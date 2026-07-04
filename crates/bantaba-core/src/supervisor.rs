@@ -1333,15 +1333,14 @@ impl RoomSupervisor {
         // holds only its cloned session Arc, taking no `structural` lock — there
         // is no node spawn/teardown to serialize against room.open / room.close.
         let session = self.session(&room_id)?;
-        {
-            let store = self.open_store()?;
-            let (_, snapshot) = self.fold(&store, &room_id)?;
-            if !snapshot.is_active(&sender_id) {
-                return Err(CoreError::new(
-                    ErrorKind::NotAMember,
-                    format!("this identity ({sender_id}) is not an active member of room {room_id}"),
-                ));
-            }
+        // Access check from the fast membership snapshot (live for this open
+        // session) instead of an O(history) re-fold of the whole log.
+        let snapshot = self.snapshot_for(&room_id).await?;
+        if !snapshot.is_active(&sender_id) {
+            return Err(CoreError::new(
+                ErrorKind::NotAMember,
+                format!("this identity ({sender_id}) is not an active member of room {room_id}"),
+            ));
         }
 
         // Import into the room's durable blob store on the LIVE session (issue
@@ -1470,16 +1469,18 @@ impl RoomSupervisor {
         let self_id = secret.identity.identity_key();
         let self_device = endpoint_id_of(secret.device.device_key())?;
 
+        // Access check from the fast membership snapshot (live for an open
+        // session, cached fold for a closed room) — not an O(history) re-fold.
+        let snapshot = self.snapshot_for(&room_id).await?;
+        if !snapshot.is_active(&self_id) {
+            return Err(CoreError::new(
+                ErrorKind::FileUnauthorized,
+                format!("this identity ({self_id}) is not an active member of room {room_id}"),
+            ));
+        }
         // Sync scope: the !Sync store never crosses the fetch awaits below.
         let (shared, author_device) = {
             let store = self.open_store()?;
-            let (_, snapshot) = self.fold(&store, &room_id)?;
-            if !snapshot.is_active(&self_id) {
-                return Err(CoreError::new(
-                    ErrorKind::FileUnauthorized,
-                    format!("this identity ({self_id}) is not an active member of room {room_id}"),
-                ));
-            }
             let events = store
                 .by_type(&room_id, EventType::FileShared)
                 .map_err(|e| internal("could not read file.shared events", e))?;
@@ -1796,10 +1797,12 @@ impl RoomSupervisor {
         let secret = self.secrets()?;
         let self_id = secret.identity.identity_key();
 
+        // Access check from the fast membership snapshot (live for an open
+        // session, cached fold for a closed room) — not an O(history) re-fold.
+        let snapshot = self.snapshot_for(&room_id).await?;
         // Sync scope: no !Sync store borrow crosses the pipe_close await.
         {
             let store = self.open_store()?;
-            let (_, snapshot) = self.fold(&store, &room_id)?;
             let opened = open_pipe(&store, &room_id, pipe_id)?;
             let is_admin = snapshot.admin() == Some(&self_id);
             let is_owner = opened.as_ref().is_some_and(|o| o.owner_id == self_id);
