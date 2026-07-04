@@ -123,6 +123,42 @@ present only for that kind.
 |---|---|---|
 | `peers.status` | `{ room_id }` | `{ peers: [PeerStatus] }` |
 
+### Agents (fleet reads)
+
+Pure reads over the existing event folds and live peer state — they author
+nothing and require no SDK change. Full semantics (liveness derivation, claim
+protocol, aggregation rules) live in `docs/agent-orchestration.md`.
+
+| Method | Params | Result |
+|---|---|---|
+| `agents.fleet` | `{}` | `{ active, working, total, rooms_total, rooms_covered, agents: [FleetAgent] }` — aggregated across all locally known rooms; every count derives from folded events + live `PeerConnState`, never estimated |
+| `agent.history` | `{ room_id, identity_id, limit? }` | `{ points: [{ ts, label, progress }] }` — one point per real `agent_status` event by that identity, chronological (`limit` newest, default 100); no interpolation |
+
+`FleetAgent`:
+
+```json
+{
+  "identity_id": "…64-hex…",
+  "rooms": [{ "room_id": "blake3:…", "name": "…" }],
+  "liveness": "online-idle | working | offline | stale",
+  "latest": { "label": "…", "message": "…", "progress": null, "ts": 1783190000000, "room_id": "blake3:…" },
+  "last_seen_ts": 1783190000000
+}
+```
+
+`liveness` is derived at read time, never stored: **primary** signal is
+whether one of the agent's devices is a `connected` peer in an open room
+(`peers.status` source); **secondary** is the timestamp of its most recent
+event. `working` requires a connected peer AND a fresh working-class latest
+status; a working-class latest status with a disconnected peer reports
+`stale`/`offline`, never `working`.
+
+Reserved `agent_status` labels: `claiming` (task-claim handshake — a claim's
+`status_message` starts with `task:<first 16 hex of the triggering message
+event_id>`; the lexicographically lowest claim `event_id` per token wins) and
+`idle` (posted by a runner when a task finishes). Claiming is best-effort
+eventual coordination, not a lock — see `docs/agent-orchestration.md` §2.
+
 ## Pushes
 
 | Push | Data | When |
@@ -139,3 +175,6 @@ present only for that kind.
    hide relay fallback.
 3. Fetch failures surface the taxonomy (`unavailable` / `unauthorized` /
    `hash_mismatch`) — a verification failure is a hard stop, not a retry.
+4. Agent liveness and fleet counts derive only from real events and real
+   peer-connection state: never report `working` for a disconnected peer,
+   never fabricate progress or heartbeats, never extrapolate `last_seen`.

@@ -15,7 +15,7 @@
 //! persist (directly, or through the live node's `publish` when the room is
 //! open so the engine both persists and fans out).
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -47,10 +47,11 @@ use iroh_rooms::files::build_file_shared;
 use iroh_rooms::identity::{DeviceBinding, DeviceKey, IdentityKey};
 use iroh_rooms::room::{
     build_member_invited, build_member_joined, build_room_created, derive_room_id, Ingest,
-    MembershipSnapshot, RoomId, RoomInviteTicket, RoomMembership, Status,
+    MembershipSnapshot, Role, RoomId, RoomInviteTicket, RoomMembership, Status,
 };
 
 use crate::error::{CoreError, CoreResult, ErrorKind};
+use crate::fleet::{self, Liveness};
 use crate::identity::SecretKeys;
 use crate::materializer::{self, bare_event_hex, file_handle, role_label};
 use crate::{localstate, now_ms};
@@ -1973,6 +1974,267 @@ impl RoomSupervisor {
         }
         changed
     }
+
+    // ------------------------------------------------------------------
+    // Agents (fleet reads) — docs/agent-orchestration.md §3
+    // ------------------------------------------------------------------
+
+    /// `agents.fleet`: the aggregated agent view across every locally known
+    /// room (the local store's rooms ∪ the localstate index), open or not.
+    ///
+    /// A **pure read**: it authors nothing, opens no room, and invents no
+    /// count. Every number derives from folded stored events plus live
+    /// `PeerConnState` on rooms this daemon has open. Liveness follows the
+    /// §1.2 decision table via [`fleet::derive_liveness`] — in particular a
+    /// `working` latest status with no connected peer reports `stale`, never
+    /// `working`, and a room without an open session can never read
+    /// `online-idle`/`working` (no live peer state exists to support it).
+    pub fn agents_fleet(&self) -> CoreResult<Value> {
+        let now = crate::now_ms();
+        // Known rooms: everything in the event store plus the localstate
+        // index (a room remembered before/without any synced events still
+        // counts toward rooms_total — it is honestly known, just unreadable).
+        let mut known: BTreeSet<String> =
+            localstate::load(&self.data_dir)?.rooms.keys().cloned().collect();
+        let store = if self.db_path().exists() {
+            Some(self.open_store()?)
+        } else {
+            None
+        };
+        if let Some(store) = &store {
+            for id in store
+                .room_ids()
+                .map_err(|e| internal("could not enumerate rooms", e))?
+            {
+                known.insert(id.to_string());
+            }
+        }
+        let rooms_total = known.len();
+        let mut rooms_covered = 0usize;
+        let mut agents: BTreeMap<String, FleetAgentAgg> = BTreeMap::new();
+
+        if let Some(store) = &store {
+            for room_str in &known {
+                let Ok(room_id) = room_str.parse::<RoomId>() else {
+                    continue;
+                };
+                let Ok((_, snapshot)) = self.fold(store, &room_id) else {
+                    // A room with no readable/foldable log contributes nothing
+                    // knowable beyond its rooms_total slot — never a guess.
+                    continue;
+                };
+                let agent_ids: BTreeSet<IdentityKey> = snapshot
+                    .members()
+                    .filter(|m| m.role == Role::Agent)
+                    .map(|m| m.identity)
+                    .collect();
+                if agent_ids.is_empty() {
+                    continue;
+                }
+                rooms_covered += 1;
+                let room_name = genesis_name(store, &room_id)
+                    .or_else(|| localstate::local_name(&self.data_dir, room_str));
+                let rows = store
+                    .room_tail(&room_id, u32::MAX)
+                    .map_err(|e| internal("could not read the timeline", e))?;
+
+                // Per-agent signals from the room's real stored events only:
+                // device keys (member.joined bindings + authored device_ids),
+                // the newest agent_status, and the newest event of any kind.
+                let mut signals: BTreeMap<IdentityKey, AgentRoomSignals> = BTreeMap::new();
+                for se in &rows {
+                    let Ok(ev) = SignedEvent::decode(&se.wire.signed) else {
+                        continue;
+                    };
+                    if let Content::MemberJoined(c) = &ev.content {
+                        if agent_ids.contains(&c.device_binding.identity_key) {
+                            signals
+                                .entry(c.device_binding.identity_key)
+                                .or_default()
+                                .devices
+                                .insert(c.device_binding.device_key);
+                        }
+                    }
+                    if !agent_ids.contains(&ev.sender_id) {
+                        continue;
+                    }
+                    let sig = signals.entry(ev.sender_id).or_default();
+                    sig.devices.insert(ev.device_id);
+                    sig.last_seen_ts = Some(
+                        sig.last_seen_ts
+                            .map_or(ev.created_at, |t| t.max(ev.created_at)),
+                    );
+                    if let Content::AgentStatus(c) = &ev.content {
+                        // The tail is causal order; on a ts tie the causally
+                        // later status wins.
+                        let newer = match &sig.latest {
+                            Some(latest) => ev.created_at >= latest.ts,
+                            None => true,
+                        };
+                        if newer {
+                            sig.latest = Some(LatestStatus {
+                                ts: ev.created_at,
+                                label: c.status.clone(),
+                                message: c.message.clone(),
+                                progress: c.progress_pct,
+                            });
+                        }
+                    }
+                }
+
+                // Primary liveness signal: only an OPEN room has live peer
+                // state to consult (peers.status source, per the contract).
+                let session = self.session_opt(&room_id);
+                for identity in &agent_ids {
+                    let sig = signals.remove(identity).unwrap_or_default();
+                    let connected = session.as_deref().is_some_and(|s| {
+                        sig.devices.iter().any(|dev| {
+                            endpoint_id_of(*dev).is_ok_and(|id| {
+                                s.node.peer_state(id) == Some(PeerConnState::Connected)
+                            })
+                        })
+                    });
+                    let liveness = fleet::derive_liveness(
+                        connected,
+                        sig.latest.as_ref().map(|l| (l.label.as_str(), l.ts)),
+                        now,
+                    );
+                    let agg = agents.entry(identity.to_string()).or_default();
+                    agg.rooms.push(json!({ "room_id": room_str, "name": room_name }));
+                    agg.per_room_liveness.push(liveness);
+                    if let Some(latest) = sig.latest {
+                        let newer = match &agg.latest {
+                            Some((ts, _)) => latest.ts >= *ts,
+                            None => true,
+                        };
+                        if newer {
+                            let view = json!({
+                                "label": latest.label,
+                                "message": latest.message,
+                                "progress": latest.progress,
+                                "ts": latest.ts,
+                                "room_id": room_str,
+                            });
+                            agg.latest = Some((latest.ts, view));
+                        }
+                    }
+                    if let Some(seen) = sig.last_seen_ts {
+                        agg.last_seen_ts =
+                            Some(agg.last_seen_ts.map_or(seen, |t| t.max(seen)));
+                    }
+                }
+            }
+        }
+
+        // Aggregate per identity (strongest per-room liveness), then order:
+        // liveness rank, last_seen_ts descending (never-seen last), identity.
+        let mut rows: Vec<(Liveness, Option<u64>, String, Value)> =
+            Vec::with_capacity(agents.len());
+        for (identity_id, agg) in agents {
+            let liveness = fleet::aggregate_liveness(agg.per_room_liveness.iter().copied());
+            let view = json!({
+                "identity_id": identity_id,
+                "rooms": agg.rooms,
+                "liveness": liveness.label(),
+                "latest": agg.latest.map(|(_, v)| v),
+                "last_seen_ts": agg.last_seen_ts,
+            });
+            rows.push((liveness, agg.last_seen_ts, identity_id, view));
+        }
+        rows.sort_by(|a, b| {
+            a.0.cmp(&b.0)
+                .then_with(|| b.1.cmp(&a.1))
+                .then_with(|| a.2.cmp(&b.2))
+        });
+
+        let total = rows.len();
+        let active = rows.iter().filter(|r| r.0.is_active()).count();
+        let working = rows.iter().filter(|r| r.0 == Liveness::Working).count();
+        Ok(json!({
+            "active": active,
+            "working": working,
+            "total": total,
+            "rooms_total": rooms_total,
+            "rooms_covered": rooms_covered,
+            "agents": rows.into_iter().map(|r| r.3).collect::<Vec<Value>>(),
+        }))
+    }
+
+    /// `agent.history`: one point per real `agent_status` event authored by
+    /// `identity_id` in `room_id`, chronological — the newest `limit` events
+    /// (default 100). The daemon never interpolates, smooths, or fabricates
+    /// intermediate points; an identity with no statuses returns `[]`.
+    pub fn agent_history(
+        &self,
+        room_id_str: &str,
+        identity_hex: &str,
+        limit: Option<u32>,
+    ) -> CoreResult<Value> {
+        let room_id = parse_room_id(room_id_str)?;
+        let identity: IdentityKey = identity_hex.trim().parse().map_err(|e| {
+            CoreError::invalid(format!("invalid identity_id (expected 64-char hex): {e}"))
+        })?;
+        let store = self.open_store()?;
+        let (_, _snapshot) = self.fold(&store, &room_id)?; // room_unknown when absent
+        let rows = store
+            .room_tail(&room_id, u32::MAX)
+            .map_err(|e| internal("could not read the timeline", e))?;
+        let mut points = Vec::new();
+        for se in &rows {
+            if se.event_type != EventType::AgentStatus {
+                continue;
+            }
+            let Ok(ev) = SignedEvent::decode(&se.wire.signed) else {
+                continue;
+            };
+            if ev.sender_id != identity {
+                continue;
+            }
+            let Content::AgentStatus(c) = ev.content else {
+                continue;
+            };
+            points.push(json!({
+                "ts": ev.created_at,
+                "label": c.status,
+                "progress": c.progress_pct,
+            }));
+        }
+        // Most-recent-first selection, returned in chronological order.
+        let keep =
+            usize::try_from(limit.unwrap_or(fleet::HISTORY_DEFAULT_LIMIT)).unwrap_or(usize::MAX);
+        if points.len() > keep {
+            points.drain(..points.len() - keep);
+        }
+        Ok(json!({ "points": points }))
+    }
+}
+
+/// One agent's per-room evidence for the fleet read: its known device keys
+/// (from `member.joined` bindings and authored events), its newest
+/// `agent_status`, and the ts of its newest event of any kind. All fields
+/// derive from stored events — nothing is synthesized.
+#[derive(Default)]
+struct AgentRoomSignals {
+    devices: BTreeSet<DeviceKey>,
+    latest: Option<LatestStatus>,
+    last_seen_ts: Option<u64>,
+}
+
+/// The newest `agent_status` posted by an agent (per room).
+struct LatestStatus {
+    ts: u64,
+    label: String,
+    message: Option<String>,
+    progress: Option<u64>,
+}
+
+/// One agent's cross-room aggregate for `agents.fleet`.
+#[derive(Default)]
+struct FleetAgentAgg {
+    rooms: Vec<Value>,
+    per_room_liveness: Vec<Liveness>,
+    latest: Option<(u64, Value)>,
+    last_seen_ts: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -2325,7 +2587,268 @@ mod tests {
         RoomSupervisor,
     };
     use crate::error::ErrorKind;
+    use iroh_rooms::events::{validate_wire_bytes, ValidationContext, WireEvent};
+    use iroh_rooms::identity::{DeviceBinding, SigningKey};
+    use iroh_rooms::room::{RoomId, RoomInviteTicket};
     use tempfile::tempdir;
+
+    /// Persist an event authored elsewhere directly into the supervisor's
+    /// store (validating first) — the way a synced remote event lands.
+    fn insert_wire(sup: &RoomSupervisor, room_id: &RoomId, wire: &WireEvent) {
+        let validated =
+            validate_wire_bytes(&wire.to_bytes(), &ValidationContext::for_room(*room_id))
+                .expect("authored event validates");
+        let mut store = sup.open_store().unwrap();
+        store.insert(&validated).unwrap();
+    }
+
+    /// Join `agent` keys into the room offline: mint a real invite through
+    /// the supervisor, then author + persist the `member.joined` with the
+    /// ticket's capability — exactly the event a remote agent runner syncs.
+    async fn seed_agent_member(
+        sup: &RoomSupervisor,
+        room_id_str: &str,
+        agent_identity: &SigningKey,
+        agent_device: &SigningKey,
+    ) {
+        let ticket_str = sup
+            .create_invite(
+                room_id_str,
+                &agent_identity.identity_key().to_string(),
+                "agent",
+                None,
+            )
+            .await
+            .unwrap();
+        let ticket: RoomInviteTicket = ticket_str.parse().unwrap();
+        let room_id: RoomId = room_id_str.parse().unwrap();
+        let mut heads = sup.open_store().unwrap().heads(&room_id).unwrap();
+        heads.truncate(super::MAX_PREV_EVENTS);
+        let binding = DeviceBinding::create(&room_id, agent_identity, agent_device.device_key());
+        let wire = super::build_member_joined(
+            agent_identity,
+            agent_device,
+            &room_id,
+            &ticket.invite_id,
+            &ticket.capability_secret,
+            "agent",
+            binding,
+            Some("fleet-agent"),
+            &heads,
+            crate::now_ms(),
+        );
+        insert_wire(sup, &room_id, &wire);
+    }
+
+    /// Persist an `agent_status` authored by the given keys at `ts`.
+    fn seed_status(
+        sup: &RoomSupervisor,
+        room_id_str: &str,
+        identity: &SigningKey,
+        device: &SigningKey,
+        label: &str,
+        progress: Option<u64>,
+        ts: u64,
+    ) {
+        let room_id: RoomId = room_id_str.parse().unwrap();
+        let mut heads = sup.open_store().unwrap().heads(&room_id).unwrap();
+        heads.truncate(super::MAX_PREV_EVENTS);
+        let wire = super::build_agent_status(
+            identity,
+            device,
+            &room_id,
+            label,
+            Some("status message"),
+            &[],
+            progress,
+            &heads,
+            ts,
+        );
+        insert_wire(sup, &room_id, &wire);
+    }
+
+    /// Poll `agents.fleet` until `pred` holds (or fail after a deadline).
+    async fn wait_fleet(
+        sup: &RoomSupervisor,
+        what: &str,
+        pred: impl Fn(&serde_json::Value) -> bool,
+    ) -> serde_json::Value {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        loop {
+            let fleet = sup.agents_fleet().unwrap();
+            if pred(&fleet) {
+                return fleet;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "timed out waiting for {what}; last fleet: {fleet}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+    }
+
+    #[test]
+    fn fleet_is_empty_and_honest_on_a_fresh_daemon() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+
+        // No rooms at all: every count is a real zero, never a guess.
+        let fleet = sup.agents_fleet().unwrap();
+        assert_eq!(fleet["total"], 0);
+        assert_eq!(fleet["active"], 0);
+        assert_eq!(fleet["working"], 0);
+        assert_eq!(fleet["rooms_total"], 0);
+        assert_eq!(fleet["rooms_covered"], 0);
+        assert_eq!(fleet["agents"].as_array().unwrap().len(), 0);
+
+        // A room with no agent-role member counts toward rooms_total only.
+        sup.create_room("No Agents Here").unwrap();
+        let fleet = sup.agents_fleet().unwrap();
+        assert_eq!(fleet["rooms_total"], 1);
+        assert_eq!(fleet["rooms_covered"], 0);
+        assert_eq!(fleet["total"], 0);
+    }
+
+    #[tokio::test]
+    async fn fleet_reports_stale_never_working_without_a_connected_peer() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("Fleet Room").unwrap();
+        let agent_identity = SigningKey::generate();
+        let agent_device = SigningKey::generate();
+        seed_agent_member(&sup, &room_id, &agent_identity, &agent_device).await;
+        let agent_hex = agent_identity.identity_key().to_string();
+
+        // Agent member, no status, room not open: offline — with the real
+        // member.joined ts as last_seen (an event timestamp, never "now").
+        let fleet = sup.agents_fleet().unwrap();
+        assert_eq!(fleet["total"], 1);
+        assert_eq!(fleet["rooms_total"], 1);
+        assert_eq!(fleet["rooms_covered"], 1);
+        let agent = &fleet["agents"][0];
+        assert_eq!(agent["identity_id"], agent_hex);
+        assert_eq!(agent["liveness"], "offline");
+        assert!(agent["latest"].is_null());
+        assert!(agent["last_seen_ts"].is_u64());
+        assert_eq!(agent["rooms"][0]["room_id"], room_id);
+        assert_eq!(agent["rooms"][0]["name"], "Fleet Room");
+
+        // THE RULE at the RPC level: a fresh "working" status with no
+        // connected peer reads stale — never working, never active.
+        let t1 = crate::now_ms();
+        seed_status(&sup, &room_id, &agent_identity, &agent_device, "working", Some(40), t1);
+        let fleet = sup.agents_fleet().unwrap();
+        let agent = &fleet["agents"][0];
+        assert_eq!(agent["liveness"], "stale");
+        assert_eq!(fleet["active"], 0);
+        assert_eq!(fleet["working"], 0);
+        assert_eq!(agent["latest"]["label"], "working");
+        assert_eq!(agent["latest"]["progress"], 40);
+        assert_eq!(agent["latest"]["ts"], t1);
+        assert_eq!(agent["latest"]["room_id"], room_id);
+        assert_eq!(agent["last_seen_ts"], t1);
+
+        // An idle-class latest with no peer reads offline.
+        seed_status(&sup, &room_id, &agent_identity, &agent_device, "idle", None, t1 + 1);
+        let fleet = sup.agents_fleet().unwrap();
+        assert_eq!(fleet["agents"][0]["liveness"], "offline");
+        assert_eq!(fleet["agents"][0]["latest"]["label"], "idle");
+
+        // agent.history: one point per real event, chronological; `limit`
+        // selects the newest; progress is the event's value or null.
+        let history = sup.agent_history(&room_id, &agent_hex, None).unwrap();
+        let points = history["points"].as_array().unwrap();
+        assert_eq!(points.len(), 2);
+        assert_eq!(points[0]["label"], "working");
+        assert_eq!(points[0]["progress"], 40);
+        assert_eq!(points[0]["ts"], t1);
+        assert_eq!(points[1]["label"], "idle");
+        assert!(points[1]["progress"].is_null());
+        let limited = sup.agent_history(&room_id, &agent_hex, Some(1)).unwrap();
+        assert_eq!(limited["points"].as_array().unwrap().len(), 1);
+        assert_eq!(limited["points"][0]["label"], "idle");
+
+        // A member with no statuses returns an empty (not fabricated) series.
+        let owner_hex = crate::identity::load_profile(dir.path())
+            .unwrap()
+            .unwrap()
+            .identity_id;
+        let empty = sup.agent_history(&room_id, &owner_hex, None).unwrap();
+        assert_eq!(empty["points"].as_array().unwrap().len(), 0);
+
+        // Error taxonomy: unknown room, malformed identity.
+        let unknown = format!("blake3:{}", "ee".repeat(32));
+        let err = sup.agent_history(&unknown, &agent_hex, None).unwrap_err();
+        assert_eq!(err.kind, ErrorKind::RoomUnknown);
+        let err = sup.agent_history(&room_id, "not-hex", None).unwrap_err();
+        assert_eq!(err.kind, ErrorKind::InvalidParams);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn fleet_liveness_tracks_live_peer_state_loopback() {
+        // Two supervisors (two data dirs, two identities) on the loopback
+        // transport: liveness must come from the REAL peer connection, and a
+        // "working" claim must decay to stale the moment the peer is gone.
+        let owner_dir = tempdir().unwrap();
+        crate::identity::create(owner_dir.path()).unwrap();
+        let owner = RoomSupervisor::new(owner_dir.path().to_path_buf(), true).unwrap();
+        let room_id = owner.create_room("Fleet Live").unwrap();
+        let opened = owner.open_room(&room_id, &[]).await.unwrap();
+        let owner_addr = opened["endpoint"]["addr"]
+            .as_str()
+            .expect("loopback session has a dialable addr")
+            .to_owned();
+
+        let agent_dir = tempdir().unwrap();
+        let agent_profile = crate::identity::create(agent_dir.path()).unwrap();
+        let agent = RoomSupervisor::new(agent_dir.path().to_path_buf(), true).unwrap();
+        let ticket = owner
+            .create_invite(&room_id, &agent_profile.identity_id, "agent", None)
+            .await
+            .unwrap();
+        agent
+            .join_room(&ticket, None, std::slice::from_ref(&owner_addr))
+            .await
+            .unwrap();
+        agent.open_room(&room_id, &[owner_addr]).await.unwrap();
+
+        // Connected agent, no working-class claim: online-idle.
+        let fleet = wait_fleet(&owner, "online-idle", |f| {
+            f["agents"][0]["liveness"] == "online-idle"
+        })
+        .await;
+        assert_eq!(fleet["total"], 1);
+        assert_eq!(fleet["active"], 1);
+        assert_eq!(fleet["working"], 0);
+
+        // A fresh working status from a connected peer: working.
+        agent
+            .post_status(&room_id, "working", Some("crunching"), Some(40), &[])
+            .await
+            .unwrap();
+        let fleet = wait_fleet(&owner, "working", |f| {
+            f["agents"][0]["liveness"] == "working"
+        })
+        .await;
+        assert_eq!(fleet["working"], 1);
+        assert_eq!(fleet["active"], 1);
+        assert_eq!(fleet["agents"][0]["latest"]["label"], "working");
+        assert_eq!(fleet["agents"][0]["latest"]["progress"], 40);
+
+        // The agent daemon vanishes without posting anything: its last claim
+        // is "working" but the peer is gone -> stale, never working.
+        agent.close_room(&room_id).await.unwrap();
+        let fleet = wait_fleet(&owner, "stale after disconnect", |f| {
+            f["agents"][0]["liveness"] == "stale"
+        })
+        .await;
+        assert_eq!(fleet["working"], 0);
+        assert_eq!(fleet["active"], 0);
+
+        owner.close_room(&room_id).await.unwrap();
+    }
 
     #[test]
     fn room_name_bounds() {

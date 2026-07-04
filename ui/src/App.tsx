@@ -28,6 +28,7 @@ import { Composer } from './components/Composer';
 import { RightPanel } from './components/RightPanel';
 import type { PanelTab, PipeConnState } from './components/RightPanel';
 import { InviteModal } from './components/InviteModal';
+import { FleetDashboard } from './components/FleetDashboard';
 
 type Phase = 'boot' | 'no-identity' | 'no-rooms' | 'ready';
 
@@ -351,7 +352,11 @@ export default function App({ client }: { client: Client }) {
             : 'rooms';
 
   const navigate = useCallback((key: NavKey) => {
-    if (key === 'agents' || key === 'pipes' || key === 'files') {
+    if (key === 'agents') {
+      // Top-level fleet dashboard — distinct from the in-room Agents tab, which
+      // stays reachable via the right-panel tab strip.
+      setMobileView('agents');
+    } else if (key === 'pipes' || key === 'files') {
       setTab(key);
       setMobileView(key);
     } else if (key === 'settings') {
@@ -395,7 +400,7 @@ export default function App({ client }: { client: Client }) {
 
   return (
     <NamesContext.Provider value={names}>
-      <div className={`app mv-${mobileView}`}>
+      <div className={`app mv-${mobileView}${activeNav === 'agents' ? ' app-fleet' : ''}`}>
         {conn !== 'connected' ? (
           <div className={`conn-banner conn-${conn}`}>
             {conn === 'reconnecting' || conn === 'connecting'
@@ -464,6 +469,17 @@ export default function App({ client }: { client: Client }) {
           onPipeClose={pipeClose}
           onPipeExpose={pipeExpose}
         />
+
+        {activeNav === 'agents' ? (
+          <FleetDashboard
+            client={client}
+            rooms={rooms}
+            onOpenRoom={(rid) => {
+              setMobileView('chat');
+              if (rid !== roomId) void openRoom(rid);
+            }}
+          />
+        ) : null}
 
         <section className="mobile-settings" aria-label="Settings">
           <h2 className="mobile-settings-title">Settings</h2>

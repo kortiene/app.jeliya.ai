@@ -48,6 +48,32 @@
 // the claude stream). No fabricated progress percentages — progress is only
 // ever the literal 100 on the final "done" status. Failures are posted as
 // label "failed" with the real reason. See docs/agent-guide.md.
+//
+// ====================== TASK-CLAIM COORDINATION =============================
+// When the room's membership snapshot shows MORE THAN ONE active agent-role
+// member, an allowed trigger is arbitrated via a claim handshake over plain
+// agent_status events (docs/agent-orchestration.md §2): post label "claiming"
+// with status_message "task:<first 16 hex of the trigger's event_id>", wait
+// CLAIM_SETTLE_MS collecting other agents' same-token claims (pushes + one
+// timeline re-poll), then proceed only if our claim's event_id is the
+// lexicographically lowest — otherwise stand down silently (local log only;
+// no execution, no reply, no further status). With ≤1 agent-role member the
+// claim step is skipped entirely: no claim event, no delay.
+//
+// HONEST LIMITS — this is best-effort eventual coordination, NOT a lock:
+//   (a) two runners whose gossip round-trip exceeds CLAIM_SETTLE_MS can both
+//       see themselves as the minimum and both run;
+//   (b) a lower claim arriving after a winner started does not abort the
+//       winner;
+//   (c) the deterministic event-id order guarantees only that all peers
+//       EVENTUALLY agree on which claim won, bounding duplicates to the
+//       propagation window. Duplicate "done" replies are possible and
+//       acceptable; fabricating a stronger guarantee is not.
+//
+// ADDRESSED TRIGGERS: "<trigger> <task>" is for any agent; the form
+// "<trigger>:<id-prefix> <task>" (case-insensitive hex) is only for agents
+// whose identity id starts with the prefix — all others ignore it silently
+// (no reply, no claim). Multiple prefix matches are arbitrated by claiming.
 // ============================================================================
 
 import { spawn } from "node:child_process";
@@ -73,6 +99,8 @@ const RESYNC_TIMELINE_LIMIT = 1_000; // tail size for the push-loss recovery pol
 const RESYNC_INTERVAL_MS = 5_000; // how often to re-poll the timeline (pushes are lossy under load)
 const REPLY_MIN_INTERVAL_MS = 10_000; // rate limit for busy/empty-task replies
 const SHUTDOWN_FLUSH_MS = 2_000; // grace for the daemon to gossip final statuses before it dies
+const CLAIM_SETTLE_MS = 1_500; // claim settle window (docs/agent-orchestration.md §2.3)
+const CLAIM_TOKEN_RE = /^task:([0-9a-f]{16})(\s|$)/; // claim status_message parser (fail closed)
 
 // ---------------------------------------------------------------------------
 // CLI (custom parse: --allow-sender and --peer are repeatable)
@@ -524,11 +552,27 @@ function nextTaskNumber() {
   return max + 1;
 }
 
-function matchesTrigger(body) {
-  if (body.length < TRIGGER.length) return false;
-  if (body.slice(0, TRIGGER.length).toLowerCase() !== TRIGGER.toLowerCase()) return false;
-  const rest = body.slice(TRIGGER.length);
-  return rest === "" || /^\s/.test(rest);
+/**
+ * Parse a trigger body into { idPrefix, task } or null when it is not a
+ * trigger at all. Two accepted forms (docs/agent-orchestration.md §2.4):
+ *   "<trigger> <task>"              → { idPrefix: null, task }  (any agent)
+ *   "<trigger>:<hexprefix> <task>"  → { idPrefix, task }        (addressed)
+ * The addressed prefix is case-insensitive hex; a malformed address (non-hex,
+ * or no word boundary after it) is NOT a trigger — fail closed, silence.
+ */
+function parseTrigger(body) {
+  if (body.length < TRIGGER.length) return null;
+  if (body.slice(0, TRIGGER.length).toLowerCase() !== TRIGGER.toLowerCase()) return null;
+  let rest = body.slice(TRIGGER.length);
+  let idPrefix = null;
+  if (rest.startsWith(":")) {
+    const m = /^:([0-9a-fA-F]+)(\s|$)/.exec(rest);
+    if (!m) return null;
+    idPrefix = m[1].toLowerCase();
+    rest = rest.slice(1 + m[1].length);
+  }
+  if (rest !== "" && !/^\s/.test(rest)) return null;
+  return { idPrefix, task: rest.trim() };
 }
 
 /** True when `child` lives strictly under `parent`. */
@@ -877,8 +921,111 @@ try {
         log(`task #${n} failed: ${reason}`);
       } finally {
         current = null;
+        // LIVENESS (docs/agent-orchestration.md §1.1): one honest "idle"
+        // after the terminal done/failed status — an idle agent is now
+        // distinguishable from a stalled "working" one. Not a heartbeat.
+        if (!shuttingDown) {
+          try {
+            await postStatusNow("idle", "ready for the next task");
+          } catch (err) {
+            log(`"idle" status failed (ignored): ${err.message}`);
+          }
+        }
       }
     })();
+  }
+
+  // CLAIM OBSERVATION: claims for tokens with an open settle window are
+  // collected from the SAME event stream the task loop drains (pushes + the
+  // periodic resync), plus one explicit timeline re-poll at the end of each
+  // window. Tokens without an open window are ignored — bounded memory.
+  const activeClaims = new Map(); // token -> Set<claim event_id>
+  function observeClaim(ev) {
+    if (ev?.kind !== "agent_status" || ev.label !== "claiming") return;
+    const m = CLAIM_TOKEN_RE.exec(ev.status_message ?? "");
+    if (!m) return; // fail closed: an unparseable claim is not a claim
+    const ids = activeClaims.get(m[1]);
+    if (ids && typeof ev.event_id === "string") ids.add(ev.event_id);
+  }
+
+  /**
+   * Claim gate (docs/agent-orchestration.md §2.3). Runs AFTER the existing
+   * allowlist/staleness/busy checks. ≤1 active agent-role member: execute
+   * immediately (no claim event, no delay). Otherwise post a claim, settle,
+   * and proceed only when holding the lexicographically lowest claim
+   * event_id; losers stand down silently (local log only).
+   */
+  async function claimAndMaybeStart(task, triggerEv) {
+    let eligible = null;
+    try {
+      const { members } = await client.call("room.members", { room_id: currentRoomId });
+      eligible = members.filter((m) => m.role === "agent" && m.status === "active").length;
+    } catch (err) {
+      // Fail toward coordination: if we cannot count agents, claim anyway.
+      log(`room.members failed (${err.message}) — assuming multiple agents, claiming`);
+    }
+    if (eligible !== null && eligible <= 1) {
+      startTaskIfIdle(task);
+      return;
+    }
+    if (!/^[0-9a-f]{64}$/.test(triggerEv.event_id ?? "")) {
+      // Cannot derive a token no other agent could derive either — the claim
+      // protocol is impossible for this event; run rather than lose the task.
+      log(`trigger event_id is not bare 64-hex — claim impossible, executing`);
+      startTaskIfIdle(task);
+      return;
+    }
+    const token = triggerEv.event_id.slice(0, 16);
+    const ids = new Set();
+    activeClaims.set(token, ids);
+    let myClaimId;
+    try {
+      const posted = await client.call("status.post", {
+        room_id: currentRoomId,
+        label: "claiming",
+        message: truncateBytes(
+          `task:${token} from ${triggerEv.sender.identity_id.slice(0, 12)}… — ${task.slice(0, 120)}`,
+          STATUS_MESSAGE_LIMIT,
+        ),
+      });
+      myClaimId = posted.event_id;
+    } catch (err) {
+      activeClaims.delete(token);
+      log(`claim post failed (${err.message}) — standing down on task:${token}`);
+      return;
+    }
+    ids.add(myClaimId);
+    log(`claim posted for task:${token} (eligible agents: ${eligible ?? "unknown"}) — settling ${CLAIM_SETTLE_MS}ms`);
+    await sleep(CLAIM_SETTLE_MS);
+    // Pushes are lossy — one timeline re-poll is the safety net for claims
+    // whose push frame was dropped or that gossiped before our window opened.
+    try {
+      for (const ev of await timelineEvents(currentRoomId, RESYNC_TIMELINE_LIMIT)) observeClaim(ev);
+    } catch (err) {
+      log(`claim-settle timeline poll failed (${err.message}) — deciding on pushes only`);
+    }
+    activeClaims.delete(token);
+    if (current) {
+      log(`became busy during the task:${token} settle window — standing down (never queue)`);
+      return;
+    }
+    const winner = [...ids].sort()[0];
+    if (winner !== myClaimId) {
+      log(`lost claim task:${token} to ${winner.slice(0, 12)}… — standing down silently`);
+      return;
+    }
+    log(`won claim task:${token} (${ids.size} claim(s) observed)`);
+    startTaskIfIdle(task);
+  }
+
+  /** Re-check the one-task-at-a-time gate after any async gap. Standing down
+   * here is silent by contract (local log only — no reply, no status). */
+  function startTaskIfIdle(task) {
+    if (current) {
+      log("busy after claim/count window — task dropped (not queued)");
+      return;
+    }
+    startTask(task);
   }
 
   function handleEvent(ev) {
@@ -886,7 +1033,13 @@ try {
     const senderId = ev.sender?.identity_id;
     if (!senderId || senderId === me.identity_id) return; // never react to own events
     const body = (ev.body ?? "").trim();
-    if (!matchesTrigger(body)) return;
+    const parsed = parseTrigger(body);
+    if (!parsed) return;
+    if (parsed.idPrefix !== null && !me.identity_id.startsWith(parsed.idPrefix)) {
+      // Addressed to a different agent: silence (no reply, no claim).
+      log(`ignored trigger addressed to ${parsed.idPrefix}… (not this agent)`);
+      return;
+    }
     if (typeof ev.ts !== "number" || ev.ts < staleBefore) {
       // Fail CLOSED: a missing/non-numeric ts is treated as stale rather than
       // waved through — no backlog execution on (re)join, ever.
@@ -898,7 +1051,7 @@ try {
       log(`SECURITY: ignored trigger from non-allowed sender ${senderId} — not executed, no reply`);
       return;
     }
-    const task = body.slice(TRIGGER.length).trim();
+    const task = parsed.task;
     if (current) {
       const runningHead = current.task.slice(0, 80);
       sendControlReply(
@@ -912,7 +1065,7 @@ try {
       sendControlReply(`No task text after ${TRIGGER} — try: ${TRIGGER} <what to do>.`, "empty-task");
       return;
     }
-    startTask(task);
+    void claimAndMaybeStart(task, ev);
   }
 
   // TASK LOOP: drain room.event pushes collected by the client. The daemon's
@@ -928,6 +1081,7 @@ try {
       if (frame.data?.room_id !== roomId) continue;
       const ev = frame.data.event;
       if (!ev?.event_id || !rememberSeen(ev.event_id)) continue;
+      observeClaim(ev);
       handleEvent(ev);
     }
     if (Date.now() - lastResync >= RESYNC_INTERVAL_MS) {
@@ -935,6 +1089,7 @@ try {
       try {
         for (const ev of await timelineEvents(roomId, RESYNC_TIMELINE_LIMIT)) {
           if (!ev?.event_id || !rememberSeen(ev.event_id)) continue;
+          observeClaim(ev);
           handleEvent(ev);
         }
       } catch (err) {

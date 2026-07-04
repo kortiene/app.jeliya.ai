@@ -10,7 +10,12 @@ import type {
   ConnectionState,
   DaemonStatus,
   FileEntry,
+  FleetAgent,
+  FleetAgentLatest,
+  FleetAgentRoom,
+  FleetResult,
   Identity,
+  Liveness,
   Member,
   MethodMap,
   MethodName,
@@ -92,8 +97,9 @@ const SAM = person('sam', 'member', 'Sam D.');
 const BACKEND = person('backend-agent', 'agent', 'Backend Agent');
 const FRONTEND = person('frontend-agent', 'agent', 'Frontend Agent');
 const QA = person('qa-agent', 'agent', 'QA Agent');
+const RESEARCH = person('research-agent', 'agent', 'Research Agent');
 
-const EVERYONE = [ALEX, MAYA, SAM, BACKEND, FRONTEND, QA];
+const EVERYONE = [ALEX, MAYA, SAM, BACKEND, FRONTEND, QA, RESEARCH];
 
 // -- room fixture ------------------------------------------------------------
 
@@ -167,11 +173,31 @@ function buildMainRoom(): MockRoom {
     ev(r, at(9, 48), SAM, 'file_shared', {
       file: { file_id: F_WIREFRAME, name: 'wireframe.png', size: 320 * 1024, mime: 'image/png' },
     }),
+    ev(r, at(9, 5), BACKEND, 'agent_status', {
+      label: 'working',
+      status_message: 'Scaffolding room invite flow and peer discovery.',
+      progress: 15,
+    }),
+    ev(r, at(9, 25), FRONTEND, 'agent_status', {
+      label: 'working',
+      status_message: 'Blocking out the room shell and timeline components.',
+      progress: 20,
+    }),
+    ev(r, at(9, 40), BACKEND, 'agent_status', {
+      label: 'working',
+      status_message: 'File manifest sync wired; starting invite flow tests.',
+      progress: 35,
+    }),
+    ev(r, at(9, 55), QA, 'agent_status', {
+      label: 'working',
+      status_message: 'Writing test suite v1 against the invite + sync paths.',
+      progress: 40,
+    }),
     ev(r, at(10, 2), ALEX, 'message', {
       body: 'Kicked off the rooms protocol spec and initial backend scaffolding. Next up: agent orchestration + pipe manager.',
     }),
     ev(r, at(10, 15), BACKEND, 'agent_status', {
-      label: 'running_tests',
+      label: 'working',
       status_message:
         'Implemented room invite flow, peer discovery, and file manifest sync. Running integration tests…',
       progress: 60,
@@ -199,6 +225,13 @@ function buildMainRoom(): MockRoom {
     }),
     ev(r, at(10, 45, 30), QA, 'file_shared', {
       file: { file_id: F_REPORT, name: 'test-report.json', size: 85 * 1024, mime: 'application/json' },
+    }),
+    // A fresh working-class status so the fleet dashboard has one truthfully
+    // "working" agent (connected peer + fresh working label, §1.2 row 4).
+    ev(r, Math.max(at(10, 50), Date.now() - 90_000), BACKEND, 'agent_status', {
+      label: 'working',
+      status_message: 'Sync convergence suite running (14/24 green).',
+      progress: 68,
     }),
   ];
 
@@ -265,6 +298,40 @@ function buildSideRoom(seed: string, name: string, people: Person[], myRole: Rol
   };
 }
 
+// -- fleet liveness derivation (docs/agent-orchestration.md §1.2) -------------
+//
+// Mirrors the daemon's read-time rule exactly: primary signal = a currently
+// connected peer in an OPEN room, secondary = the ts of the latest real
+// agent_status event. A working-class latest label is never sufficient on its
+// own — peer state overrides the last posted label.
+
+const STALE_WORKING_MS = 20 * 60_000;
+
+const LIVENESS_RANK: Record<Liveness, number> = {
+  working: 0,
+  'online-idle': 1,
+  stale: 2,
+  offline: 3,
+};
+
+/** Working-class iff the label is exactly `working`; unknown labels are
+ *  idle-class (§1.1). */
+const isWorkingClass = (label: string | undefined) => label === 'working';
+
+function deriveLiveness(connected: boolean, latest: TimelineEvent | null, now: number): Liveness {
+  if (!connected) {
+    // Rows 1–3: no live peer — never online, never working.
+    if (latest && isWorkingClass(latest.label)) return 'stale';
+    return 'offline';
+  }
+  if (latest && isWorkingClass(latest.label)) {
+    // Rows 4–5: connected + working-class label — fresh means working.
+    return now - latest.ts <= STALE_WORKING_MS ? 'working' : 'stale';
+  }
+  // Row 6: connected, idle-class latest (or no status yet).
+  return 'online-idle';
+}
+
 // -- the client --------------------------------------------------------------
 
 class MockClient implements Client {
@@ -308,7 +375,36 @@ class MockClient implements Client {
         'member',
         'Tokens v2 exploration lives here.',
       );
-      for (const room of [workspace, review, design]) this.rooms.set(room.room_id, room);
+      const research = buildSideRoom(
+        'research-lab',
+        'Research Lab',
+        [ALEX, RESEARCH],
+        'owner',
+        'P2P performance benchmarks and optimization research.',
+      );
+      // Crashed-runner fixture: the latest status is working-class but the
+      // peer is gone — the fleet view must report `stale`, never `working`.
+      research.peers = research.peers.map((p) =>
+        p.endpoint_id === RESEARCH.ep ? { ...p, state: 'offline' as const, path: null } : p,
+      );
+      research.timeline.push(
+        ev(research.room_id, at(8, 40), RESEARCH, 'agent_status', {
+          label: 'working',
+          status_message: 'Collecting NAT traversal benchmarks across relay paths.',
+          progress: 20,
+        }),
+        ev(research.room_id, at(9, 10), RESEARCH, 'agent_status', {
+          label: 'working',
+          status_message: 'Benchmarks 12/30 done; profiling gossip fanout next.',
+          progress: 45,
+        }),
+        ev(research.room_id, at(9, 35), RESEARCH, 'agent_status', {
+          label: 'working',
+          status_message: 'Profiling run 3 in flight — writing up interim notes.',
+          progress: 60,
+        }),
+      );
+      for (const room of [workspace, review, design, research]) this.rooms.set(room.room_id, room);
     }
   }
 
@@ -437,7 +533,7 @@ class MockClient implements Client {
     };
     later(6_000, () => {
       this.ingest(room, ev(room.room_id, Date.now(), BACKEND, 'agent_status', {
-        label: 'running_tests',
+        label: 'working',
         status_message: 'Integration tests passing (17/24). Sync convergence suite up next.',
         progress: 72,
       }));
@@ -458,6 +554,87 @@ class MockClient implements Client {
         progress: 100,
       }));
     });
+  }
+
+  /** `agents.fleet` fixture — computed live from the same evidence the daemon
+   *  would use (folded events + peer state of open rooms), never hardcoded, so
+   *  the dashboard's numbers stay real even as the mock simulation evolves. */
+  private fleet(): FleetResult {
+    const now = Date.now();
+    interface Entry {
+      rooms: FleetAgentRoom[];
+      liveness: Liveness;
+      latest: FleetAgentLatest | null;
+      last_seen_ts: number | null;
+    }
+    const byAgent = new Map<string, Entry>();
+    let rooms_covered = 0;
+
+    for (const room of this.rooms.values()) {
+      const agents = room.members.filter((m) => m.role === 'agent');
+      if (agents.length > 0) rooms_covered += 1;
+      for (const m of agents) {
+        const entry =
+          byAgent.get(m.identity_id) ??
+          ({ rooms: [], liveness: 'offline', latest: null, last_seen_ts: null } as Entry);
+        entry.rooms.push({ room_id: room.room_id, name: room.name });
+
+        // Newest agent_status + newest event of any kind by this identity here.
+        let latest: TimelineEvent | null = null;
+        let lastSeen: number | null = null;
+        for (const e of room.timeline) {
+          if (e.sender.identity_id !== m.identity_id) continue;
+          if (lastSeen === null || e.ts > lastSeen) lastSeen = e.ts;
+          if (e.kind === 'agent_status' && (latest === null || e.ts > latest.ts)) latest = e;
+        }
+        if (latest && (entry.latest === null || latest.ts > entry.latest.ts)) {
+          entry.latest = {
+            label: latest.label ?? '',
+            message: latest.status_message ?? null,
+            progress: typeof latest.progress === 'number' ? latest.progress : null,
+            ts: latest.ts,
+            room_id: room.room_id,
+          };
+        }
+        if (lastSeen !== null && (entry.last_seen_ts === null || lastSeen > entry.last_seen_ts)) {
+          entry.last_seen_ts = lastSeen;
+        }
+
+        // Primary signal: is one of this identity's devices a connected peer
+        // in a room this "daemon" has open? Non-open rooms are never online.
+        const ep = EVERYONE.find((p) => p.id === m.identity_id)?.ep;
+        const connected =
+          room.open && ep !== undefined && room.peers.some((p) => p.endpoint_id === ep && p.state === 'connected');
+        const lv = deriveLiveness(connected, latest, now);
+        // Multi-room aggregate: strongest presence wins.
+        if (LIVENESS_RANK[lv] < LIVENESS_RANK[entry.liveness]) entry.liveness = lv;
+        byAgent.set(m.identity_id, entry);
+      }
+    }
+
+    const agents: FleetAgent[] = [...byAgent.entries()].map(([identity_id, e]) => ({
+      identity_id,
+      rooms: e.rooms,
+      liveness: e.liveness,
+      latest: e.latest,
+      last_seen_ts: e.last_seen_ts,
+    }));
+    agents.sort((a, b) => {
+      const rank = LIVENESS_RANK[a.liveness] - LIVENESS_RANK[b.liveness];
+      if (rank !== 0) return rank;
+      const seen = (b.last_seen_ts ?? 0) - (a.last_seen_ts ?? 0);
+      if (seen !== 0) return seen;
+      return a.identity_id < b.identity_id ? -1 : 1;
+    });
+
+    return {
+      active: agents.filter((a) => a.liveness === 'working' || a.liveness === 'online-idle').length,
+      working: agents.filter((a) => a.liveness === 'working').length,
+      total: agents.length,
+      rooms_total: this.rooms.size,
+      rooms_covered,
+      agents,
+    };
   }
 
   private dispatch(method: MethodName, params: unknown): unknown {
@@ -731,6 +908,32 @@ class MockClient implements Client {
       case 'peers.status': {
         const room = this.needRoom((params as MethodMap['peers.status']['params']).room_id);
         return { peers: [...room.peers] };
+      }
+
+      case 'agents.fleet': {
+        this.needIdentity();
+        return this.fleet();
+      }
+
+      case 'agent.history': {
+        const p = params as MethodMap['agent.history']['params'];
+        const room = this.needRoom(p.room_id);
+        if (typeof p.identity_id !== 'string' || !/^[0-9a-f]{16,}$/i.test(p.identity_id.trim())) {
+          this.err('invalid_params', 'identity_id must be a hex identity id', null);
+        }
+        const id = p.identity_id.trim();
+        const limit = typeof p.limit === 'number' && p.limit > 0 ? Math.floor(p.limit) : 100;
+        // One point per real agent_status event, chronological — no interpolation.
+        const points = room.timeline
+          .filter((e) => e.kind === 'agent_status' && e.sender.identity_id === id)
+          .sort((a, b) => a.ts - b.ts)
+          .slice(-limit)
+          .map((e) => ({
+            ts: e.ts,
+            label: e.label ?? '',
+            progress: typeof e.progress === 'number' ? e.progress : null,
+          }));
+        return { points };
       }
 
       default:

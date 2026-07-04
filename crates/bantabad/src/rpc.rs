@@ -133,6 +133,13 @@ struct FileFetchParams {
 }
 
 #[derive(Deserialize)]
+struct AgentHistoryParams {
+    room_id: String,
+    identity_id: String,
+    limit: Option<u32>,
+}
+
+#[derive(Deserialize)]
 struct PipeExposeParams {
     room_id: String,
     target: String,
@@ -281,6 +288,13 @@ async fn dispatch(method: &str, raw_params: Value, state: &AppState) -> CoreResu
         "pipe.close" => {
             let p: PipeIdParams = params(raw_params)?;
             sup.pipe_close(&p.room_id, &p.pipe_id).await
+        }
+
+        // ---- Agents (fleet reads) --------------------------------------------
+        "agents.fleet" => sup.agents_fleet(),
+        "agent.history" => {
+            let p: AgentHistoryParams = params(raw_params)?;
+            sup.agent_history(&p.room_id, &p.identity_id, p.limit)
         }
 
         // ---- Peers ----------------------------------------------------------

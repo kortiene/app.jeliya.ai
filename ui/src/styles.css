@@ -195,10 +195,17 @@ select {
     display: flex;
   }
 
-  .app.mv-agents .right-panel,
   .app.mv-pipes .right-panel,
   .app.mv-files .right-panel {
     display: flex;
+  }
+
+  .app.mv-agents .fleet-view {
+    display: flex;
+    grid-column: 1;
+    grid-row: 1;
+    height: 100vh;
+    padding-bottom: 58px;
   }
 
   .app.mv-settings .mobile-settings {
@@ -1467,6 +1474,21 @@ select:focus {
   border-color: var(--accent-line);
 }
 
+/* Keyboard focus must be unmistakable on the dark ground: the translucent
+   border-color shift above is too faint on its own (WCAG 2.2 SC 2.4.11). A
+   solid accent ring is drawn for keyboard focus (:focus-visible) on every
+   focusable control, including the fleet search and the Add Agent form. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
 input::placeholder,
 textarea::placeholder {
   color: var(--text-mute);
@@ -1658,4 +1680,388 @@ select {
 .onboarding-columns .onboarding-card {
   flex: 1;
   min-width: 320px;
+}
+
+/* ---------- fleet dashboard (mockups/mobile-agents.png) ----------
+   Top-level view shown when nav='agents'. On desktop it covers the center +
+   right columns (grid-column 2 / -1) so it reads as a distinct page, not a
+   room panel; the sidebar stays put. On mobile the media query above makes it
+   the single active pane. */
+
+.fleet-view {
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app-fleet .fleet-view {
+  display: flex;
+  grid-column: 2 / -1;
+  grid-row: 1;
+  height: 100vh;
+  background: var(--bg);
+  z-index: 5;
+  overflow: hidden;
+}
+
+.fleet-head {
+  padding: 18px 24px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raise);
+}
+
+.fleet-head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.fleet-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fleet-title h1 {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.fleet-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fleet-search {
+  width: 200px;
+  max-width: 46vw;
+  padding: 8px 12px;
+  border-radius: 9px;
+}
+
+.fleet-filters {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+
+.fleet-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.fleet-filter:hover {
+  color: var(--text);
+  border-color: var(--accent-line);
+}
+
+.fleet-filter.active {
+  background: var(--accent-dim);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.fleet-filter .count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  background: var(--bg-card-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+}
+
+.fleet-filter.active .count {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+
+.fleet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 24px 26px;
+  min-height: 0;
+}
+
+/* stat tiles */
+
+.fleet-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.fleet-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+
+.fleet-stat-icon {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 18px;
+}
+
+.fleet-stat-icon.icon-green {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.fleet-stat-icon.icon-amber {
+  color: var(--amber);
+  background: rgba(245, 180, 83, 0.12);
+}
+
+.fleet-stat-icon.icon-blue {
+  color: var(--blue);
+  background: rgba(106, 168, 247, 0.12);
+}
+
+.fleet-stat-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fleet-stat-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.fleet-stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.fleet-stat-sub {
+  font-size: 11.5px;
+}
+
+/* agent card grid */
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.fleet-empty {
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.fleet-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 15px;
+  border-radius: 15px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+
+/* Offline cards recede via a muted ground + dimmed graphic marks only — never a
+   blanket opacity, which would composite the info-bearing text (id hex,
+   last-seen, status message) below the WCAG AA floor documented at the top of
+   this file. Text keeps its full --text-mute/--text-dim contrast. */
+.fleet-card.tone-off {
+  background: var(--bg-raise);
+  border-color: var(--border);
+}
+
+.fleet-card.tone-off .fleet-hex,
+.fleet-card.tone-off .spark {
+  opacity: 0.5;
+}
+
+.fleet-card.tone-live {
+  border-color: var(--accent-line);
+}
+
+.fleet-card.tone-warn {
+  border-color: rgba(245, 180, 83, 0.35);
+}
+
+.fleet-card-top {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.fleet-hex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 3px;
+  flex: none;
+}
+
+.fleet-card-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.fleet-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fleet-name {
+  font-size: 14.5px;
+}
+
+.fleet-idhex {
+  font-size: 11px;
+  color: var(--text-mute);
+}
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+}
+
+.live-pill .dot {
+  width: 6px;
+  height: 6px;
+}
+
+.live-pill.live-live {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-dim);
+}
+
+.live-pill.live-live .dot {
+  box-shadow: 0 0 6px rgba(47, 214, 164, 0.7);
+}
+
+.live-pill.live-idle {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+
+.live-pill.live-warn {
+  color: var(--amber);
+  border-color: rgba(245, 180, 83, 0.4);
+  background: rgba(245, 180, 83, 0.08);
+}
+
+.live-pill.live-off {
+  color: var(--text-mute);
+}
+
+.fleet-card-mid {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fleet-status {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+
+.fleet-msg {
+  font-size: 13px;
+  color: var(--text-dim);
+  overflow-wrap: break-word;
+}
+
+.spark {
+  width: 132px;
+  height: 40px;
+  flex: none;
+  align-self: center;
+}
+
+.fleet-rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.room-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card-2);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.room-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+
+.fleet-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.fleet-seen {
+  font-size: 11.5px;
+}
+
+@media (max-width: 720px) {
+  .fleet-stats {
+    grid-template-columns: 1fr;
+  }
 }

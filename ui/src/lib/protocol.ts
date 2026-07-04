@@ -125,6 +125,53 @@ export interface PipeEntry {
   connected: boolean;
 }
 
+// -- fleet reads (docs/agent-orchestration.md §3, PROTOCOL.md "Agents") -------
+
+/** Derived at read time from real peer state + real events — never stored,
+ *  never extrapolated. `working` requires a connected peer AND freshness. */
+export type Liveness = 'online-idle' | 'working' | 'offline' | 'stale';
+
+export interface FleetAgentRoom {
+  room_id: string;
+  name: string | null;
+}
+
+export interface FleetAgentLatest {
+  label: string;
+  message: string | null;
+  progress: number | null;
+  ts: number;
+  room_id: string;
+}
+
+export interface FleetAgent {
+  identity_id: string;
+  rooms: FleetAgentRoom[];
+  liveness: Liveness;
+  /** Newest agent_status by this identity across its rooms, or null if it has
+   *  never posted one. */
+  latest: FleetAgentLatest | null;
+  /** ts of the newest event of any kind by this identity — an event
+   *  timestamp, never "now". */
+  last_seen_ts: number | null;
+}
+
+export interface FleetResult {
+  active: number;
+  working: number;
+  total: number;
+  rooms_total: number;
+  rooms_covered: number;
+  agents: FleetAgent[];
+}
+
+/** One point per real agent_status event — no interpolation. */
+export interface HistoryPoint {
+  ts: number;
+  label: string;
+  progress: number | null;
+}
+
 /** `error` object of a failed response. `code` mirrors the SDK/CLI taxonomy. */
 export interface DaemonErrorShape {
   code: string;
@@ -192,6 +239,11 @@ export interface MethodMap {
   'pipe.connect': { params: { room_id: string; pipe_id: string }; result: { local_addr: string } };
   'pipe.close': { params: { room_id: string; pipe_id: string }; result: { event_id: string } };
   'peers.status': { params: { room_id: string }; result: { peers: PeerStatus[] } };
+  'agents.fleet': { params: Record<string, never>; result: FleetResult };
+  'agent.history': {
+    params: { room_id: string; identity_id: string; limit?: number };
+    result: { points: HistoryPoint[] };
+  };
 }
 
 export type MethodName = keyof MethodMap;

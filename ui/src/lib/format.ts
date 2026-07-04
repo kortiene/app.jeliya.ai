@@ -28,6 +28,19 @@ export function dayLabel(ts: number): string {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/** Relative time from a real event timestamp — display only, never a
+ *  liveness claim. */
+export function relTime(ts: number): string {
+  const delta = Date.now() - ts;
+  if (delta < 45_000) return 'just now';
+  const mins = Math.round(delta / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
 export function prettyLabel(label: string): string {
   const s = label.replace(/[_-]+/g, ' ').trim();
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : label;

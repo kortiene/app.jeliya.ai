@@ -3,6 +3,8 @@
 //! for the online runtime), consumed by the `bantabad` daemon.
 //!
 //! Modules:
+//! * [`fleet`] — pure agent-liveness derivation (the `agents.fleet` /
+//!   `agent.history` decision table per `docs/agent-orchestration.md` §1.2).
 //! * [`identity`] — create/load the device identity under `--data-dir`
 //!   (mirrors the iroh-rooms CLI's `identity.json` / `identity.secret` split).
 //! * [`localstate`] — daemon-local JSON state: known-rooms index + local name
@@ -16,6 +18,7 @@
 //!   offline flows (create/invite/join/reads) mirrored from the CLI.
 
 pub mod error;
+pub mod fleet;
 pub mod identity;
 pub mod localstate;
 pub mod materializer;
