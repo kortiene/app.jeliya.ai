@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // Bantaba two-daemon end-to-end test (Node 22+, global WebSocket, no npm deps).
 //
-// Spawns TWO `bantabad --loopback` daemons (A on 7411, B on 7412, separate
-// scratch data dirs) and drives the full product flow over real loopback
-// networking with hard assertions:
+// Spawns TWO `bantabad` daemons (A on 7411, B on 7412, separate scratch data
+// dirs) and drives the full product flow with hard assertions:
 //
 //   a. both: daemon.status + identity.create
 //   b. A: room.create "Build Iroh Rooms MVP" + room.open (capture addr)
@@ -18,7 +17,15 @@
 //   h. push discipline: every room.event push carries a distinct event_id
 //      (exactly once per event per client), checked on both daemons
 //
-// Usage: node scripts/e2e.mjs   (builds the workspace first)
+// Usage: node scripts/e2e.mjs [--mode loopback|real]   (builds the workspace first)
+//
+//   --mode loopback (default): daemons run with `--loopback` (the SDK's
+//     offline/CI network stack over 127.0.0.1).
+//   --mode real: daemons run WITHOUT `--loopback`, on the SDK's real network
+//     stack (iroh N0 preset: relay + DNS discovery). Same 67 assertions; the
+//     explicit dial addrs passed by the flow make same-host direct
+//     connections work even when relays are unreachable.
+//   The BANTABA_E2E_MODE env var is honored; the flag wins over the env.
 
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -32,6 +39,23 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const BINARY = join(repoRoot, "target", "debug", "bantabad");
 const PORT_A = 7411;
 const PORT_B = 7412;
+
+/** Network mode: "loopback" (default) or "real". Flag > env > default. */
+function parseMode() {
+  let mode = process.env.BANTABA_E2E_MODE || "loopback";
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === "--mode") mode = argv[i + 1];
+    else if (argv[i].startsWith("--mode=")) mode = argv[i].slice("--mode=".length);
+  }
+  if (mode !== "loopback" && mode !== "real") {
+    console.error(`e2e: invalid mode ${JSON.stringify(mode)} — use --mode loopback|real`);
+    process.exit(2);
+  }
+  return mode;
+}
+const MODE = parseMode();
+const REAL = MODE === "real";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -102,7 +126,7 @@ function startDaemon(label, port) {
   dataDirs.push(dataDir);
   const proc = spawn(
     BINARY,
-    ["--loopback", "--port", String(port), "--data-dir", dataDir],
+    [...(REAL ? [] : ["--loopback"]), "--port", String(port), "--data-dir", dataDir],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
   proc.stdout.on("data", (d) => process.stdout.write(`[${label}] ${d}`));
@@ -198,6 +222,7 @@ class Client {
 // The flow
 // ---------------------------------------------------------------------------
 
+console.log(`e2e: network mode = ${MODE}`);
 console.log("e2e: building the workspace (cargo build --workspace)");
 execFileSync("cargo", ["build", "--workspace"], { cwd: repoRoot, stdio: "inherit" });
 
@@ -215,7 +240,7 @@ try {
     [b, "B"],
   ]) {
     const status = await c.call("daemon.status");
-    assert(status.mode === "loopback", `${name}: daemon.status mode is loopback`);
+    assert(status.mode === MODE, `${name}: daemon.status mode is ${MODE}`);
     assert(status.identity === null, `${name}: fresh daemon has no identity`);
     assert(
       Array.isArray(status.rooms_open) && status.rooms_open.length === 0,
@@ -234,7 +259,20 @@ try {
   });
   assert(roomId.startsWith("blake3:"), "A: room.create returns a blake3: room_id");
 
-  const opened = await a.call("room.open", { room_id: roomId });
+  // room.open is idempotent. In real mode the endpoint's dialable socket
+  // addrs come from live net discovery and can land a beat after the first
+  // open returns, so re-poll the same call until the addr is populated
+  // (loopback: the first call already carries it).
+  const opened = await pollUntil(
+    async () => {
+      const o = await a.call("room.open", { room_id: roomId });
+      return typeof o.endpoint?.addr === "string" && o.endpoint.addr.includes("@")
+        ? o
+        : null;
+    },
+    30_000,
+    "A's room.open to report a dialable addr",
+  );
   assert(
     typeof opened.endpoint.endpoint_id === "string",
     "A: room.open returns the endpoint id",

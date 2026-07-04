@@ -5,3 +5,4 @@ ui/dist/
 .bantaba-demo*/
 *.log
 .DS_Store
+.bantaba-realnet*/
