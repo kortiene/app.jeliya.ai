@@ -3,11 +3,9 @@ name: release
 # Build and publish per-target `bantabad` release binaries when a version tag
 # (e.g. `v0.1.0`) is pushed.
 #
-# PHASE 0 / INERT: there is no git remote or GitHub repo yet, and no `v*` tag
-# has ever been pushed, so this workflow cannot run today. It hardcodes NO org
-# or repo slug — it always builds the repo it runs in. Once a remote exists and
-# you push a `v*` tag, GitHub runs this and attaches the artifacts to the
-# auto-created Release. See packaging/README.md for the Phase-0 prerequisites.
+# This workflow hardcodes no org or repo slug — it always builds the repo it
+# runs in. Pushing a `v*` tag triggers it and attaches artifacts to the
+# auto-created Release. See packaging/README.md for release follow-up.
 #
 # PHASE 2 (deferred): macOS notarization + Windows Authenticode signing. The
 # artifacts produced here are UNSIGNED. A *browser* download of an unsigned
