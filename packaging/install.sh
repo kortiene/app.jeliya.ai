@@ -3,11 +3,10 @@
 # detect platform, download the matching release archive, drop `bantabad` on
 # PATH. This script does NOT run the binary.
 #
-# PHASE 0: `OWNER/REPO` below is a placeholder. This script is inert until a
-# GitHub remote + a first `v*` release exist. See packaging/README.md.
+# Requires a published GitHub Release with bantabad assets attached.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/packaging/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/kortiene/bantaba/main/packaging/install.sh | sh
 #
 # Env overrides:
 #   BANTABA_VERSION=v0.1.0   pin a specific release tag (default: latest)
@@ -15,7 +14,7 @@
 set -eu
 
 # --- config -----------------------------------------------------------------
-REPO="OWNER/REPO" # <-- FILL IN once a remote exists (e.g. your-org/bantaba)
+REPO="kortiene/bantaba"
 BIN="bantabad"
 
 VERSION="${BANTABA_VERSION:-}"

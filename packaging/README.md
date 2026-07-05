@@ -1,9 +1,10 @@
 # Bantaba packaging & distribution (Phase 1)
 
 These files distribute the `bantabad` daemon as prebuilt, per-platform binaries.
-They are **templates**: every one contains a clearly-marked `OWNER/REPO`
-placeholder and is **inert until Phase 0 is done** (a git remote exists and a
-first tagged release has been published).
+The installer scripts and archive URLs are wired to `kortiene/bantaba`; they
+become usable after the first `v*` GitHub Release has published assets.
+`bantaba.rb` remains a per-release Homebrew formula template until the release
+sha256 values are copied in.
 
 ## Files
 
@@ -12,7 +13,7 @@ first tagged release has been published).
 | `../.github/workflows/release.yml` | GitHub Actions release build. Triggers on a `v*` tag push; builds `bantabad` for five targets and attaches the archives (+ `.sha256` sidecars) to the GitHub Release. |
 | `install.sh` | POSIX-sh one-liner installer for macOS + Linux (`curl \| sh`). Detects OS/arch, downloads the matching `.tar.gz`, installs `bantabad` to `/usr/local/bin` (or `~/.local/bin`). |
 | `install.ps1` | Windows PowerShell equivalent. Downloads the `.zip`, expands to `%LOCALAPPDATA%\Programs\Bantaba`, adds it to the user PATH. |
-| `bantaba.rb` | Homebrew formula template. Belongs in a tap (`OWNER/homebrew-bantaba`), not homebrew-core. |
+| `bantaba.rb` | Homebrew formula template. Belongs in a tap (`kortiene/homebrew-bantaba`), not homebrew-core. |
 
 ## How they fit together
 
@@ -48,24 +49,18 @@ static binaries and dodge glibc-version breakage (the tree has C deps — `ring`
 `libsqlite3-sys` — and a QUIC/UDP stack via `iroh`, so a C toolchain is
 required; zig supplies it).
 
-## Phase 0 prerequisites (do these before any of this works)
+## Phase 0 status
 
-1. **Create the GitHub remote / repo** and decide the org. Nothing here is
-   wired to a real org yet — that is deliberate.
-2. **Confirm redistribution rights.** The `iroh-rooms` SDK is a *git*
-   dependency (`github.com/kortiene/iroh-room`, pinned rev — not on crates.io)
-   and is compiled into `bantabad`. Confirm its license permits redistributing
-   the built binary before publishing artifacts. (The workflow only *fetches*
-   from git at build time; it never runs `cargo publish`.)
-3. **Push a first `v*` tag** so a Release (and its assets) exist for the
-   installers/formula to point at.
+1. **GitHub remote / repo:** configured as `git@github.com:kortiene/bantaba.git`.
+2. **Redistribution rights:** confirmed for publishing built `bantabad` binaries
+   that include the pinned `iroh-rooms` git dependency.
+3. **Remaining:** push the first `v*` tag so GitHub Actions creates a Release
+   and attaches the platform archives plus `.sha256` sidecars.
 
-## Placeholders a human must fill
+## Per-release follow-up
 
-| Placeholder | Where | Fill with |
+| Item | Where | Fill with |
 | --- | --- | --- |
-| `OWNER/REPO` | `install.sh`, `install.ps1`, `bantaba.rb` (homepage + urls) | the real GitHub slug, e.g. `your-org/bantaba` |
-| `OWNER/homebrew-bantaba` | `bantaba.rb` comment | your tap repo |
 | `version "0.1.0"` | `bantaba.rb` | the release number (no leading `v`) |
 | `REPLACE_WITH_*_SHA256` (×4) | `bantaba.rb` | sha256 of each tarball — copy from the `<asset>.sha256` files the workflow uploads |
 

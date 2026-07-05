@@ -3,11 +3,10 @@
   Detects arch, downloads the Windows release zip, expands it to a
   user-writable dir, and puts `bantabad.exe` on your PATH. Does NOT run it.
 
-  PHASE 0: `OWNER/REPO` below is a placeholder. This script is inert until a
-  GitHub remote + a first `v*` release exist. See packaging/README.md.
+  Requires a published GitHub Release with bantabad assets attached.
 
   Usage (from an elevated-or-normal PowerShell):
-    irm https://raw.githubusercontent.com/OWNER/REPO/main/packaging/install.ps1 | iex
+    irm https://raw.githubusercontent.com/kortiene/bantaba/main/packaging/install.ps1 | iex
 
   Env overrides:
     $env:BANTABA_VERSION = 'v0.1.0'   # pin a release tag (default: latest)
@@ -16,7 +15,7 @@
 #Requires -Version 5.1
 $ErrorActionPreference = 'Stop'
 
-$Repo = 'OWNER/REPO'  # <-- FILL IN once a remote exists (e.g. your-org/bantaba)
+$Repo = 'kortiene/bantaba'
 $Bin  = 'bantabad'
 
 # --- detect arch ------------------------------------------------------------
