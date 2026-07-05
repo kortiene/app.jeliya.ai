@@ -75,7 +75,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Build UI (produces ui/dist)
         working-directory: ui
@@ -91,6 +91,8 @@ jobs:
       - name: Setup Zig
         if: ${{ matrix.zigbuild }}
         uses: mlugg/setup-zig@v1
+        with:
+          version: 0.15.2
 
       - name: Install cargo-zigbuild
         if: ${{ matrix.zigbuild }}
