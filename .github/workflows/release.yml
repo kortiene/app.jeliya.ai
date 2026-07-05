@@ -54,7 +54,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # `@stable` is always >= the repo MSRV (workspace rust-version = 1.80).
       # `targets` installs the cross target's std via rustup so cargo/zigbuild
@@ -73,7 +73,7 @@ jobs:
       # The `embed-ui` feature bakes ui/dist into the binary via rust-embed, so
       # ui/dist MUST exist before the cargo build. Built once per job.
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -148,7 +148,7 @@ jobs:
           "ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           # The tag being built (github.ref) is the Release; created if absent.
           files: |
