@@ -291,9 +291,6 @@ class AppStringsEn extends AppStrings {
       'This file failed a security check and wasn\'t saved — it may have been corrupted or tampered with in transit.';
 
   @override
-  String get fleetAgentsTitle => 'Agents';
-
-  @override
   String get fleetSearchPlaceholder => 'Search agents…';
 
   @override
@@ -307,9 +304,6 @@ class AppStringsEn extends AppStrings {
 
   @override
   String get fleetFilterAll => 'All';
-
-  @override
-  String get fleetFilterActive => 'Active';
 
   @override
   String get fleetFilterNeedsAttention => 'Needs attention';
@@ -611,16 +605,67 @@ class AppStringsEn extends AppStrings {
   String get panelRoomPanel => 'Room panel';
 
   @override
-  String get panelTabMembers => 'Members';
+  String get roomDestPeople => 'People';
 
   @override
-  String get panelTabAgents => 'Agents';
+  String get roomDestAgents => 'Agents & Runs';
 
   @override
-  String get panelTabFiles => 'Files';
+  String get roomDestFiles => 'Files';
 
   @override
-  String get panelTabPipes => 'Pipes';
+  String get roomDestPipes => 'Pipes';
+
+  @override
+  String get roomDestActivity => 'Activity';
+
+  @override
+  String get roomNavLabel => 'Room tools';
+
+  @override
+  String get roomBackToRooms => 'Back to Rooms';
+
+  @override
+  String get roomBackToActivity => 'Back to Activity';
+
+  @override
+  String get roomCloseInspector => 'Close inspector';
+
+  @override
+  String get roomInformation => 'Room information';
+
+  @override
+  String get roomInfoRoom => 'Room';
+
+  @override
+  String get roomInfoSession => 'Session';
+
+  @override
+  String get roomInfoAgents => 'Agents';
+
+  @override
+  String get roomInfoInvites => 'Invites';
+
+  @override
+  String get memberStatusMember => 'Member';
+
+  @override
+  String get memberStatusUnknown => 'Unknown';
+
+  @override
+  String get pipeStateConnected => 'Connected';
+
+  @override
+  String get pipeStateOpen => 'Open';
+
+  @override
+  String get pipeStateClosed => 'Closed';
+
+  @override
+  String get fleetFilterLive => 'Live';
+
+  @override
+  String get roomLoadingMembers => 'Loading members…';
 
   @override
   String get panelMembersEmpty => 'No members have synced for this room yet.';
@@ -647,21 +692,16 @@ class AppStringsEn extends AppStrings {
   String get panelMemberCountsLabel => 'Member counts';
 
   @override
-  String get panelStatActive => 'Active';
+  String get panelStatAgents => 'Agents';
 
   @override
-  String get panelStatAgents => 'Agents';
+  String get panelStatMembers => 'Members';
 
   @override
   String get panelStatInvited => 'Invited';
 
   @override
   String get panelRoomRoster => 'Room roster';
-
-  @override
-  String panelNActive(num n) {
-    return '$n active';
-  }
 
   @override
   String get panelThisDevice => 'this device';
@@ -674,9 +714,6 @@ class AppStringsEn extends AppStrings {
 
   @override
   String get panelRoleMember => 'Member';
-
-  @override
-  String get panelStatusUnknown => 'Unknown';
 
   @override
   String get panelLeave => 'Leave';
@@ -841,15 +878,6 @@ class AppStringsEn extends AppStrings {
   @override
   String get panelPipesEmpty =>
       'No pipes yet — expose a local port to one authorized peer below.';
-
-  @override
-  String get panelPipeStateActive => 'Active';
-
-  @override
-  String get panelPipeStateOpen => 'Open';
-
-  @override
-  String get panelPipeStateClosed => 'Closed';
 
   @override
   String panelPipeMeta(String openedBy, String authorized) {
@@ -1100,11 +1128,6 @@ class AppStringsEn extends AppStrings {
   String get fetchOpenLocalFileCopy => 'Open local file copy';
 
   @override
-  String roomHeaderActiveCount(num n) {
-    return '$n active';
-  }
-
-  @override
   String roomHeaderAgentCount(num n) {
     String _temp0 = intl.Intl.pluralLogic(
       n,
@@ -1127,7 +1150,7 @@ class AppStringsEn extends AppStrings {
   }
 
   @override
-  String get roomHeaderAloneInRoom => 'Alone in this room';
+  String get roomHeaderNoPeersConnected => 'No peers connected';
 
   @override
   String get roomHeaderPeerToPeer => 'Peer-to-Peer';
@@ -1301,13 +1324,10 @@ class AppStringsEn extends AppStrings {
   String get sidebarNavPrimaryLabel => 'Primary';
 
   @override
-  String get sidebarNavHome => 'Home';
-
-  @override
   String get sidebarNavRooms => 'Rooms';
 
   @override
-  String get sidebarNavAgents => 'Agents';
+  String get sidebarNavFleet => 'Agent Fleet';
 
   @override
   String get sidebarNavPipes => 'Pipes';
@@ -1316,13 +1336,7 @@ class AppStringsEn extends AppStrings {
   String get sidebarNavFiles => 'Files';
 
   @override
-  String get sidebarNavCalls => 'Calls';
-
-  @override
   String get sidebarNavSettings => 'Settings';
-
-  @override
-  String get sidebarNavSoon => 'Soon';
 
   @override
   String get sidebarYourRooms => 'Your Rooms';
@@ -1337,10 +1351,10 @@ class AppStringsEn extends AppStrings {
   String get sidebarNoRoomsYet => 'No rooms yet';
 
   @override
-  String get sidebarStateActive => 'Active';
+  String get sidebarStateOpen => 'Open';
 
   @override
-  String get sidebarStateIdle => 'Idle';
+  String get sidebarStateClosed => 'Closed';
 
   @override
   String get sidebarStateLeft => 'Left';
@@ -1531,6 +1545,22 @@ class AppStringsEn extends AppStrings {
   String get commonYou => 'You';
 
   @override
+  String commonMemberCount(num n) {
+    final intl.NumberFormat nNumberFormat = intl.NumberFormat.decimalPattern(
+      localeName,
+    );
+    final String nString = nNumberFormat.format(n);
+
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$nString members',
+      one: '$nString member',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get commonClickToSetLocalName => 'Click to set a local name';
 
   @override
@@ -1582,9 +1612,6 @@ class AppStringsEn extends AppStrings {
 
   @override
   String get wireRoleAgentInline => 'agent';
-
-  @override
-  String get wireStatusActive => 'Active';
 
   @override
   String get wireStatusInvited => 'Invited';

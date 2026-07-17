@@ -70,10 +70,14 @@ String _livenessLabel(AppStrings s, String liveness) => switch (liveness) {
 
 // -- filters ---------------------------------------------------------------------
 
-enum _FleetFilter { all, active, needsAttention, working, offline }
+enum _FleetFilter { all, live, needsAttention, working, offline }
 
 bool _matchesFilter(FleetAgent a, _FleetFilter f) => switch (f) {
-  _FleetFilter.active =>
+  // `working || online-idle` — an agent whose peer is reachable. "Live" says
+  // that; "Active" said it in a word the room rail used for a local session
+  // and the wire uses for signed membership (docs/room-workbench.md,
+  // decision 4).
+  _FleetFilter.live =>
     a.liveness == LivenessValues.working ||
         a.liveness == LivenessValues.onlineIdle,
   _FleetFilter.needsAttention =>
@@ -86,7 +90,7 @@ bool _matchesFilter(FleetAgent a, _FleetFilter f) => switch (f) {
 
 String _filterLabel(AppStrings s, _FleetFilter f) => switch (f) {
   _FleetFilter.all => s.fleetFilterAll,
-  _FleetFilter.active => s.fleetFilterActive,
+  _FleetFilter.live => s.fleetFilterLive,
   _FleetFilter.needsAttention => s.fleetFilterNeedsAttention,
   _FleetFilter.working => s.fleetFilterWorking,
   _FleetFilter.offline => s.fleetFilterOffline,
@@ -183,13 +187,26 @@ class _FleetDashboardState extends State<FleetDashboard> {
     final title = <Widget>[
       const TreeMark(size: 26),
       const SizedBox(width: JeliyaSpacing.x10),
-      Semantics(
-        header: true,
-        child: Text(
-          s.fleetAgentsTitle,
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
+      // Flexible with ellipsis: the title shares its row with the mark (and,
+      // on desktop, the search + Add Agent), and "Flotte d'agents" is wide
+      // enough to overrun a 360dp phone. It shortens rather than overflowing —
+      // and the same guard holds at 200% text, where even the English title
+      // needs the room to give.
+      Flexible(
+        child: Semantics(
+          header: true,
+          child: Text(
+            // The same words as the rail entry that opens it (decision 1). A
+            // rail reading "Agent Fleet" that lands on a page titled "Agents" —
+            // the name the room's own Agents & Runs destination also answers
+            // to — leaves the user to guess which question they just asked.
+            s.sidebarNavFleet,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
