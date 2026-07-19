@@ -3,7 +3,7 @@ type: "Architecture"
 title: "Production deployment architecture"
 description: "Repository-grounded assessment, target architecture, security boundaries, infrastructure plan, and phased gates for deploying Jeliya at app.jeliya.ai."
 tags: ["architecture", "deployment", "production", "security", "pwa", "iroh"]
-timestamp: "2026-07-19T15:15:00Z"
+timestamp: "2026-07-19T22:15:00Z"
 status: "proposal"
 implementation_status: "planned"
 verification_status: "partial"
@@ -19,10 +19,19 @@ signed-event architecture. It distinguishes repository facts from proposed
 work, compares the viable deployment models, defines the recommended trust
 architecture, and provides measurable delivery gates.
 
-It does not authorize a production deployment by itself. The page remains a
-proposal until the architecture decision is accepted, and its implementation,
+It does not authorize a production deployment by itself. Its implementation,
 verification, and release status must advance independently under the
 [documentation profile](PROFILE.md).
+
+**This architecture was adopted on 2026-07-19 subject to six binding
+amendments. Read [Production deployment
+decision](production-deployment-decision.md) first.** The amendments override
+parts of this page — the browser control key's lifetime and extractability, the
+`room.join` scope, the production header set, the companion update path, the
+supported iOS storage mode, the frontend gate set, and the trust-and-safety and
+legal owners. Where this page and the decision record disagree, the decision
+record governs. The estimates below predate the decision and do not include the
+work its amendments add.
 
 ## Executive decision
 
