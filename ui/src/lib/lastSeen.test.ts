@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 //
 // jsdom gives this file a real `localStorage` for the load/save round-trip; the
-// pure seed/mark/unread helpers need no DOM. The Dart mirror of the shared-
-// fixture block lives in dart/jeliya_protocol/test/conventions_test.dart — both
-// read ./conformance/room-attention.fixtures.json, so the two clients decide
-// unread from ONE source (docs/room-attention.md; issue #63, AC7).
+// pure seed/mark/unread helpers need no DOM. The shared-fixture block below
+// reads ./conformance/room-attention.fixtures.json, so unread is decided from
+// ONE source (docs/room-attention.md; issue #63, AC7).
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -97,9 +96,8 @@ describe('isRoomUnread', () => {
   });
 });
 
-// The shared five-case fixture, replayed here and (identically) in the Dart
-// conventions test — the parity guard docs/room-attention.md relies on.
-describe('shared room-attention fixtures (parity with Dart)', () => {
+// The shared five-case fixture — the guard docs/room-attention.md relies on.
+describe('shared room-attention fixtures', () => {
   interface FixtureCase {
     name: string;
     room: { room_id: string; last_event_ts: number | null; last_event_kind: string | null };

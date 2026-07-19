@@ -53,9 +53,8 @@ upstream suite at the pinned revision, not on network evidence.
 - `jeliyad-v0.5.0-x86_64-pc-windows-msvc.zip`
 - one `.sha256` sidecar for each archive
 
-No DMG, Linux native-app tarball, APK/AAB, iOS application, or separately
-packaged agent runner is in `v0.5.0`; it is a daemon-plus-embedded-UI
-prerelease only.
+No separately packaged agent runner is in `v0.5.0`; it is a
+daemon-plus-embedded-UI prerelease only.
 
 ## Candidate changes are not released capabilities
 
@@ -63,10 +62,7 @@ The post-release candidate repins `iroh-rooms` to untagged `a5d98b70...`.
 Alongside the rc.3 join capability, bounded membership sync, and gap healing,
 this adds provisional-peer fanout/handshake gating, connection-generation
 teardown guards, and bounded store-insert recovery with durable critical
-degradation reporting. It also adds a source-supported Linux
-Flutter app with its packaging gate and `linux-flutter` CI job. The Linux app
-is an unsigned, unpublished developer package; it adds no released feature.
-Local tests and upstream regressions demonstrate implementation progress;
+degradation reporting. Local tests and upstream regressions demonstrate implementation progress;
 they do not alter the release boundary — `v0.5.0` behavior is exactly what
 its archives contain, including its known join-after-chat limitation.
 
@@ -82,8 +78,7 @@ published, the same public immutable commit must prove all of the following:
 3. direct and relay evidence is certifiable against the candidate's published
    revisions (the `v0.5.0` evidence binds `c5f740e` + `d0ceb0b` and does not
    transfer);
-4. all required hosted CI gates — now including `linux-flutter` — pass twice
-   from clean environments;
+4. all required hosted CI gates pass twice from clean environments;
 5. the complete archive-and-sidecar set exists and verifies, including
    Windows behavioral gates;
 6. tag, daemon version, changelog, and artifact names agree;

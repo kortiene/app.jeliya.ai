@@ -25,8 +25,7 @@ constant — that is what makes a language switch apply live, with no restart.
 ## Adding a key
 
 1. Add the field to `Catalog` in `catalog.ts`, in its area block, named
-   `<area><Key>` in lowerCamelCase (`roomsFilterActive`) — the same scheme the
-   Flutter ARB uses, so the two catalogs line up under review.
+   `<area><Key>` in lowerCamelCase (`roomsFilterActive`).
 2. Plain string → `Message`. Needs a value from the call site → `MessageFn<[…]>`,
    which puts the argument list in the type and makes a missing one a type error
    instead of a `{name}` on screen.
@@ -41,9 +40,9 @@ constant — that is what makes a language switch apply live, with no restart.
 
 Sentence case, vouvoiement, `U+202F` before `; ! ?` and inside `« »`, `U+00A0`
 before `:`, `U+2019` for the apostrophe, `U+2026` for the ellipsis, octets
-(`o/Ko/Mo/Go`), `42 %` with `U+202F`. Compare against the Flutter
-`app/lib/src/l10n/arb/app_fr.arb`, which already follows the same contract —
-if a phrase exists there, reuse its wording rather than inventing a second one.
+(`o/Ko/Mo/Go`), `42 %` with `U+202F`. `docs/glossary-fr.md` records the agreed
+terminology tiers — if a term is settled there, reuse its wording rather than
+inventing a second one.
 
 ## The never-translate module
 
@@ -65,8 +64,8 @@ the display label are never the same constant.
 date, number and calendar **conventions**. They are separate persisted
 preferences (glossary decision 4), and either may be unset, meaning "follow the
 platform". Someone may read French while formatting under `en-CA`. The
-deliberate exception, carried over from Flutter so the clients agree: byte-unit
-words and the Today/Yesterday/"ago" phrases follow the **text** locale, because
+deliberate exception: byte-unit words and the Today/Yesterday/"ago" phrases
+follow the **text** locale, because
 they are vocabulary — only numeric and calendar conventions follow the
 formatting locale.
 

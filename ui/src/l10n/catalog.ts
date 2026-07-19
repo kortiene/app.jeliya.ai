@@ -1,10 +1,9 @@
 /** The React catalog contract (issue #74).
  *
- *  The Flutter app resolves copy through a generated `AppStrings` class backed
- *  by an ARB catalog with a translator description per key. React gets the same
- *  contract, expressed in TypeScript rather than generated: `Catalog` is the
- *  shape, `en` is the source of truth, and every other locale is typed as
- *  `Catalog` — so a missing key is a COMPILE error, not a runtime blank.
+ *  Copy is resolved through a hand-written TypeScript catalog rather than a
+ *  generated one: `Catalog` is the shape, `en` is the source of truth, and every
+ *  other locale is typed as `Catalog` — so a missing key is a COMPILE error, not
+ *  a runtime blank.
  *
  *  Why not an i18n library. `ui/` ships exactly two runtime dependencies,
  *  react and react-dom, and `docs/room-workbench.md` records that adding one is
@@ -34,10 +33,9 @@ export type MessageFn<A extends unknown[]> = (...args: A) => string;
 
 /** Every user-visible string in the React client.
  *
- *  Names follow the Flutter scheme — `<area><Key>` in lowerCamelCase — so a
- *  reviewer comparing the two catalogs can line them up, and so the two clients
- *  cannot drift into different words for the same thing. The areas mirror the
- *  destinations in `docs/room-workbench.md`.
+ *  Names follow one scheme — `<area><Key>` in lowerCamelCase — so a reviewer can
+ *  find every string for a surface by prefix, and so one thing cannot acquire
+ *  two names. The areas mirror the destinations in `docs/room-workbench.md`.
  *
  *  Ordered by area, and within an area by where the string appears on screen.
  */

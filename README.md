@@ -164,33 +164,6 @@ jeliyad --version       # print the version
 > `~/Library/Application Support/Jeliya`, on Linux: `$XDG_DATA_HOME/Jeliya`,
 > on Windows: `%APPDATA%\Jeliya`), so they persist between runs.
 
-### What about a native desktop app?
-
-There's one in the repo: `app/` is a native Flutter desktop app for macOS and
-Linux at feature parity with the web UI, fully localized in English and
-French. macOS has a signed, sandboxed packaging pipeline
-(`scripts/package-macos.mjs`, which emits a DMG — ad-hoc signed until Apple
-Developer enrollment completes). Linux has a GTK host and a source packaging
-pipeline that builds a path-relocatable bundle with its supervised `jeliyad`
-sidecar; CI is configured to compile and inspect that bundle on Linux x86_64.
-
-**No native app release has been published yet** — every release so far ships
-only the `jeliyad` daemon — so installing today means the daemon above plus
-the browser UI. The Linux app is source-supported, not a downloadable app
-artifact. Build and packaging instructions are in
-[`app/README.md`](app/README.md).
-
-`app/` also runs on phones: below 900dp it lays out as a bottom-tab mobile
-app, and the Android build speaks the real protocol through an in-process
-(FFI) engine. A physical Android 13 smoke covered engine startup, local room
-operations, pushes, persistence, and the mobile UI with the engine configured
-for real networking. It did not connect that phone to a peer on another
-network or observe a direct or relay path, so Android cross-network behavior
-is not yet verified. Android release builds (store bundle and per-ABI sideload
-APKs) are wired and documented in
-[`packaging/README.md`](packaging/README.md), but no APK or app bundle has
-been published either.
-
 ---
 
 ## Your first room (2-minute tour)
@@ -371,9 +344,8 @@ the app is a *fold* (a replay) over Iroh Rooms' signed event log.
   view-models the UI shows.
 - **`jeliyad`** is the daemon: a thin **local-only** WebSocket shell (bound
   to `127.0.0.1`) over the protocol engine in `jeliya-core`, which dispatches
-  every request and fans out live pushes. The Android app drives the same
-  engine in-process (via `crates/jeliya-ffi`) with no daemon and no socket.
-  The contract over either transport is **[`docs/PROTOCOL.md`](docs/PROTOCOL.md)**.
+  every request and fans out live pushes. The contract over that transport is
+  **[`docs/PROTOCOL.md`](docs/PROTOCOL.md)**.
 - The `iroh-rooms` SDK is pinned to a specific revision and uses its
   *experimental* tier, which can change on any release — so **nothing outside
   `jeliya-core` is allowed to import it.**
@@ -386,10 +358,7 @@ the app is a *fold* (a replay) over Iroh Rooms' signed event log.
 |---|---|
 | `crates/jeliya-core` | The only consumer of the `iroh-rooms` SDK: room supervisor (one node per open room), event materializer (log → view-models), local state (room names), and the transport-free protocol engine (dispatch + pushes) every transport drives. |
 | `crates/jeliyad` | The resident daemon: a thin local-only WebSocket shell over the `jeliya-core` engine (see `docs/PROTOCOL.md`). |
-| `crates/jeliya-ffi` | C-ABI shim over `jeliya-core` for the mobile in-process (FFI) transport. |
-| `dart/jeliya_protocol` | Pure-Dart typed client for the protocol: typed models + wrappers for all 24 RPCs, WebSocket and in-process FFI transports (`package:jeliya_protocol/ffi.dart`), sidecar supervisor, mock client for tests. |
-| `app/` | The native Flutter app: macOS and Linux desktop clients at parity with the web UI (English + French), plus a phone bottom-tab layout below 900dp and the Android build running the protocol in-process (FFI). Linux is buildable from source but has no published app artifact. |
-| `ui/` | The web UI the daemon serves (`embed-ui`): Vite + React, implements `mockups/`. It remains the only GUI shipped in Windows and Linux releases, and the reference client the native app tracks. |
+| `ui/` | The web UI the daemon serves (`embed-ui`): Vite + React, implements `mockups/`. It is the only GUI Jeliya ships. |
 | `docs/index.md` | The canonical documentation wiki: architecture, guides, operations, decisions, and proposals. |
 | `docs/PROFILE.md` | The metadata, lifecycle, navigation, linking, and CI contract for every wiki page. |
 | `docs/PROTOCOL.md` | The daemon ⇄ shell contract (the spine). |
@@ -397,7 +366,7 @@ the app is a *fold* (a replay) over Iroh Rooms' signed event log.
 | `docs/agent-orchestration.md` | The pinned v1 fleet contract: truthful agent liveness, status vocabulary, task claims, and the fleet read RPCs, across daemon, runner, and UI. |
 | `docs/agent-marketplace.md` | Proposed hosted-agent marketplace architecture, trust model, and delivery plan (not yet implemented). |
 | `mockups/` | The original product mockups the UI is built to. |
-| `packaging/` | Daemon distribution: `install.sh` / `install.ps1`, plus the Homebrew formula (`jeliya.rb`) and app cask (`jeliya-app.rb`) templates for the tap. |
+| `packaging/` | Daemon distribution: `install.sh` / `install.ps1`, plus the Homebrew formula (`jeliya.rb`) template for the tap. |
 | `scripts/` | Test and demo harnesses: the two-daemon loopback demo + e2e, the real-agent runner (real network stack by default) with its three-daemon agent e2e, and the two-machine real-network NAT scripts. |
 | `memory/` | Dated session records — debugging and analysis notes kept for the record. |
 

@@ -3,20 +3,21 @@ type: "Runbook"
 title: "Accessibility release checklist"
 description: "The screen-reader and keyboard behaviours automated checks cannot prove, verified by hand before a release."
 tags: ["accessibility", "release", "qa", "manual"]
-timestamp: "2026-07-18T13:30:00Z"
+timestamp: "2026-07-19T12:00:00Z"
 status: "canonical"
 implementation_status: "implemented"
-verification_status: "verified"
+verification_status: "partial"
 release_status: "unreleased"
 audience: ["contributors", "reviewers", "maintainers"]
 ---
 
 # Accessibility release checklist
 
-CI enforces what a machine can decide: no critical or serious axe violations
-across every destination and viewport, no clipped layout at 100/200/320% text
-in English and French, a focus indicator that exists, target sizes that clear
-their floor, and a token palette both clients agree on.
+Jeliya ships one client, the React web client in `ui/`, and CI enforces what a
+machine can decide about it: no critical or serious axe violations across
+every destination and viewport, critical flows that reflow at the 320px /
+400%-zoom target in English and French, target sizes that clear their floor,
+and a palette that matches the shared token fixture.
 
 None of that proves the app is usable with a screen reader. Automated checks
 read the accessibility tree; they cannot hear the order things are announced
@@ -24,20 +25,24 @@ in, notice that a live region interrupts mid-sentence, or tell that focus
 technically moved somewhere useless. This checklist covers exactly that gap —
 the residue, not a re-run of the gates.
 
-Work through it on one desktop screen reader and one mobile screen reader
-before a release. Record the pass in the release notes with the reader and
-version used; a checklist nobody can tell was run is not evidence.
+Work through it in one desktop browser with a desktop screen reader and one
+mobile browser with a mobile screen reader before a release. Record the pass
+in the release notes with the browser, reader, and versions used; a checklist
+nobody can tell was run is not evidence.
+
+Accessibility here is enforced, not certified. Nothing on this page is a WCAG
+conformance claim; see [capability status](capability-status.md) for the
+standing position.
 
 ## What CI already covers — do not re-verify by hand
 
 | Enforced by | Covers |
 |---|---|
 | `ui/e2e/a11y-matrix.spec.ts` | No critical/serious axe violations, all destinations x 4 viewports |
-| `ui/e2e/a11y.spec.ts` | One `main` and one `h1` per destination, landmark names, skip links, target floors |
-| `app/test/a11y_semantics_test.dart` | Button/link roles, Enter and Space activation, focus-ring presence |
-| `app/test/a11y_text_scale_test.dart` | 100/200/320% text in English and French at 360x640 |
-| `app/test/a11y_matrix_test.dart` | Widths 360/899/900/1280, tab traversal, safe-area insets |
-| `scripts/check-design-tokens.mjs`, `app/test/design_tokens_test.dart` | Token parity and the contrast floors |
+| `ui/e2e/a11y.spec.ts` | One `main` and one `h1` per destination, landmark names, skip links that move focus, 44px target floors, distinct names on repeated row actions, reduced motion |
+| `ui/e2e/i18n-layout.spec.ts` | Critical flows reflow at 320px (the 400%-zoom equivalent) in English and French |
+| `ui/e2e/responsive.spec.ts` | Widths 360/899/900/920/1280, the inspector's float-versus-column behaviour, safe-area insets at 320 and 360 |
+| `scripts/check-design-tokens.mjs` | The React palette against the shared fixture |
 
 ## Screen reader
 
@@ -84,20 +89,31 @@ version used; a checklist nobody can tell was run is not evidence.
       disappears behind the drawer, the composer, the jump-to-latest pill, or
       the bottom tab bar.
 
-## Platform behaviours
+## Browser and platform behaviours
 
-- [ ] **OS text size at maximum** on a phone: every primary and Cancel action
-      still reachable, by scrolling if necessary, in both English and French.
-- [ ] **Reduced motion honoured** at the OS level: the jump-to-latest scroll
-      lands instantly rather than animating.
-- [ ] **The desktop app is operable with the keyboard alone** from launch —
+- [ ] **Browser text size raised on its own**, without page zoom: set the
+      browser's minimum or default font size to its largest and confirm every
+      primary and Cancel action is still reachable, by scrolling if necessary,
+      in both English and French. CI covers page-zoom reflow but not
+      text-only resizing (see Known gaps).
+- [ ] **OS text size at maximum** in a mobile browser: same check on a phone.
+- [ ] **Reduced motion honoured** at the OS level, not only through the
+      Playwright emulation: the jump-to-latest scroll lands instantly rather
+      than animating.
+- [ ] **The app is operable with the keyboard alone from first load** —
       including onboarding, which a pointer-only assumption tends to miss
       because it is seen once.
 
 ## Known gaps
 
-- The web client is English-only until issue #74 lands, so the bilingual
-  checks above apply to the Flutter app for now.
+- **Text-only resizing has no automated coverage.** The Flutter suite carried
+  the 100/200/320% text-scale checks; it is gone with the client, and the
+  browser equivalent — raising text size without zooming — has no spec. Until
+  one exists, the manual item above is the only coverage, and WCAG 1.4.4 is
+  unproven.
+- **Focus-indicator presence has no automated coverage** either, for the same
+  reason. axe does not decide whether a visible focus ring appears, so the
+  keyboard item above is the only check.
 - `ui-e2e` is not currently in the repository's required status checks, so the
   accessibility gate runs on every pull request but does not yet BLOCK a merge.
   Adding it is a branch-protection change, outside any pull request's diff.

@@ -1,7 +1,7 @@
 ---
 type: "Runbook"
 title: "Signing and notarization (Phase 2)"
-description: "Release-security plan and procedure for signing and notarizing Jeliya desktop artifacts."
+description: "Release-security plan and procedure for signing the Jeliya daemon release artifacts."
 tags: ["linux", "macos", "release", "security", "signing", "windows"]
 timestamp: "2026-07-16T15:30:00Z"
 status: "canonical"
@@ -18,24 +18,13 @@ released under the project's former name Bantaba — see `docs/naming.md`).
 The `curl | sh` and
 Homebrew paths install cleanly because they do not set the macOS quarantine bit,
 but browser downloads can still trip Gatekeeper on macOS and SmartScreen on
-Windows. This document tracks the work needed to ship signed desktop binaries.
+Windows. This document tracks the work needed to ship signed daemon binaries.
 
 Current status:
 
 - The `v0.5.0` workflow publishes only five unsigned `jeliyad` archives with
-  their checksum sidecars. It contains no `macos-app` job, DMG upload,
-  Developer ID signing, notarization, or Authenticode step.
-- Source-level macOS packaging scripts and an unsigned Linux Flutter tarball
-  pipeline exist. The Linux ARM64 build and lifecycle gate pass locally, but
-  neither platform's native app is a public release artifact. The Linux
-  tarball has only a SHA-256 integrity sidecar; it has no publisher signature,
-  distro repository signature, or sandboxed package format. It also lacks a
-  complete Rust third-party license and notice inventory, which is required
-  before distribution.
-- Android signing is separate future distribution work. `v0.5.0` publishes no
-  APK or AAB, and a debug-keystore fallback must never be treated as a
-  distributable build. See
-  [`packaging/README.md`](../packaging/README.md#android-release-builds).
+  their checksum sidecars. It contains no Developer ID signing, notarization,
+  or Authenticode step.
 
 ## Goals
 
@@ -56,10 +45,7 @@ Required Apple assets:
   workflow uses this route, not an App Store Connect API key).
 - Team ID and certificate password as GitHub secrets.
 
-### Planned: a signed and notarized `Jeliya.app` DMG
-
-`scripts/package-macos.mjs` is development packaging machinery, not a current
-release job. A future reviewed workflow may use the following credentials:
+A future reviewed workflow may use the following credentials:
 
 | Secret | Purpose |
 | --- | --- |
@@ -74,9 +60,9 @@ Required future controls:
 
 1. Import the certificate into a throwaway keychain with logs that never expose
    credential values.
-2. Sign the app and embedded daemon with hardened runtime enabled.
+2. Sign the daemon binary with hardened runtime enabled.
 3. Verify the signature locally before notarization.
-4. Submit with `notarytool`, wait for success, staple the ticket, and re-verify.
+4. Submit with `notarytool`, wait for success, and re-verify.
 5. Generate the checksum only over the final signed and notarized bytes.
 6. Fail closed if any selected signing or notarization step fails. Never fall
    back to an ad-hoc or unsigned artifact in a signing-enabled release.
@@ -98,9 +84,8 @@ Notes:
 
 - Notarization is most valuable for browser-downloaded macOS artifacts. Homebrew
   and `curl | sh` are less affected, but signed artifacts still improve trust.
-- The DMG path staples its notarization ticket to the disk image. A bare CLI
-  daemon archive has no app bundle to staple; Gatekeeper checks the ticket
-  online.
+- A bare CLI daemon archive has no app bundle to staple a notarization ticket
+  to; Gatekeeper checks the ticket online.
 
 ## Windows Authenticode signing
 

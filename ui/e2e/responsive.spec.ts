@@ -13,8 +13,8 @@ import type { Page } from '@playwright/test';
 // of "the user made everything bigger" is page zoom, and page zoom is
 // mathematically a narrower viewport. WCAG 1.4.10 fixes the target at 320 CSS
 // px — which is 1280 at 400% — so the 320 cases below ARE the zoom coverage.
-// Real text-scale coverage (textScale 2.0, EN and FR) lives in the Flutter
-// suite, where the platform exposes it faithfully.
+// OS-level text scaling (textScale 2.0) is not exposed to a browser page, so
+// it has no equivalent here; docs/accessibility-checklist.md records the gap.
 
 test.skip(({ viewport }) => (viewport?.width ?? 0) !== 1440, 'viewport-driven: one project is enough');
 

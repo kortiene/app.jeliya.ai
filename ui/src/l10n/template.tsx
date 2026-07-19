@@ -20,7 +20,6 @@
  *      }} />
  *
  *  The translator moves `{room}` and `{id}` wherever the sentence needs them.
- *  Flutter does exactly this in `widgets/template_text.dart`.
  */
 
 import { Fragment } from 'react';

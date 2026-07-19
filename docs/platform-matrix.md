@@ -49,17 +49,15 @@ The older schema 1
 local-remediation evidence only. See
 [Verification evidence](verification-evidence.md).
 
-## Native applications and source-only tools
+## Source-only tools
 
 | Surface | Implementation | Verification evidence | Release status | `v0.5.0` decision |
 |---|---|---|---|---|
-| macOS Flutter app | application and DMG pipeline exist | local tests only; current app sidecar is loopback-only; signing/notarization inactive | no DMG published | excluded |
-| Linux Flutter app | GTK application, XDG storage policy, bundled-sidecar CMake contract, and host-architecture source packaging exist | Ubuntu 24.04 ARM64 local qualification passes; the x86_64 hosted gate passed on public `main` at `a24f223…`; current-candidate rerun and Wayland remain pending | no native Linux app archive published; the local ARM64 daemon requires GLIBC 2.39 and the tarball lacks a complete Rust dependency license inventory | excluded |
-| Android Flutter app with in-process Rust engine | application and three-ABI build path exist | Android 13 local lifecycle/FFI smoke only; no cross-network, NAT, direct, or relay evidence | no APK/AAB published | excluded |
-| Android identity storage | app-private no-backup storage with cloud and device-transfer exclusions | rules and validation pass | unreleased | included security control; not Keystore-backed |
-| iOS app | no scaffold or engine build | none | none | excluded |
 | Agent runner and fleet launcher | JavaScript scripts exist | agent E2E pass; fleet stability 5/5; Linux orphan/zombie cleanup verified remotely | source only | no separate artifact |
-| Dart protocol package | source package exists | candidate unit, replay, and integration gates are implemented locally; hosted result pending | not published separately | source only |
+
+Jeliya is daemon-only. The repository contains no desktop or mobile
+application for any platform, so there is no native application surface to
+implement, verify, or publish.
 
 ## Network claims by runtime
 
@@ -67,13 +65,9 @@ local-remediation evidence only. See
 |---|---|---|---|---|
 | `jeliyad` on macOS x86_64 and Linux x86_64 | implemented | signed direct pass at prior `55024a4…` + `71fbb500…` and released `c5f740e…` + `d0ceb0b…`; current candidate pending | signed relay pass with self-attestation at those same prior pairs; current candidate pending | local current-pin loopback passes; signed current-pin reconnect/resync pending |
 | Other daemon targets | implemented | no candidate evidence | no candidate evidence | no candidate evidence |
-| Android in-process engine | local device-smoke evidence | unverified | unverified | local lifecycle only; cross-peer unverified |
-| macOS Flutter sidecar | loopback-only configuration | unsupported by current app configuration | unsupported by current app configuration | local sidecar lifecycle only |
-| Linux Flutter sidecar | real networking configured through the bundled daemon | unverified | unverified | local ARM64 source-package lifecycle gate passes; cross-peer unverified |
 
 The certifying runs qualify their recorded revision pairs exactly; they do not
-transfer to the current candidate, whose pin differs. “Real networking enabled”
-on Android means only `loopback: false`; it is not evidence of a peer path.
+transfer to the current candidate, whose pin differs.
 
 ## Packaging trust status
 

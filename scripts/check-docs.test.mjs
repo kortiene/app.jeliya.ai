@@ -395,8 +395,6 @@ test('developer documentation matches the MSRV and complete CI job matrix', () =
   assert.deepEqual(jobs, [
     'docs-ui',
     'ui-e2e',
-    'flutter',
-    'linux-flutter',
     'rust-runtime',
     'msrv',
     'windows-installer',

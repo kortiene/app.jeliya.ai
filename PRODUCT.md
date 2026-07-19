@@ -11,10 +11,10 @@ peer-to-peer rooms. The humans are technical operators — they run daemons,
 invite peers, watch agent fleets, open pipes to local ports. The agents are
 full participants: they post statuses, artifacts, and results into the same
 timeline. Primary context is a desktop working session (the wide shell:
-room rail, workspace, inspector); mobile is for checking in on rooms and
-agent runs on the go, then stepping into a room's workbench. The user is
-always mid-task: chatting, sharing a file, reviewing an agent run,
-connecting a pipe.
+room rail, workspace, inspector); the same browser client narrows to a
+phone-sized compact shell for checking in on rooms and agent runs, then
+stepping into a room's workbench. The user is always mid-task: chatting,
+sharing a file, reviewing an agent run, connecting a pipe.
 
 Work is organized the same way on every screen: a few **global**
 destinations (Rooms, Agent Fleet, Settings), and a **room's** workbench
@@ -76,7 +76,7 @@ human avatars, warm status language.
 WCAG 2.1 AA is the design target, not a current certification. The codebase
 defines contrast intent for `--text-mute`, combines status color with labels,
 and requires reduced-motion and keyboard behavior, but CI does not yet provide
-a complete automated WCAG audit across every React and Flutter state. Treat
-accessibility verification as partial until automated checks and documented
+a complete automated WCAG audit across every React state. Treat accessibility
+verification as partial until automated checks and documented
 manual keyboard, screen-reader, contrast, zoom, and text-scaling evidence all
 pass. See [`docs/capability-status.md`](docs/capability-status.md).

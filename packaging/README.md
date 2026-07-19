@@ -4,26 +4,19 @@ These files distribute the `jeliyad` daemon as prebuilt, per-platform binaries.
 The installer scripts and archive URLs are wired to `kortiene/jeliya` and have
 been live since `v0.3.0` (see the release-status section below). `jeliya.rb`
 is a per-release Homebrew formula: its `version` and sha256 values are
-refreshed from each release's sidecars. Native-app packaging helpers also
-exist in `../scripts`, but their outputs are source-built developer artifacts,
-not public downloads.
+refreshed from each release's sidecars.
 
 **`v0.5.0` publishes exactly five `jeliyad` archives with the embedded web UI,
-plus one checksum sidecar per archive.** It does not publish the macOS Flutter
-app or DMG, the Linux Flutter app or its tarball, Android APK/AAB files, an iOS
-app, or the Homebrew app cask. Native build instructions below remain
-development references, not `v0.5.0` release scope.
+plus one checksum sidecar per archive.** It publishes no other artifact.
 
 ## Files
 
 | File | What it is |
 | --- | --- |
-| `../.github/workflows/release.yml` | Manual GitHub Actions promotion workflow. For `v0.5.0`, it runs the complete CI workflow twice on the exact `main` revision, builds `jeliyad` plus its embedded UI for five targets, validates the private archive/checksum set, and then exposes one complete release from the sole write-enabled job. It publishes no native app artifact. |
+| `../.github/workflows/release.yml` | Manual GitHub Actions promotion workflow. For `v0.5.0`, it runs the complete CI workflow twice on the exact `main` revision, builds `jeliyad` plus its embedded UI for five targets, validates the private archive/checksum set, and then exposes one complete release from the sole write-enabled job. It publishes no other artifact. |
 | `install.sh` | POSIX-sh one-liner installer for macOS + Linux (`curl \| sh`). Detects OS/arch, downloads the matching archive and checksum, verifies SHA-256 before extraction, then installs `jeliyad` to `/usr/local/bin` (or `~/.local/bin`). |
 | `install.ps1` | Windows PowerShell equivalent. Downloads the archive and checksum, verifies SHA-256 before extraction, installs to `%LOCALAPPDATA%\Programs\Jeliya`, and adds it to the user PATH. |
 | `jeliya.rb` | Homebrew formula template. Belongs in a tap (`kortiene/homebrew-jeliya`), not homebrew-core. |
-| `jeliya-app.rb` | Unpublished Homebrew cask template for a future desktop-app release. It is not completed, uploaded, or updated by the `v0.5.0` release. |
-| `../scripts/package-linux.mjs` | Source-only Linux Flutter packager. Builds the host-native app and `jeliyad`, installs the adjacent sidecar and freedesktop metadata, exercises the bundle, then emits a tarball and SHA-256 sidecar under `dist/`. CI checks but does not publish them. |
 
 ## How they fit together
 
@@ -125,8 +118,7 @@ shipped:
 
 After the five `v0.5.0` daemon archives are published and independently
 verified, update `version` and checksums in `jeliya.rb` in a separate reviewed
-tap change. Do not update or publish `jeliya-app.rb`: no DMG belongs to this
-release.
+tap change.
 
 `release.yml` needs no slug edit — it always builds the repo it runs in.
 
@@ -135,138 +127,7 @@ release.
 The daemon archives are **unsigned**. A *browser* download of an unsigned
 binary trips Gatekeeper (macOS) and SmartScreen (Windows). The `curl | sh` and
 Homebrew install paths do **not** set the quarantine bit, so they install
-cleanly. The repository contains a Developer ID and notarization design for a
-future macOS app release, but `v0.5.0` must not execute a DMG publishing job or
-attach a DMG to its release. Every release to date carries only unsigned daemon
-archives. Signing the bare daemon archives (issue #1) and Windows Authenticode
-(issue #2) are tracked in
+cleanly. Every release to date carries only unsigned daemon archives. Signing
+the bare daemon archives (issue #1) and Windows Authenticode (issue #2) are
+tracked in
 [`../docs/signing-notarization.md`](../docs/signing-notarization.md).
-
-## Linux native app source package
-
-The GTK/Flutter Linux app is supported as a source build. This does **not**
-make it a released Linux app: no AppImage, Flatpak, deb, rpm, or native app
-tarball is attached to a GitHub release, and the install script still installs
-only the standalone `jeliyad` daemon with its browser UI.
-
-On Debian/Ubuntu, install the native build dependencies and enable Flutter's
-Linux target:
-
-```sh
-sudo apt-get install appstream clang cmake desktop-file-utils libgtk-3-dev \
-  liblzma-dev libstdc++-12-dev ninja-build pkg-config
-flutter config --enable-linux-desktop
-```
-
-Then package from the repository root:
-
-```sh
-node scripts/package-linux.mjs
-```
-
-The default path builds release versions of both `jeliyad` and the Flutter
-app, injects the daemon through the Linux CMake sidecar contract, verifies the
-bundle, and runs the app/sidecar launch-health-teardown gate. Run it inside an
-active desktop session; the gate also requires a rendered Flutter frame and a
-completed authenticated protocol bootstrap. Headless CI uses `xvfb-run -a`.
-The result is:
-
-```text
-dist/Jeliya-v<version>-linux-<x86_64|aarch64>.tar.gz
-dist/Jeliya-v<version>-linux-<x86_64|aarch64>.tar.gz.sha256
-```
-
-The path-relocatable archive contains the `jeliya` app executable, adjacent
-`jeliyad`, Flutter libraries and data, and freedesktop desktop entry,
-AppStream, icon, project-license, and Flutter/Dart notice assets. `--skip-build`
-repackages an existing release bundle; `--skip-runtime-gate` is the explicit
-escape hatch when no display is available. The x86_64 hosted CI gate keeps the
-default lifecycle check enabled, smokes the bundled daemon, validates the
-freedesktop metadata, checks dynamic dependencies and archive contents, and
-verifies the checksum. It deliberately does not upload the result.
-
-The complete gate has also passed locally on Ubuntu 24.04 ARM64, including
-the Xvfb app/sidecar lifecycle, daemon protocol smoke, dynamic dependency
-checks, archive verification, checksum verification, and a repeat package
-with the same SHA-256 digest. This is source-build evidence, not publication;
-the x86_64 hosted result remains pending until CI runs.
-
-“Path-relocatable” does not mean distro-portable. The locally built ARM64
-daemon requires GLIBC 2.39, so a public build must declare and enforce its
-runtime baseline or use a more portable distribution format. The lifecycle
-proof above covers X11 through Xvfb; Wayland remains unverified. The archive
-also lacks a complete Rust third-party license and notice inventory for the
-linked daemon dependencies. That inventory is required before public
-distribution.
-
-## Android release builds
-
-These commands are development and future-release references. `v0.5.0` does
-not build or publish an APK or AAB, and its release workflow must not receive or
-upload one.
-
-The Android app (`app/android`) release-signs from an **optional, gitignored**
-`app/android/key.properties`. Without it, release builds fall back to the
-debug keystore so `flutter run --release` works on-device — those artifacts
-are **not distributable** (Play rejects debug signatures, and sideloaded
-upgrades break when the signature later changes). No keystore is checked in
-anywhere, and none should ever be.
-
-### One-time keystore setup
-
-Create an upload keystore **outside the repo** (never commit it):
-
-```sh
-keytool -genkeypair -v \
-  -keystore "$HOME/keystores/jeliya-upload.jks" \
-  -keyalg RSA -keysize 2048 -validity 10000 \
-  -alias upload
-```
-
-Then create `app/android/key.properties` (gitignored via
-`app/android/.gitignore`, alongside `*.jks`/`*.keystore`):
-
-```properties
-storeFile=/Users/you/keystores/jeliya-upload.jks
-storePassword=...
-keyAlias=upload
-keyPassword=...
-```
-
-Relative `storeFile` paths resolve against `app/android/app`; an absolute
-path is simplest.
-
-### The two build commands
-
-```sh
-cd app
-flutter build appbundle                    # release path: .aab for Play
-flutter build apk --split-per-abi --release  # sideload path: one APK per ABI
-```
-
-Both artifacts package `libjeliya_ffi.so` per ABI from the gitignored
-`app/android/app/src/main/jniLibs/` — build those first with
-`node scripts/build-android-libs.mjs` (prerequisites in `../app/README.md`);
-this is the Android analogue of the UI-before-cargo ordering above.
-
-- **Play (release path):** Play requires app bundles and enrolls the app in
-  Play App Signing — Google holds the distribution key and our keystore
-  becomes the *upload* key. The bundle builds with no extra Gradle flags.
-- **Sideload:** `--split-per-abi` produces one APK per supported ABI
-  (armeabi-v7a, arm64-v8a, x86_64). The Gradle config skips its
-  `ndk.abiFilters` for this build only (AGP forbids `abiFilters` combined
-  with ABI splits); the default debug fat APK is unaffected.
-
-### Sizes (measured 2026-07-10, release, tree-shaken icons)
-
-| Artifact | Size |
-| --- | --- |
-| `app-armeabi-v7a-release.apk` | 30.4 MB |
-| `app-arm64-v8a-release.apk` | 39.7 MB |
-| `app-x86_64-release.apk` | 43.1 MB |
-| `app-release.aab` (all ABIs; Play serves per-device splits) | 77.2 MB |
-| fat `app-release.apk` (all ABIs, for reference) | 112.1 MB |
-| fat `app-debug.apk` (the on-device dev build) | 222 MB |
-
-Per-ABI APKs run larger than a stock Flutter app (~15–25 MB) because each
-carries the bundled Rust core (`libjeliya_ffi.so`: 14–23 MB per ABI).

@@ -3,14 +3,14 @@
  *  Every other locale is typed as `Catalog`, so this file's shape is the
  *  contract: add a key here and `fr.ts` stops compiling until it is translated.
  *
- *  Where a string already exists in the Flutter catalog
- *  (`app/lib/src/l10n/arb/app_en.arb`) its wording is REUSED verbatim rather
- *  than re-written. The two clients ship the same product; a rail that says
- *  "Left & removed" in one and "Departed" in the other is a translation bug in
- *  both languages at once.
+ *  Historical note: where a string already existed in an earlier catalog, its
+ *  wording was REUSED verbatim rather than re-written, so one concept keeps one
+ *  phrasing across the product's history — a rail that says "Left & removed" in
+ *  one place and "Departed" in another is a translation bug in both languages at
+ *  once.
  *
- *  Casing is sentence case, matching the Flutter catalog's normalization pass.
- *  All-caps treatments are `toUpperCase()` at render time (rule 7), never here.
+ *  Casing is sentence case. All-caps treatments are `toUpperCase()` at render
+ *  time (rule 7), never here.
  */
 
 import type { LocaleCatalog } from './catalog';

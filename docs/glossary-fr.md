@@ -3,7 +3,7 @@ type: "Glossary"
 title: "French localization — glossary & scoping decisions"
 description: "Canonical French terminology and localization decisions for Jeliya product surfaces."
 tags: ["french", "i18n", "localization", "terminology"]
-timestamp: "2026-07-11T21:27:07Z"
+timestamp: "2026-07-19T12:00:00Z"
 status: "canonical"
 implementation_status: "implemented"
 verification_status: "verified"
@@ -20,14 +20,14 @@ Senegal, Guinea, Côte d'Ivoire); Bambara (bm) is the community aspiration
 unlocked now that the French catalog has landed.
 
 This is a contract for translators and reviewers — it is not a live,
-end-user-facing glossary. It did its gating work: PR #12 (commit `fdb4c97`,
-merged 2026-07-09) shipped the full French catalog —
-`app/lib/src/l10n/arb/app_fr.arb` translates all 444/444 keys of
-`app_en.arb` (gen-l10n's untranslated-messages report is empty) — plus the
-French macOS menu (`app/macos/Runner/fr.lproj`); mechanics in
-`docs/i18n.md`. Still open: the user-facing discoverability pointer (a
-`README.fr.md`, or a "Voir aussi" link from the main README) does not exist
-yet — until one lands, francophone users have no way to find this page.
+end-user-facing glossary. It did its gating work: the web client ships a
+complete French catalog in `ui/src/l10n/fr.ts`, typed against
+`ui/src/l10n/catalog.ts` so a missing key is a compile error, and checked by
+`scripts/check-ui-i18n.mjs` for empty, untranslated, and typographically
+invalid values. Mechanics in [`i18n.md`](i18n.md). Still open: the user-facing
+discoverability pointer (a `README.fr.md`, or a "Voir aussi" link from the
+main README) does not exist yet — until one lands, francophone users have no
+way to find this page.
 
 ## Tier 1 — communal vocabulary: translate
 
@@ -83,29 +83,33 @@ wordmark (no badge, no animation):
    orthography — add no speculative RTL layout work. (N'Ko, if it ships
    later, is RTL and gets its own groundwork phase.)
 3. **Status labels are an English-token contract.** `labelTone()` in
-   `dart/jeliya_protocol/lib/src/conventions/format.dart` (normative in
-   `docs/PROTOCOL.md`) derives chip/dot tone from known English tokens;
+   `ui/src/lib/format.ts` (the reference implementation, normative in
+   [`PROTOCOL.md`](PROTOCOL.md)) derives chip/dot tone from known English tokens;
    labels it can't read (any language) render neutral — green is earned,
    never a fallback. The long-term fix is a typed severity field on the
    agent-status protocol event so tone keys off protocol truth, not prose.
 4. **Text locale ≠ formatting locale.** Bambara users will run fr-locale
    systems; locale plumbing must let UI strings (bm) and date/number
    formatting (fr) diverge from day one. (The seam today is
-   `app/lib/src/format.dart` — every display formatter lives there.)
-5. **Rollout scope.** Superseded 2026-07-08: the desktop app's permanent
-   three-column layout shows RightPanel/Settings/Fleet beside the timeline,
-   so a partial (release-1) translation would ship a mixed-language window.
-   French ships **full-catalog** in one release, at desktop launch
-   (`app/lib/src/l10n/arb/app_en.arb` is the complete inventory — one key
-   per user-visible string, each with a translator `@description`).
-   `docs/agent-guide.md` stays English (an API contract, not an onboarding
-   surface); a `README.fr.md` quickstart follows the app release.
+   `ui/src/l10n/formats.ts` — every display formatter lives there, reached
+   through `useFormats()`.)
+5. **Rollout scope.** A language ships **full-catalog** or not at all. The
+   workbench shows the room rail, the timeline, and the inspector at once, so
+   a partial translation would put two languages in one window;
+   `SUPPORTED_LOCALES` in `ui/src/l10n/locale.ts` lists only the languages
+   with a complete catalog, and anything outside it falls back.
+   `ui/src/l10n/catalog.ts` is the complete inventory — one member per
+   user-visible string. [`agent-guide.md`](agent-guide.md) stays English (an
+   API contract, not an onboarding surface); a `README.fr.md` quickstart is
+   still outstanding.
 6. **Bambara feasibility notes.** Standard orthography needs ɛ ɔ ɲ ŋ — the
    sans stack covers them on mainstream platforms; smoke-test the mono stack
    before shipping bm. CLDR bm has a single plural category, which an
    ICU-based catalog handles with no extra work.
-7. **Typographie française (settled 2026-07-09, before the first string —
-   the docs/i18n.md step-4 precondition).**
+7. **Typographie française (settled 2026-07-09, before the first French
+   string was written).** `scripts/check-ui-i18n.mjs` enforces the
+   non-breaking-space, apostrophe, ellipsis, and guillemet rules
+   mechanically; register and casing stay a review obligation.
    - **Espaces insécables** : espace fine insécable U+202F before `;` `!`
      `?` and inside guillemets (« texte ») ; espace insécable U+00A0 before
      `:`. Never a breaking space before high punctuation.

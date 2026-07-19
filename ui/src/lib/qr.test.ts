@@ -114,7 +114,7 @@ function isFinderAt(qr: QrMatrix, top: number, left: number): boolean {
   return true;
 }
 
-describe('encodeQr — shared conformance fixtures (byte-for-byte parity with Flutter)', () => {
+describe('encodeQr — shared conformance fixtures (byte-for-byte)', () => {
   for (const c of fixtures.cases) {
     it(`${c.name}: v${c.version}/mask${c.mask}/${c.size}²`, () => {
       const qr = encodeQr(c.input);

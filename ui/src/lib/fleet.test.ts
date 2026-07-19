@@ -77,9 +77,9 @@ describe('hasNumericProgress', () => {
   });
 });
 
-// The shared classifier fixture, replayed here and (identically) in the Dart
-// conventions test — the parity guard for the closed attention set.
-describe('shared fleet-attention fixtures (parity with Dart)', () => {
+// The shared classifier fixture — the guard that keeps the attention set closed
+// and its ranking pinned.
+describe('shared fleet-attention fixtures', () => {
   interface FixtureCase {
     name: string;
     liveness: string;

@@ -138,13 +138,11 @@ only on this device, that advances when you view the room.
 - **Clearing unread advances `deviceLastSeen[r]` to the newest event
   timestamp known for `r`, and affects that room only.** It is written to
   device-local storage and survives restart. The persistence rule is fixed:
-  web `localStorage` under a single namespaced key
-  (`jeliya.lastSeen`, `{ [room_id]: ts }`), Flutter `PrefsStore` (the same
-  atomic JSON file that already holds `lastRoom`, aliases, and drafts). This
-  mirrors the existing device-local `jeliya.lastRoom` / `prefs.lastRoomId`
-  precedent exactly.
+  `localStorage` under a single namespaced key
+  (`jeliya.lastSeen`, `{ [room_id]: ts }`). This mirrors the existing
+  device-local `jeliya.lastRoom` precedent exactly.
 - **Cross-device divergence is correct.** Last-seen is per device by design;
-  the same identity on a phone and a laptop will show different unread. Syncing
+  the same identity in two browsers will show different unread. Syncing
   last-seen would re-introduce the read-receipt this record refuses to invent,
   so it is out of scope now and named as a non-goal.
 
@@ -227,9 +225,9 @@ this certain:
   (`crates/jeliya-core/src/engine.rs`, `push_loop` over `sup.open_room_ids()`):
   a closed room emits no `room.event` at all.
 - Even for a non-current room that *is* open, the client drops the event
-  (`ui/src/App.tsx` — `if (room_id !== roomIdRef.current) return;`; the Flutter
-  `RoomStore` is likewise scoped to the current room). Non-current-room events
-  are unavailable at the source and discarded at the sink.
+  (`ui/src/App.tsx` — `if (room_id !== roomIdRef.current) return;`).
+  Non-current-room events are unavailable at the source and discarded at the
+  sink.
 
 "Keep every room open so every room pushes" is rejected: opening a room spawns
 a per-room node session (`supervisor.rs`, `open_room`), and holding one open
@@ -271,10 +269,9 @@ show is enumerated here with the evidence it requires and what it may not do.
 
 ## Fixtures and parity
 
-The two clients keep hand-ported parallel mocks (`ui/src/lib/mock.ts`,
-`dart/jeliya_protocol/lib/testing/mock_client.dart`) held to one envelope shape
-by the conformance harness. Both must gain fixture rooms exercising the five
-cases this record introduces, so React and Flutter render identical decisions:
+The client mock (`ui/src/lib/mock.ts`) is held to one envelope shape by the
+conformance harness. It must gain fixture rooms exercising the five cases this
+record introduces:
 
 - **Unread** — a room with a signed event newer than its device-local
   last-seen mark.
@@ -289,10 +286,8 @@ cases this record introduces, so React and Flutter render identical decisions:
 
 The conformance harness normalizes the new `last_event_ts` field the way it
 already normalizes timestamps and ids, so the mock and the real daemon stay
-comparable. Because the two mocks are duplicated rather than shared, the five
-cases doubled across two languages are a real drift risk; the conformance
-vectors are the guard, and a shared fixture manifest is a reasonable later
-consolidation.
+comparable. Because the mock restates by hand what the daemon computes, drift
+between the two is a real risk; the conformance vectors are the guard.
 
 ## Truthful states on the room-list surface
 

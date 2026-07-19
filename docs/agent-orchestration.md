@@ -13,7 +13,7 @@ audience: ["agent-authors", "client-authors", "contributors"]
 
 # Agent orchestration contract (v1)
 
-The pinned contract across four implementation surfaces:
+The pinned contract across three implementation surfaces:
 
 - **Rust daemon** (`crates/jeliyad` + `crates/jeliya-core`) — implements the
   fleet read RPCs and the liveness derivation. `jeliya-core` remains the sole
@@ -24,9 +24,6 @@ The pinned contract across four implementation surfaces:
   Node 22 (global `WebSocket`), zero npm deps.
 - **React UI** (`ui/`) — implements the fleet dashboard behind the existing
   `agents` NavKey, sourced only from `agents.fleet` + `agent.history`.
-- **Dart client and Flutter app** (`dart/jeliya_protocol`, `app/`) — expose the
-  same fleet reads over WebSocket or FFI and implement the equivalent desktop
-  and mobile dashboard without deriving liveness client-side.
 
 Ground rules that bind every section below:
 
@@ -222,8 +219,8 @@ word-boundary rule (`matchesTrigger`): the addressed form is
 
 ## 3. Fleet read RPCs (daemon; pure reads, no SDK change)
 
-The shared protocol engine exposes two fleet methods over both WebSocket and
-the in-process FFI transport. Both are **pure reads** over the existing folds
+The shared protocol engine exposes two fleet methods over WebSocket. Both are
+**pure reads** over the existing folds
 (`room_event_ids` → `validate_wire_bytes` → materialize) and live session state
 (`peer_state` / `peer_entries`) — they author nothing, open no room, and invent
 no counts. Full rows live in `docs/PROTOCOL.md`.
@@ -362,13 +359,12 @@ come only from `agents.fleet`.
 
 ## 5. UI fleet dashboard data contract
 
-The top-level Agents surface exists in both React
-(`ui/src/components/FleetDashboard.tsx`) and Flutter
-(`app/lib/src/screens/fleet_dashboard.dart`). It is distinct from a room's
+The top-level Agents surface lives in React
+(`ui/src/components/FleetDashboard.tsx`). It is distinct from a room's
 right-panel Agents tab, which remains room-scoped and timeline-fold based.
-Both clients load `agents.fleet` immediately, poll it every 4 seconds, and
-debounce a refresh after `room.event` pushes. They fetch `agent.history` when
-an agent's latest status or history room changes. The dashboards render
+The dashboard loads `agents.fleet` immediately, polls it every 4 seconds, and
+debounces a refresh after `room.event` pushes. It fetches `agent.history` when
+an agent's latest status or history room changes. The dashboard renders
 nothing that cannot be traced to those two results.
 
 **Stat tiles** (top row, straight from `agents.fleet`):
@@ -401,7 +397,7 @@ nothing that cannot be traced to those two results.
 3. UI shows the ticket plus a **copyable runner command**, e.g.
    `node scripts/jeliya-agent.mjs --ticket <T> --peer <ADDR> --worker claude`.
 
-The clients **never spawn runner processes**; the daemon gets no "spawn agent"
+The client **never spawns runner processes**; the daemon gets no "spawn agent"
 RPC. Executing the command on the target machine is deliberately a human step.
 
 ---
@@ -418,8 +414,8 @@ These implemented boundaries remain the regression contract:
   §2.4 addressed-trigger filter; `CLAIM_SETTLE_MS = 1500`.
 - **Fleet script:** the §4 schema, validation, process spawn, and bounded
   restart behavior only. Room-level truth still comes from `agents.fleet`.
-- **React and Flutter:** equivalent fleet dashboards backed only by the two
-  read RPCs; the room-scoped Agents tabs remain separate.
+- **React UI:** the fleet dashboard backed only by the two read RPCs; the
+  room-scoped Agents tab remains separate.
 - **Tests:** `scripts/fleet-e2e.mjs` proves multi-agent claims, fleet reads,
-  histories, and crash liveness; Rust, Dart, React, and Flutter suites pin the
-  corresponding projections and client behavior.
+  histories, and crash liveness; the Rust and React suites pin the
+  corresponding projections and client behaviour.

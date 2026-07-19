@@ -1,9 +1,8 @@
 // The searchable, stateful room-list projection (issue #64). A single pure
 // function turns the raw `room.list` result plus this device's search, lifecycle
-// filter, and pin/archive choices into an ordered, sectioned view. Both clients
-// import it (the Dart mirror is app/lib/src/session/room_list.dart) so React and
-// Flutter section, order, and disambiguate a room list identically — the shared
-// room-list.fixtures.json is the parity guard.
+// filter, and pin/archive choices into an ordered, sectioned view. Every surface
+// that shows a room list goes through it, so sectioning, ordering, and
+// disambiguation are decided once — room-list.fixtures.json pins the behavior.
 //
 // It renders no recency, unread, or attention itself: those are per-row claims
 // the surface layers on from the #63 evidence primitives (lastSeen.ts), and only

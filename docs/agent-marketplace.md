@@ -20,7 +20,7 @@ audience: ["contributors", "maintainers", "product"]
 ## Executive recommendation
 
 Ship a **hosted-agent-only MVP**, with the marketplace catalog and installation
-orchestration in `jeliyad`, not in either client. A hosted agent remains an
+orchestration in `jeliyad`, not in the client. A hosted agent remains an
 ordinary cryptographic P2P room participant. The public catalog is never a
 source of room state and does not receive room content merely because a user
 opens Marketplace.
@@ -34,25 +34,16 @@ This is the shortest path that preserves Jeliya's honesty model:
   active room member plus connectivity or a real status event.
 - The existing Node runner and fleet script are not a package manager or a
   sandbox. Running marketplace packages locally now would weaken the deliberate
-  browser and native execution boundary.
+  boundary between the browser client and local code execution.
 
 Two prerequisites block a truthful hosted release:
 
 1. An owner must be able to remove an agent through a signed `member.removed`
    event. The SDK supports it, but Jeliya exposes no owner removal write path
    and its materializer currently drops the event.
-2. The launch surface must be explicit: web/default `jeliyad` has real
-   networking, Flutter macOS currently starts the sidecar in loopback mode, and
-   Android runs the in-process Rust engine via `FfiClient` with real
-   networking enabled (`loopback: false`) — conformance-verified against the
-   golden corpus and since proven on a physical device (the PR #16 on-device
-   transport smoke, Android 13). iOS does not run at all
-   yet: no platform scaffold or engine build exists (the `FfiClient` code path
-   is shared, but the staticlib wiring is a tracked follow-up). The MVP was
-   scoped web-first while native real networking was unproven. Android now
-   runs the real-mode engine on-device, but only local lifecycle and room
-   operations have been exercised; no Android peer path, NAT traversal,
-   direct connection, or relay fallback has been verified.
+2. The launch surface must be explicit: the web client against the default
+   `jeliyad` has real networking, and that is the only surface Jeliya ships.
+   The MVP is therefore web-only.
 
 Keep the current manual **Bring your own agent** (BYOA) flow. Marketplace
 agents add a managed installation record; BYOA agents remain normal, unmanaged
@@ -85,12 +76,9 @@ shared dispatch in
 contract is [`docs/PROTOCOL.md`](PROTOCOL.md).
 
 The top-level Agents navigation opens a cross-room fleet dashboard, while a
-room's right panel has a separate Agents tab. React implements both in
+room's right panel has a separate Agents tab. The web client implements both in
 [`ui/src/components/FleetDashboard.tsx`](../ui/src/components/FleetDashboard.tsx)
 and [`ui/src/components/RightPanel.tsx`](../ui/src/components/RightPanel.tsx).
-Flutter implements equivalents in
-[`app/lib/src/screens/fleet_dashboard.dart`](../app/lib/src/screens/fleet_dashboard.dart)
-and [`app/lib/src/screens/right_panel.dart`](../app/lib/src/screens/right_panel.dart).
 
 The current Add Agent modal is an intentional human-controlled boundary:
 
@@ -111,9 +99,9 @@ paste agent identity id ───────► room.open(room)
                                                            + peer evidence
 ```
 
-The browser and native clients do not start the runner. React does this in
-[`FleetDashboard.tsx`](../ui/src/components/FleetDashboard.tsx); Flutter does
-the same in [`add_agent.dart`](../app/lib/src/screens/modals/add_agent.dart).
+The browser client does not start the runner; it renders the ticket, peer
+address, and command for a human to run. The web client does this in
+[`FleetDashboard.tsx`](../ui/src/components/FleetDashboard.tsx).
 The generic Invite UI is a second manual route and must remain available.
 
 An identity has separate Ed25519 identity and device keys
@@ -155,16 +143,9 @@ SDK contains `member.removed`, but Jeliya does not author it and
 [`materializer.rs`](../crates/jeliya-core/src/materializer.rs) drops it. This
 must be fixed before the UI promises Remove or Revoke.
 
-The web client uses real local daemon networking by default. Flutter macOS
-currently passes `loopback: true` to its sidecar; Android runs the same
-protocol over the in-process engine (`FfiClient`, `loopback: false`) —
-host-conformance-verified against the golden corpus and exercised on-device
-for identity, local room operations, message echo, and process recovery, but
-not against a remote peer — and iOS has no
-platform scaffold or engine build yet (nothing runs there today). A catalog
-can be rendered everywhere the app runs; a cross-device hosted join has not
-been exercised on Android's proven transport, and cannot be called supported
-on macOS or iOS yet.
+The web client uses real local daemon networking by default. A catalog can be
+rendered wherever the web client runs, but a cross-device hosted join has not
+been exercised on any transport and cannot be called supported yet.
 
 ### Reuse and required change
 
@@ -174,7 +155,7 @@ on macOS or iOS yet.
 | `room.open`, `invite.create`, `room.join`, signed membership, `agents.fleet`, `agent.history` | Orchestration RPCs, durable installation store, exact identity verification, reconciliation |
 | Peer/status-based liveness | Explicit evidence-backed installation states; never infer state from a provider success response |
 | BYOA runner, safe echo E2E, client mocks | Hosted mock provider/catalog; marketplace test fixtures and deterministic state transitions |
-| Flutter ARB localization and redaction utilities | Marketplace EN/FR copy; web localization strategy; structural redaction for new secrets |
+| Existing localization catalogs and redaction utilities | Marketplace EN/FR copy; structural redaction for new secrets |
 | Existing SDK `member.removed` event | Owner-only `member.remove` RPC, fold/materialize support, active-member/fleet semantics |
 
 ## Product experience
@@ -338,8 +319,8 @@ that requires an owner-authorized room event and a local policy decision.
 ### Responsibility boundary
 
 ```text
-React / Flutter                  jeliyad + jeliya-marketplace        Provider             jeliya-core / room
-───────────────                  ────────────────────────────        ────────             ──────────────────
+React UI                         jeliyad + jeliya-marketplace        Provider             jeliya-core / room
+────────                         ────────────────────────────        ────────             ──────────────────
 render + collect consent ─────► verify catalog / persist saga ────► provision identity
                                 create short-lived invite ─────────► receive ticket+hints
 render evidence ◄────────────── observe state ◄──────────────────── start hosted agent ─► join / signed events
@@ -347,9 +328,9 @@ render evidence ◄────────────── observe state ◄�
 ```
 
 The UI never talks to provider endpoints directly. This avoids browser CORS,
-untrusted redirect handling, provider credentials and raw invite tickets in UI
-state; it also keeps web and native behavior identical. `jeliya-core` remains
-the sole Iroh Rooms boundary. The new marketplace crate is SDK-free.
+untrusted redirect handling, and provider credentials and raw invite tickets
+in UI state. `jeliya-core` remains the sole Iroh Rooms boundary. The new
+marketplace crate is SDK-free.
 
 ### Identity and idempotency model
 
@@ -495,8 +476,7 @@ Before enabling an Install button, the supervisor needs all of the following:
   uninstall that removes artifacts/data/secrets after member removal;
 - OS-specific enforcement: namespaces/Landlock/seccomp/cgroups or a rootless
   container on Linux; a signed helper with sandbox/VM boundary on macOS;
-  AppContainer/restricted token and Job Object on Windows. Mobile platforms do
-  not run arbitrary marketplace packages.
+  AppContainer/restricted token and Job Object on Windows.
 
 The first local format should be a constrained WASI-style runtime if product
 needs justify it. A native arbitrary-code package format is not an MVP.
@@ -618,20 +598,18 @@ active, left, and removed. It must be idempotent for an already removed member.
 | `crates/jeliyad` | marketplace RPC dispatch, persistent saga, push notifications, redacted diagnostics, configuration |
 | new `crates/jeliya-marketplace` | manifest/types/signature validation, HTTP policy, cache, provider protocol, install state machine; no Iroh SDK dependency |
 | `ui/src` | split fleet from Marketplace/Installed screens; multi-room consent/progress/manage UI; protocol models; deterministic mock and component/accessibility tests |
-| `app/lib/src` | Marketplace store as daemon projection, screens/dialogs, typed protocol, ARB EN/FR, widget/localization tests |
-| `dart/jeliya_protocol` | installation/manifest/error models, RPC methods, mock behavior and tests |
 | `scripts` and tests | mock catalog/provider, hosted safe-echo E2E, retry/removal scenarios; no paid model or generated arbitrary code |
-| CI | Rust tests, web Vitest, agent/fleet/hosted E2E gates in addition to current Flutter/Dart checks |
+| CI | Rust tests, web Vitest, and agent/fleet/hosted E2E gates in addition to the current checks |
 
 ## Phased delivery plan
 
 | Phase | Deliverable | Dependencies | Relative complexity |
 |---|---|---|---|
-| 0 | Confirm launch clients; add owner `member.remove`; fix membership/fleet semantics; CI baseline | SDK event builder, core/daemon/UI contract | High |
+| 0 | Confirm the launch surface; add owner `member.remove`; fix membership/fleet semantics; CI baseline | SDK event builder, core/daemon/UI contract | High |
 | 1 | `jeliya-marketplace`: manifest verification, endpoint policy, cache, catalog search/detail, fixtures | trust-root policy and storage choice | High |
 | 2 | Hosted single-room install saga: provision, identity bind, short invite, reconcile, evidence-backed UI | Phases 0–1, provider test service | High |
-| 3 | Multi-room parent/child records, retry/cancel/remove, installed management, web/native localization and accessibility | Phase 2 | High |
-| 4 | Self-hosted catalogs, revocation/update notifications, production native networking and explicit mobile scope | Phases 1–3 | Medium–High |
+| 3 | Multi-room parent/child records, retry/cancel/remove, installed management, localization and accessibility | Phase 2 | High |
+| 4 | Self-hosted catalogs and revocation/update notifications | Phases 1–3 | Medium–High |
 | 5 | `jeliya-agentd` constrained local runtime, package format, sandbox pilots | OS security engineering and audit review | Very high |
 
 The work can run in parallel after Phase 0: core removal semantics, marketplace
@@ -652,7 +630,7 @@ install; non-owner failure; multi-room partial completion; offline verified
 cache; provider cancellation; removal/revocation; and no catalog access to room
 messages/files before membership.
 
-Client tests cover web and Flutter browse/detail/consent/progress/manage views,
+Client tests cover the web browse/detail/consent/progress/manage views,
 navigation away and restart restoration, keyboard/focus semantics, screen-reader
 labels, responsive layout, English/French parity, long French strings, and mock
 state transitions. No test uses a paid LLM or executes model-generated code.
@@ -679,7 +657,7 @@ The hosted MVP is accepted only when all of these are true:
     erase already received data.
 13. Revoked manifests are blocked for fresh installation and visibly warn on
     existing records.
-14. Web/native tests, manifest/security tests, and deterministic hosted E2E
+14. Web client tests, manifest/security tests, and deterministic hosted E2E
     are automated in CI.
 15. Local installation remains unavailable until the supervisor enforces the
     stated sandbox and lifecycle controls.
@@ -694,10 +672,8 @@ The hosted MVP is accepted only when all of these are true:
    process room data, and who enforces provider compliance?
 4. Should a hosted provider get one identity per room (recommended) or a
    multi-room identity only after runner/protocol support exists?
-5. Is the first release web-only, or can Android be considered only after a
-   representative cross-network direct/relay qualification? (The current
-   Android evidence is local-only, and macOS real networking remains
-   undelivered.)
+5. What cross-network direct/relay qualification must a release meet before
+   the hosted flow is called supported?
 6. Which durable local store and encryption/keychain policy should contain
    installation metadata and provider opaque identifiers?
 7. What is the owner UX for a revoked agent whose provider is unavailable, and
@@ -705,6 +681,6 @@ The hosted MVP is accepted only when all of these are true:
 8. Does the product need granular agent permissions enough to justify an
    explicit future room-protocol capability model?
 
-Until owner removal and an explicit client-network scope are resolved, the
+Until owner removal and an explicit network scope are resolved, the
 marketplace can be prototyped with mocks but must not be marketed as an
 install-and-remove capability.

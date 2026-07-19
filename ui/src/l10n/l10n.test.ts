@@ -99,7 +99,7 @@ describe('Formats', () => {
   });
 
   it('formats byte units with the text locale s words', () => {
-    // The accepted deviation carried over from Flutter: unit WORDS follow the
+    // The accepted deviation: unit WORDS follow the
     // text locale (they are vocabulary), numeric conventions follow the
     // formatting locale.
     expect(new Formats(en, 'en').bytes(2048)).toMatch(/KB/);

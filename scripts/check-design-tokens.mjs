@@ -10,11 +10,7 @@
  * It exists because the drift it now blocks was invisible in review: a
  * side-stripe border, a resting shadow and an accent gradient each looked
  * local and reasonable at the call site, while together they contradicted four
- * Named Rules — and the Flutter client had grown matching TOKENS for them, so
- * both clients were confidently wrong in the same direction.
- *
- * The Flutter half is `app/test/design_tokens_test.dart`, reading the same
- * file.
+ * Named Rules.
  *
  * Usage: node scripts/check-design-tokens.mjs
  */

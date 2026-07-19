@@ -2,8 +2,7 @@
  *  dependency, no CDN. Deliberately narrow: it encodes exactly what an invite
  *  needs and nothing more.
  *
- *  Fixed policy (matched 1:1 by the Flutter port in
- *  `app/lib/src/qr/qr.dart`, and locked by the shared fixtures in
+ *  Fixed policy (locked by the fixtures in
  *  `conformance/qr-invite.fixtures.json`):
  *    - Byte mode (UTF-8). Invite strings carry lowercase / `#` / `@` / `,`,
  *      which alphanumeric mode cannot represent, so byte mode is always correct.
@@ -13,7 +12,7 @@
  *      (ties resolve to the lowest mask index).
  *
  *  Correctness is proven two ways in qr.test.ts: byte-for-byte equality with the
- *  cross-client fixtures, and a self-contained round-trip decode (un-mask →
+ *  conformance fixtures, and a self-contained round-trip decode (un-mask →
  *  reverse placement → de-interleave → Reed–Solomon syndrome check → parse) that
  *  recovers the input — i.e. the symbol actually scans. */
 

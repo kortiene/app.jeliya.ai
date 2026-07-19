@@ -15,8 +15,8 @@ Contributions are reviewed against that promise first:
    signed log proves.
 2. **Green is earned.** The emerald accent marks real, verified
    live/healthy state — never decoration, never a fallback
-   (see `labelTone` in `dart/jeliya_protocol/lib/src/conventions/format.dart`,
-   normative in `docs/PROTOCOL.md`).
+   (see `labelTone` in `ui/src/lib/format.ts`, normative in
+   `docs/PROTOCOL.md`).
 3. **Failures are failures.** Errors surface their real code
    (`unavailable`, `unauthorized`, `hash_mismatch`) and a useful hint —
    never a silent partial result.
@@ -34,19 +34,18 @@ declined kindly.
   the contract.
 - **Prove it runs.** `node scripts/agent-e2e.mjs` proves the agent flow
   end-to-end with no network and no AI; `scripts/demo.sh` runs the full
-  two-daemon demo. Say in the PR what you ran. CI runs eight jobs on every PR
-  and push to main: `docs-ui`, `ui-e2e`, `flutter`, `linux-flutter`,
-  `rust-runtime`, `msrv`, `windows-installer`, and `dependency-security`.
+  two-daemon demo. Say in the PR what you ran. CI runs six jobs on every PR
+  and push to main: `docs-ui`, `ui-e2e`, `rust-runtime`, `msrv`,
+  `windows-installer`, and `dependency-security`.
   Together they cover docs, UI, browser-level responsive and accessibility
-  regressions, Flutter/i18n, the native Linux bundle and its supervised
-  sidecar, Rust and Dart, smoke/E2E/protocol conformance, the 1.91.0 MSRV,
+  regressions, Rust, smoke/E2E/protocol conformance, the 1.91.0 MSRV,
   Windows installer integrity, and Cargo/npm security audits.
-  **Six of the eight are branch-protection REQUIRED checks** — `ui-e2e` and
-  `linux-flutter` run on every PR but do not block a merge. That gap matters
-  for the accessibility gate in particular: the axe sweep lives in `ui-e2e`,
-  so a critical violation currently fails the run without stopping the merge.
-  Adding those two contexts to branch protection is a repository-settings
-  change, not something a pull request can carry.
+  **Five of the six are branch-protection REQUIRED checks** — `ui-e2e` runs on
+  every PR but does not block a merge. That gap matters for the accessibility
+  gate in particular: the axe sweep lives in `ui-e2e`, so a critical violation
+  currently fails the run without stopping the merge. Adding that context to
+  branch protection is a repository-settings change, not something a pull
+  request can carry.
   The same complete matrix can be dispatched manually without publishing a release.
 - **UI regressions are browser-tested.** `cd ui && npm run test:e2e` runs the
   Playwright suite (`ui/e2e/`) against the `VITE_MOCK=1` fixture client — no
@@ -58,34 +57,19 @@ declined kindly.
   lifecycle, navigation, and linking rules. Every page must remain reachable
   from `docs/index.md`; run `node scripts/check-docs.mjs` after editing the
   wiki. CI runs the same gate.
-- **App widget tests** pump through the helpers in `app/test/helpers.dart`.
-  New layouts should use the strict surface (`useStrictSurface` /
-  `pumpReadyMobileApp`): a realistic textScale 1.0 — the older half-scale
-  default masked real overflow regressions — with RenderFlex overflows
-  recorded instead of swallowed; mobile suites assert that list is empty.
-- **Android:** below 900dp the app is the phone layout, and Android links
-  the Rust engine in-process. `node scripts/build-android-libs.mjs`
-  cross-compiles `libjeliya_ffi.so` for the shipped ABIs (prereqs in the
-  script header); `jeliya-ffi`'s `build.rs` needs the Dart SDK headers —
-  set `DART_SDK_INCLUDE` or `FLUTTER_ROOT`. Release-build commands live in
-  `packaging/README.md`.
-- **Flutter plugins are a policy, not a dependency bump.** The allowlist is
-  deliberate — `file_selector`, `url_launcher`, and (the one mobile
-  addition) `share_plus` — each with rationale and provenance recorded in
-  `app/pubspec.yaml`; make the case there before adding one.
-- **Strings & i18n:** French ships wherever the app does (desktop and
-  phone) — `docs/i18n.md` records
-  the decisions and engineering rules; `docs/glossary-fr.md` the glossary
-  tiers. App copy lives in the ARB catalog (`app/lib/src/l10n/arb/app_en.arb`
-  with an `@description` per key); run `flutter gen-l10n` and
-  `node scripts/gen-l10n-parity.mjs` after editing it, and resolve copy via
-  `context.strings` at render time. No hand-rolled pluralizations (ICU
-  plurals in the ARB), no sentence-building from concatenated fragments (use
-  `template_text.dart` slots), no wire enums as display text. Tests assert
-  copy via the shared `en` catalog instance (`test/helpers.dart`), never a
-  literal duplicate of a catalog value. `node scripts/i18n-gate.mjs`
-  enforces the literal, locale-pinning, and test-copy rules — CI runs it on
-  every PR and push to main, and the release jobs gate on it.
+- **The UI ships inside the binary.** `jeliyad` embeds `ui/dist` via
+  `rust-embed` under the `embed-ui` feature, so the build order is not
+  optional: `cd ui && npm ci && npm run build` **before**
+  `cargo build --release -p jeliyad --features embed-ui`. A plain `cargo build`
+  produces a WS-only daemon that serves no UI — that is by design, and the
+  daemon says so on `/`.
+- **Strings & i18n:** French ships wherever the web client does —
+  `docs/i18n.md` records the decisions and engineering rules;
+  `docs/glossary-fr.md` the glossary tiers. No hand-rolled pluralizations, no
+  sentence-building from concatenated fragments, no wire enums as display
+  text. `node scripts/check-ui-i18n.mjs` enforces catalog completeness, French
+  typography, and the never-translate boundary — CI runs it on every PR and
+  push to main, and the release jobs gate on it.
 - **Naming:** the project renamed from Bantaba to Jeliya on 2026-07-05
   (`docs/naming.md`). Don't reintroduce the old name outside that record.
 - **Security reports:** privately, please — see `SECURITY.md`.

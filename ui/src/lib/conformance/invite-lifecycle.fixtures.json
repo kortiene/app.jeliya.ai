@@ -1,5 +1,5 @@
 {
-  "note": "Shared invite-lifecycle contract fixtures for issue #66. Consumed by BOTH ui/src/lib/invite.test.ts (TS) and app/test/invite_lifecycle_test.dart (Dart), so React and Flutter validate the invitee identity, build the combined invite, and derive the waiting/expired/joined lifecycle identically. `identity` pins the bare-64-hex validator (never the blake3: room id). `combined` pins the ticket#address builder. `lifecycle` pins the honest state machine: Joined comes ONLY from a signed active roster row, and Joined outranks a lapsed expiry.",
+  "note": "Shared invite-lifecycle contract fixtures for issue #66. Consumed by ui/src/lib/invite.test.ts, which pins how the invitee identity is validated, how the combined invite is built, and how the waiting/expired/joined lifecycle is derived. `identity` pins the bare-64-hex validator (never the blake3: room id). `combined` pins the ticket#address builder. `lifecycle` pins the honest state machine: Joined comes ONLY from a signed active roster row, and Joined outranks a lapsed expiry.",
   "identity": [
     { "value": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "valid": true },
     { "value": "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF", "valid": true },

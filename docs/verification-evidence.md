@@ -90,15 +90,14 @@ manifests are the certifying set.
 |---|---|---|
 | Public read-RPC authorization | centralized guard and local negative suite cover foreign timelines, members, agents, files, pipes, local-file HTTP, and aggregate projections; the retained schema 2 runs denied all 17 room-scoped RPCs and filtered local-file and aggregate reads | certifying PASS at the superseded `55024a4…` + `71fbb500…` snapshot; current-pin network rerun required |
 | Accepted-room provenance | create/join failure injection proves provenance is accepted before irreversible event publication; 24 concurrent mutations retain every room; direct reads reuse the authorized snapshot cache; Unix mode is pinned to `0600`; exact `atomicwrites 0.4.4` uses synchronized Unix directory replacement and Windows write-through replacement | local PASS; Windows semantics source-reviewed but not behaviorally executed on `windows-latest` |
-| Pre-identity protocol contract | `room.list` returns the successful empty onboarding result `{ rooms: [] }` consistently across the core engine, TypeScript mock, Dart daemon, Dart FFI, Dart mock, and golden-corpus oracles | local PASS |
+| Pre-identity protocol contract | `room.list` returns the successful empty onboarding result `{ rooms: [] }` consistently across the core engine, the TypeScript mock, and the golden-corpus replay against a real daemon | local PASS |
 | Upstream synchronization isolation | malicious `WantEvents`, foreign-parent, and administrative-tip checks pass at `a5d98b70d717f35d3ce60953a88e12e646f2e871`, which carries forward the isolation remediation first published at `d0ceb0b320f1ff3a576b63d8b24aa1bf76a2d3bb` | local exact-revision PASS. NOT network-certified: the retained manifests set `synchronization_isolation_claimed: false` and do not exercise these internals |
 | Unproven provisional-peer fanout and teardown | live-fanout denial plus the superseded-link and deauthorization-state generation regressions pass at `a5d98b70...`; Jeliya's 67-assertion loopback suite covers capability-proven join integration | local exact-revision PASS; current-pin direct and relay evidence pending |
 | Store insert recovery and degradation | five deterministic upstream tests cover retry recovery, local hole healing under descendants, exhausted-budget durable critical `store_degraded`, queue overflow, and exactly-once peer re-serve | local exact-revision PASS at `a5d98b70...`; disk failure remains possible and must surface operationally |
-| Android backup exclusion | `allowBackup=false`, explicit cloud/device-transfer exclusion rules, and engine state under `noBackupFilesDir`; repository gate and six secret-storage tests pass | local PASS; this is app-private no-backup storage, not Android Keystore wrapping |
 | Agent secret location | platform data directory outside the checkout, deny-all state-directory Git guard, repository ignore rules, and commit-prevention validation | local PASS |
 | Rust dependency audit | zero vulnerability advisories; three unmaintained-crate warnings and one yanked-version warning remain in the register below | PASS for vulnerability threshold |
 | npm dependency audit | zero vulnerabilities | PASS |
-| Complete CI definition | Rust, MSRV, TypeScript, Dart, Flutter, Linux native packaging, docs, smoke, sidecar, agent, fleet, protocol, and dependency gates are configured with required-tool failures; manual dispatch is non-publishing and Gradle is checksum-verified | all jobs, including `linux-flutter` and Windows installer integrity, passed on public `main` run `29688515781` at `a24f223...`; current-candidate rerun pending |
+| Complete CI definition | Rust, MSRV, TypeScript, docs, smoke, sidecar, agent, fleet, protocol, Windows installer, and dependency gates are configured with required-tool failures; manual dispatch is non-publishing | every job configured at that revision, including Windows installer integrity, passed on public `main` run `29688515781` at `a24f223...`; current-candidate rerun pending |
 | Repeatability | two complete hosted CI executions from clean environments | configured in `release.yml`; not executed for the current candidate |
 | Direct different-network P2P | retained schema 2 run `1ca39cfa`: three peers, three distinct observed egresses, two ASNs (AS11426 + AS24940), stable direct paths on roles A/B/C, all assertions pass | certifying PASS for `55024a4…` + `71fbb500…`; current-pin rerun required |
 | Deliberately forced relay | retained schema 2 run `cf28bc63`: the relay-only source build self-attests on all three hosts and proves relay paths on roles A/B/C | certifying PASS for `55024a4…` + `71fbb500…`; current-pin rerun required |
@@ -309,11 +308,6 @@ The 2026-07-04 Gate A result used evidence-record commit
 older revisions and remains historical. See
 [`gate-a-result.md`](gate-a-result.md).
 
-The Android 13 smoke proves local engine lifecycle, room operations, pushes,
-persistence, and UI integration with `loopback: false`. It did not communicate
-with a remote peer or measure a direct/relay path, so it is not Android
-real-network evidence.
-
 ## Exact release blockers
 
 The evidence gate is **BLOCKED** for the current `v0.6.0` source candidate.
@@ -412,7 +406,10 @@ cargo run --locked -p jeliyad --features relay-only-test -- \
   normal build rejected the hidden attestation flag with exit status 2.
 
 This is exact-revision local evidence. It does not replace the signed
-three-egress direct and forced-relay runs required above.
+three-egress direct and forced-relay runs required above. The commands above
+are recorded verbatim as executed at `9c71fac...`; the `DART_SDK_INCLUDE`
+prefix was a build prerequisite of a workspace crate that no longer exists and
+is not required on the current tree.
 
 ## Superseded candidate provenance: iroh-room v0.1.0-rc.3 (2026-07-16)
 

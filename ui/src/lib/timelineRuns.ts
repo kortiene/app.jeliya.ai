@@ -5,9 +5,8 @@
 // view-only activity CATEGORY, and breaks a batch of new items into message vs
 // non-message so the counter can tell the truth.
 //
-// Mirrored 1:1 in dart/jeliya_protocol/lib/src/conventions/timeline_runs.dart,
-// and both are replayed against ui/src/lib/conformance/timeline-runs.fixtures.json
-// so React and Flutter fold, filter, and count one timeline identically.
+// Replayed against ui/src/lib/conformance/timeline-runs.fixtures.json, which
+// pins how a timeline is folded, filtered, and counted.
 //
 // Honesty rules (docs/room-attention.md): there is NO run/task token on the
 // wire, so a run is only ever a maximal streak of consecutive `agent_status`
