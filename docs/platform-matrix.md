@@ -90,8 +90,9 @@ See [Release versus main](release-vs-main.md).
 The [supported platform matrix decision](platform-matrix-decision.md) fixes
 the first-slice support commitment for the companion-backed production slice:
 the five daemon build targets above as the supported desktop operating
-systems (macOS 13 or newer on arm64 and x86_64, Windows 10 22H2 or newer on
-x86_64, and Linux x86_64/arm64 musl with a stated reference environment),
+systems (macOS 13 or newer on arm64 and x86_64, Windows 11 plus serviced
+Windows 10 22H2 on x86_64, and Linux x86_64/arm64 musl with a stated
+reference environment),
 the latest two stable releases of Chrome, Edge, Firefox, and Safari in
 companion mode, and no mobile support in the first slice. This section
 records intent only: nothing in it changes the implementation, verification,

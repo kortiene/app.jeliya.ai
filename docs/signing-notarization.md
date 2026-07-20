@@ -29,9 +29,9 @@ Current status:
 The platform input to this plan is the
 [supported platform matrix decision](platform-matrix-decision.md): Apple
 Developer enrollment and notarization cover macOS 13 or newer on arm64 and
-x86_64, Authenticode issuance covers Windows 10 22H2 or newer on x86_64, and
-the two Linux musl targets need checksum-and-provenance publication rather
-than a platform signing service.
+x86_64, Authenticode issuance covers Windows 11 and serviced Windows 10 22H2
+on x86_64, and the two Linux musl targets need checksum-and-provenance
+publication rather than a platform signing service.
 
 ## Goals
 

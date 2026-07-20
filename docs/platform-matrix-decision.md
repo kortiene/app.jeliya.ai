@@ -3,7 +3,7 @@ type: "Decision"
 title: "Supported browser, desktop OS, and mobile matrix — decision record"
 description: "Decides the supported desktop operating systems, browser releases, and mobile position for the first production slice, the pull-request test lane each entry maps to, and the denominator for the pairing-success objective."
 tags: ["browsers", "decision", "deployment", "platforms", "support"]
-timestamp: "2026-07-20T13:20:00Z"
+timestamp: "2026-07-20T14:50:00Z"
 status: "canonical"
 implementation_status: "planned"
 verification_status: "unverified"
@@ -48,14 +48,21 @@ the release workflow already produces:
 | Operating system | Minimum version | Architectures | Companion package trust |
 |---|---|---|---|
 | macOS | 13 (Ventura) | arm64 (`aarch64-apple-darwin`) and x86_64 (`x86_64-apple-darwin`) | Developer ID signed and notarized |
-| Windows | Windows 10 22H2, and all Windows 11 releases | x86_64 (`x86_64-pc-windows-msvc`) | Authenticode signed |
+| Windows | all current Windows 11 releases; Windows 10 22H2 only under active Microsoft servicing — consumer or enterprise ESU, or an LTSC edition still in support | x86_64 (`x86_64-pc-windows-msvc`) | Authenticode signed |
 | Linux | kernel 5.10 or newer with a Secret Service implementation for production keystore mode; Ubuntu 22.04 LTS is the verified-reference distribution | x86_64 and arm64 (musl static) | verified via checksum sidecar and provenance |
 
 This is the closed, named set behind the Phase 1 gate item "recovery succeeds
 from a fresh install on every supported OS": macOS 13 or newer on arm64 and
-x86_64, Windows 10 22H2 or newer on x86_64, and the Linux reference
-environment above on x86_64 and arm64 — five OS/architecture entries and
-nothing else.
+x86_64, Windows 11 plus serviced Windows 10 22H2 on x86_64, and the Linux
+reference environment above on x86_64 and arm64 — five OS/architecture
+entries and nothing else.
+
+The Windows 10 boundary is a security position, not a packaging one: Windows
+10 22H2 passed Microsoft's end of support on 2025-10-14, so an install
+without ESU or an in-support LTSC edition is an unpatched platform, and
+committing pairing, recovery, and signing support to it would contradict the
+plan's own security posture. Unserviced Windows 10 installs are outside the
+commitment, and the download-and-install page says so.
 
 The same set is the input to signing procurement in
 [Signing and notarization](signing-notarization.md) and to the Phase 2
@@ -98,12 +105,16 @@ join the WebKit and Chromium lanes respectively.
 ## The measured matrix
 
 "The supported OS/browser matrix" in the plan's service objectives means the
-cross product of the operating-system entries and the browser entries above,
-restricted to the cells where the vendor ships that browser on that
-operating system. The objective "Companion pairing | At least 99 percent
-success on the supported OS/browser matrix" is measured with exactly those
-cells as its denominator — sliceable per cell and reportable in aggregate —
-so the target resolves to a concrete population instead of an open phrase.
+cross product of the operating-system entries, the browser families above,
+and each family's two supported stable majors at evaluation time, restricted
+to the combinations the vendor ships on that operating system. One cell is
+one OS entry, one browser family, and one supported major — so a regression
+on the older still-supported major is a failing cell of its own, not noise
+inside a family aggregate that only exercised the newest release. The
+objective "Companion pairing | At least 99 percent success on the supported
+OS/browser matrix" is measured with exactly those cells as its denominator —
+sliceable per cell and reportable in aggregate — so the target resolves to a
+concrete population instead of an open phrase.
 
 ## Mobile position and amendment A4
 
@@ -131,6 +142,8 @@ surfaces.
 
 - mobile operating systems and browsers, until the Phase 4 gate passes;
 - browser releases older than the latest two stable majors;
+- Windows 10 installs without active Microsoft servicing — no ESU and no
+  in-support LTSC edition;
 - Windows on arm64, every 32-bit system, and the BSDs;
 - Linux systems that cannot provide the reference environment above, beyond
   the stated encrypted-file fallback;
@@ -140,3 +153,7 @@ On those platforms the product states that the app may load but is
 unsupported and untested there, and points at the supported list on the
 download-and-install page. No copy claims a capability on a platform it has
 not run on.
+
+## Citations
+
+- [Microsoft: Windows 10 22H2 end of support](https://learn.microsoft.com/en-us/lifecycle/announcements/windows-10-22h2-end-of-support-update) - Standard-edition support ended 2025-10-14; ESU and in-support LTSC editions continue to receive security updates.
