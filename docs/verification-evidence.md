@@ -62,7 +62,8 @@ must not be used in reproduction steps. This restatement does not alter the
 and forced-relay runs are performed.
 
 Jeliya `922f620b30ee95c82426a7d4404b1f73a70c0958` is the current source
-candidate. It is the tip of public `main`: the superseded candidate
+candidate. It was the tip of public `main` when this designation was made:
+the superseded candidate
 `105744b6c27633e5ccc576d86f1a15e3fe443b94` plus the daemon-only cut
 (`kortiene/app.jeliya.ai#1`) and the production-deployment decision record
 (`kortiene/app.jeliya.ai#58`). `105744b...` remains a true ancestor of `main`.
