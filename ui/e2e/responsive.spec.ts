@@ -122,17 +122,61 @@ test('selecting a room tool preserves the timeline position', async ({ app, page
   await app.gotoPopulated();
   await expect(app.timeline).toBeVisible();
 
-  // Scroll away from the bottom, then open and close the inspector. Panes hide,
-  // they do not unmount (decision 3) — the reading position is the user's, and
-  // toggling a side panel is not a request to move it.
-  await app.timeline.evaluate((el) => el.scrollTo({ top: 0 }));
-  const before = await app.timelineBottomOffset();
-  expect(before).toBeGreaterThan(0);
+  // The backlog has to be in before a reading position means anything: the
+  // timeline renders while room.open is still in flight, and the room opens
+  // pinned to its newest event only once the backlog is really there.
+  await expect(app.timeline.locator('.timeline-row').last()).toBeInViewport();
+  await expect.poll(() => app.timelineBottomOffset()).toBeLessThanOrEqual(140);
 
+  // The reading position is WHICH row sits at the top of the scrollport — not
+  // an offset derived from scrollHeight, which grows every time the mock's
+  // live-event timers append a row below the viewport (issue #61: the flake
+  // was exactly one appended row's height). Anchor on a mid-history row:
+  // neither reset can imitate it — a fresh mount pins to the newest event and
+  // a scroller that lost its state starts back at 0, so either failure of
+  // decision 3 (panes hide, they do not unmount) moves this anchor by
+  // hundreds of pixels.
+  const rows = app.timeline.locator('.timeline-row');
+  const anchor = rows.nth(Math.floor((await rows.count()) / 2));
+  await anchor.evaluate((el) => {
+    const scroller = el.closest('.timeline')!;
+    scroller.scrollTop += el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  });
+  const anchorOffset = () =>
+    anchor.evaluate((el) => {
+      const scroller = el.closest('.timeline')!;
+      return el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    });
+
+  // Let the scroll settle before capturing the baseline: two consecutive
+  // identical reads, never a value captured mid-scroll.
+  let previous = Number.NaN;
+  await expect
+    .poll(async () => {
+      const current = await anchorOffset();
+      const settled = current === previous;
+      previous = current;
+      return settled;
+    })
+    .toBe(true);
+  const before = previous;
+  // Genuinely mid-history: away from both the top and the stick-to-bottom band.
+  expect(await app.timeline.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  expect(await app.timelineBottomOffset()).toBeGreaterThan(140);
+
+  // Open and close the inspector. Panes hide, they do not unmount (decision
+  // 3) — the reading position is the user's, and toggling a side panel is not
+  // a request to move it.
   await app.goToRoomDest('People');
   await app.goToRoomDest('Activity');
   await expect(app.timeline).toBeVisible();
-  expect(await app.timelineBottomOffset()).toBe(before);
+
+  // The same row is back at the same place in the scrollport. ±2px: the
+  // inspector column narrows and re-widens the timeline, and the browser's
+  // scroll anchoring restores the position across each reflow in device-pixel
+  // steps — sub-pixel residue, not position loss. Either unmount reset sits
+  // hundreds of pixels away, far outside this bound.
+  await expect.poll(async () => Math.abs((await anchorOffset()) - before)).toBeLessThanOrEqual(2);
 });
 
 test.describe('safe areas', () => {
