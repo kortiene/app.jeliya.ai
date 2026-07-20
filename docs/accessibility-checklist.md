@@ -3,7 +3,7 @@ type: "Runbook"
 title: "Accessibility release checklist"
 description: "The screen-reader and keyboard behaviours automated checks cannot prove, verified by hand before a release."
 tags: ["accessibility", "release", "qa", "manual"]
-timestamp: "2026-07-19T12:00:00Z"
+timestamp: "2026-07-20T13:55:00Z"
 status: "canonical"
 implementation_status: "implemented"
 verification_status: "partial"
@@ -43,6 +43,11 @@ standing position.
 | `ui/e2e/i18n-layout.spec.ts` | Critical flows reflow at 320px (the 400%-zoom equivalent) in English and French |
 | `ui/e2e/responsive.spec.ts` | Widths 360/899/900/920/1280, the inspector's float-versus-column behaviour, safe-area insets at 320 and 360 |
 | `scripts/check-design-tokens.mjs` | The React palette against the shared fixture |
+
+All of this blocks merge: the specs above run in `ui-e2e` — check context
+"UI browser regression (Playwright)" — which is a required status check on
+`main` alongside the other five CI jobs (#20), so a critical or serious
+violation stops the pull request instead of only failing the run.
 
 ## Screen reader
 
@@ -114,6 +119,3 @@ standing position.
 - **Focus-indicator presence has no automated coverage** either, for the same
   reason. axe does not decide whether a visible focus ring appears, so the
   keyboard item above is the only check.
-- `ui-e2e` is not currently in the repository's required status checks, so the
-  accessibility gate runs on every pull request but does not yet BLOCK a merge.
-  Adding it is a branch-protection change, outside any pull request's diff.

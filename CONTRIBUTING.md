@@ -40,12 +40,25 @@ declined kindly.
   Together they cover docs, UI, browser-level responsive and accessibility
   regressions, Rust, smoke/E2E/protocol conformance, the 1.91.0 MSRV,
   Windows installer integrity, and Cargo/npm security audits.
-  **Five of the six are branch-protection REQUIRED checks** — `ui-e2e` runs on
-  every PR but does not block a merge. That gap matters for the accessibility
-  gate in particular: the axe sweep lives in `ui-e2e`, so a critical violation
-  currently fails the run without stopping the merge. Adding that context to
-  branch protection is a repository-settings change, not something a pull
-  request can carry.
+  **All six are branch-protection REQUIRED checks on `main`** (issue #20;
+  verified against the branch-protection API on 2026-07-20). The required
+  contexts are the six job `name:` values in `.github/workflows/ci.yml`, one
+  per job, so the set can be diffed against the workflow:
+  - `docs-ui` → "docs + TypeScript + release contracts"
+  - `ui-e2e` → "UI browser regression (Playwright)"
+  - `rust-runtime` → "Rust + smoke + E2E + protocol conformance"
+  - `msrv` → "MSRV 1.91.0"
+  - `windows-installer` → "Windows installer integrity"
+  - `dependency-security` → "dependency security (Cargo + npm)"
+  The axe accessibility sweep lives in `ui-e2e`, so a critical or serious
+  violation now blocks the merge instead of only failing the run.
+  **Rule: a new pull-request gate enters this required-check set in the same
+  change that creates it** — an advisory-only job is a gap from the moment it
+  exists (amendment A5 requires the accessibility gate to sit alongside the
+  security gates, and the same applies to every gate the deployment plan
+  adds). Branch protection is a repository setting, so the operator flips it
+  when merging the change; a job rename must update the required context in
+  the same step, or the stale context blocks every merge.
   The same complete matrix can be dispatched manually without publishing a release.
 - **UI regressions are browser-tested.** `cd ui && npm run test:e2e` runs the
   Playwright suite (`ui/e2e/`) against the `VITE_MOCK=1` fixture client — no
