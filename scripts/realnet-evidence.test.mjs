@@ -62,6 +62,8 @@ import {
   waitForLogCollectors,
   waitForReady,
   waitPath,
+  waitPathEitherSide,
+  withPathTraffic,
   zigArchiveMembersValid,
 } from "./realnet-evidence.mjs";
 
@@ -756,6 +758,124 @@ test("path timeout diagnostics are bounded and omit peer identifiers", async () 
       return true;
     },
   );
+});
+
+test("path timeout records when the observation flapped, still without identifiers", async () => {
+  // A path that reads direct once and then decays to none (issue #65): the
+  // timeout must carry each distinct change with its offset, not only the
+  // final state — and stay as identifier-free as the summary itself.
+  const perCall = [
+    [{ endpoint_id: "secret-endpoint", identity_id: "secret-identity", state: "connected", path: "direct" }],
+    [{ endpoint_id: "secret-endpoint", identity_id: "secret-identity", state: "connected", path: null }],
+    [{ endpoint_id: "secret-endpoint", identity_id: "secret-identity", state: "connected", path: null }],
+  ];
+  let calls = 0;
+  const peer = {
+    role: "c",
+    client: { async call() { return { peers: perCall[Math.min(calls++, perCall.length - 1)] }; } },
+  };
+  let ticks = 0;
+  await assert.rejects(
+    () => waitPath(peer, "room", "direct", ["secret-identity"], {
+      timeoutMs: 1,
+      intervalMs: 0,
+      // Three observations, then let the deadline pass.
+      sleepFn: async () => { ticks += 1; if (ticks >= 2) await new Promise((r) => setTimeout(r, 5)); },
+    }),
+    (error) => {
+      assert.equal(error.code, "path_settlement_timeout");
+      assert.match(error.message, /best_consecutive=1/);
+      assert.match(error.message, /transition_changes=2/);
+      assert.match(error.message, /transitions=\[\{"at_ms":\d+,"observed_peers":1/);
+      assert.match(error.message, /"direct":1.*"direct":0/s);
+      assert.doesNotMatch(error.message, /secret|endpoint|identity/);
+      return true;
+    },
+  );
+});
+
+test("a pair claim settles from whichever side proves it and stops the other side's polling", async () => {
+  // The one-sided wedge from issue #65: b's bookkeeping is stuck at
+  // connected+none while a's view of the same live link settles direct.
+  const wedged = [{ identity_id: "id-a", state: "connected", path: null }];
+  const settled = [{ identity_id: "id-b", state: "connected", path: "direct" }];
+  let wedgedPolls = 0;
+  const b = { role: "b", client: { async call() { wedgedPolls += 1; return { peers: wedged }; } } };
+  const a = { role: "a", client: { async call() { return { peers: settled }; } } };
+  const result = await waitPathEitherSide("room", "direct", [
+    { peer: b, expectedIdentityIds: ["id-a"] },
+    { peer: a, expectedIdentityIds: ["id-b"] },
+  ], { timeoutMs: 5_000, intervalMs: 0, sleepFn: async () => {} });
+  assert.equal(result.settled_by, "a");
+  assert.equal(result.expected_path, "direct");
+  assert.equal(result.consecutive_observations, 3);
+  // The wedged side was aborted with the winner, not left to its own timeout.
+  const pollsAtResolution = wedgedPolls;
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+  assert.equal(wedgedPolls, pollsAtResolution);
+});
+
+test("a pair claim still fails closed when no side settles, naming both diagnoses", async () => {
+  const wedged = [{ identity_id: "id-x", state: "connected", path: null }];
+  const make = (role) => ({ role, client: { async call() { return { peers: wedged }; } } });
+  await assert.rejects(
+    () => waitPathEitherSide("room", "direct", [
+      { peer: make("b"), expectedIdentityIds: ["id-x"] },
+      { peer: make("a"), expectedIdentityIds: ["id-x"] },
+    ], { timeoutMs: 0, intervalMs: 0, sleepFn: async () => {} }),
+    (error) => {
+      assert.equal(error.code, "path_settlement_timeout");
+      assert.match(error.message, /no side of the pair settled/);
+      assert.match(error.message, /waiting for b to report direct path/);
+      assert.match(error.message, /waiting for a to report direct path/);
+      return true;
+    },
+  );
+});
+
+test("path traffic pumps ordinary sends while the wait runs and never fails it", async () => {
+  const sent = [];
+  let failNext = true;
+  const driver = {
+    client: {
+      async call(method, params) {
+        assert.equal(method, "message.send");
+        if (failNext) {
+          failNext = false;
+          throw new Error("transient send failure");
+        }
+        sent.push(params.body);
+        return {};
+      },
+    },
+  };
+  let release;
+  const gate = new Promise((resolvePromise) => { release = resolvePromise; });
+  let pumps = 0;
+  const result = await withPathTraffic(
+    driver,
+    "room",
+    "path-probe-run",
+    async () => {
+      await gate;
+      return "settled";
+    },
+    {
+      intervalMs: 0,
+      sleepFn: async () => {
+        pumps += 1;
+        if (pumps >= 3) release();
+      },
+    },
+  );
+  assert.equal(result, "settled");
+  // First send failed and was swallowed; the rest carry the prefix in order.
+  assert.ok(sent.length >= 1);
+  assert.deepEqual(sent.slice(0, 2), ["path-probe-run-2", "path-probe-run-3"].slice(0, sent.length));
+  // The pump stops with the wait: nothing sends after completion.
+  const afterCompletion = sent.length;
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+  assert.equal(sent.length, afterCompletion);
 });
 
 test("path checks start concurrently and retain declaration order", async () => {
