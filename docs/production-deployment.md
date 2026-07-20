@@ -3,7 +3,7 @@ type: "Architecture"
 title: "Production deployment architecture"
 description: "Repository-grounded assessment, target architecture, security boundaries, infrastructure plan, and phased gates for deploying Jeliya at app.jeliya.ai."
 tags: ["architecture", "deployment", "production", "security", "pwa", "iroh"]
-timestamp: "2026-07-19T22:15:00Z"
+timestamp: "2026-07-19T23:30:00Z"
 status: "proposal"
 implementation_status: "planned"
 verification_status: "partial"
@@ -68,7 +68,7 @@ The exact qualification boundary is different:
   `55024a46b3e112796ba2acf1dc408dab26dbba2e` and Iroh Rooms commit
   `71fbb5007bef4ce83631c94762ec68c2beef3d79` (tag `v0.1.0-rc.3`).
 - The current dependency candidate is Jeliya
-  `105744b6c27633e5ccc576d86f1a15e3fe443b94` with the deliberately untagged
+  `922f620b30ee95c82426a7d4404b1f73a70c0958` with the deliberately untagged
   Iroh Rooms revision `a5d98b70d717f35d3ce60953a88e12e646f2e871`, the first upstream `main`
   merge carrying the fixes for `kortiene/iroh-room#121` and
   `kortiene/iroh-room#119` plus the intervening connection-generation fixes.

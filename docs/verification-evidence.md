@@ -3,7 +3,7 @@ type: "Status Report"
 title: "Verification evidence"
 description: "Revision-bound verification ledger and evidence-recording contract for the v0.6.0 candidate."
 tags: ["evidence", "networking", "release", "testing", "verification"]
-timestamp: "2026-07-19T19:05:30Z"
+timestamp: "2026-07-19T23:30:00Z"
 status: "canonical"
 implementation_status: "implemented"
 verification_status: "partial"
@@ -29,7 +29,7 @@ release from the current tree.
 |---|---|
 | Milestone | `v0.6.0 — Capability-Gated Join Candidate`, not yet published |
 | Baseline commit | `045d85cb1d066f16d564b6051363b9328063ee01` — the published `v0.5.0` tag |
-| Current source candidate | `105744b6c27633e5ccc576d86f1a15e3fe443b94` |
+| Current source candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` |
 | Network-qualified commit | `pending — fresh signed direct and relay runs required` |
 | Current public `iroh-rooms` pin | `a5d98b70d717f35d3ce60953a88e12e646f2e871` — deliberately untagged first upstream `main` merge carrying the fixes for `kortiene/iroh-room#121` and `kortiene/iroh-room#119` plus the connection-generation follow-ups |
 | Candidate upstream remediation revision | `a5d98b70d717f35d3ce60953a88e12e646f2e871` |
@@ -48,10 +48,10 @@ The retained signed direct and forced-relay runs remain valid evidence for
 `55024a4...` + `71fbb500...`: they covered three peers across two BGP origin
 ASNs, passed every recorded assertion, and set `certifiable: true`. They are
 historical for the current source candidate. Fresh manifests must bind
-`105744b...` and `a5d98b70...` before the release
+`922f620...` and `a5d98b70...` before the release
 evidence gate can return to `READY`.
 
-The current source candidate was recorded as `4261470...` while the repin was in
+The source candidate was then recorded as `4261470...` while the repin was in
 review. `main` enforces linear history, so the merge rebased that work and
 rewrote its commit SHA to `9c71fac...`. The rebased commit has the identical
 tree (`53e5ce2c...`) and the identical parent (`a24f2238...`), so it is the same
@@ -61,12 +61,29 @@ must not be used in reproduction steps. This restatement does not alter the
 `Network-qualified commit` row, which stays `pending` until fresh signed direct
 and forced-relay runs are performed.
 
-Jeliya `105744b6c27633e5ccc576d86f1a15e3fe443b94` advances the source
-candidate to include the bounded concurrent path-settlement observer and
-sanitized timeout diagnostics from `kortiene/jeliya#133`. Its tree
-(`4aeed8ce...`) and parent (`05b5f4e...`) match the reviewed PR head exactly.
-All eight hosted checks passed on public `main` run `29699530741` at the exact
-candidate commit, including the network evidence harness qualification step.
+Jeliya `922f620b30ee95c82426a7d4404b1f73a70c0958` is the current source
+candidate. It was the tip of public `main` when this designation was made:
+the superseded candidate
+`105744b6c27633e5ccc576d86f1a15e3fe443b94` plus the daemon-only cut
+(`kortiene/app.jeliya.ai#1`) and the production-deployment decision record
+(`kortiene/app.jeliya.ai#58`). `105744b...` remains a true ancestor of `main`.
+
+`105744b...` itself advanced the source candidate to include the bounded
+concurrent path-settlement observer and sanitized timeout diagnostics from
+`kortiene/jeliya#133`; its tree (`4aeed8ce...`) and parent (`05b5f4e...`)
+matched the reviewed PR head exactly, and all eight hosted checks passed on
+public `main` run `29699530741` at that exact commit, including the network
+evidence harness qualification step. That run covered the matrix as it was
+defined then and is a record of what executed at `105744b...`; it is not
+evidence for `922f620...`. The frozen candidate has its own hosted record: the
+complete daemon-only six-job matrix passed twice at `922f620...`, on
+push-triggered run `29713108134` and on `workflow_dispatch` run `29713781499`.
+Both executed every job — `docs-ui`, `ui-e2e`, `rust-runtime`, `msrv`,
+`windows-installer`, and `dependency-security` — and both succeeded on their
+first attempt, so no job was rerun. `workflow_dispatch` publishes nothing.
+These runs qualify the CI matrix only; signed direct and forced-relay network
+evidence at `922f620...` + `a5d98b70...` still does not exist.
+
 The evidence gate remains `BLOCKED`: neither the prior signed manifests nor
 the local dry runs can qualify this new public commit.
 
@@ -98,7 +115,7 @@ manifests are the certifying set.
 | Rust dependency audit | zero vulnerability advisories; three unmaintained-crate warnings and one yanked-version warning remain in the register below | PASS for vulnerability threshold |
 | npm dependency audit | zero vulnerabilities | PASS |
 | Complete CI definition | Rust, MSRV, TypeScript, docs, smoke, sidecar, agent, fleet, protocol, Windows installer, and dependency gates are configured with required-tool failures; manual dispatch is non-publishing | every job configured at that revision, including Windows installer integrity, passed on public `main` run `29688515781` at `a24f223...`; current-candidate rerun pending |
-| Repeatability | two complete hosted CI executions from clean environments | configured in `release.yml`; not executed for the current candidate |
+| Repeatability | two complete hosted CI executions from clean environments | PASS at `922f620…`: runs `29713108134` (push) and `29713781499` (`workflow_dispatch`), every job green on first attempt with no rerun |
 | Direct different-network P2P | retained schema 2 run `1ca39cfa`: three peers, three distinct observed egresses, two ASNs (AS11426 + AS24940), stable direct paths on roles A/B/C, all assertions pass | certifying PASS for `55024a4…` + `71fbb500…`; current-pin rerun required |
 | Deliberately forced relay | retained schema 2 run `cf28bc63`: the relay-only source build self-attests on all three hosts and proves relay paths on roles A/B/C | certifying PASS for `55024a4…` + `71fbb500…`; current-pin rerun required |
 | Join, reconnect, and resynchronization | the current two-daemon loopback run passes 67/67 assertions; retained network runs cover the same integration boundary at the prior dependency pin | local current-pin PASS; current-pin direct and relay evidence pending |
@@ -318,12 +335,14 @@ Completed work:
    and present at immutable revision
    `a5d98b70d717f35d3ce60953a88e12e646f2e871`;
 2. public Jeliya source candidate
-   `105744b6c27633e5ccc576d86f1a15e3fe443b94` resolves that exact revision in
+   `922f620b30ee95c82426a7d4404b1f73a70c0958` resolves that exact revision in
    `Cargo.toml` and `Cargo.lock`; and
-3. the targeted fanout, isolation, and store-degradation regressions, the full
-   upstream core/net suite, the Jeliya workspace suite, and the loopback E2E
-   suite pass at source candidate
-   `105744b6c27633e5ccc576d86f1a15e3fe443b94`.
+3. the Jeliya workspace suite and the 67-assertion loopback E2E suite pass
+   locally at source candidate
+   `922f620b30ee95c82426a7d4404b1f73a70c0958`, and the targeted fanout,
+   isolation, and store-degradation regressions plus the full upstream core/net
+   suite pass at the unchanged pin
+   `a5d98b70d717f35d3ce60953a88e12e646f2e871` in a detached upstream checkout.
 
 Remaining work before `READY`:
 
@@ -341,9 +360,10 @@ snapshot but cannot clear the current candidate's gate.
 
 ## Candidate provenance: untagged upstream fixes (2026-07-19)
 
-Jeliya source candidate `105744b6c27633e5ccc576d86f1a15e3fe443b94`
-repins the SDK crates to upstream merge
-`a5d98b70d717f35d3ce60953a88e12e646f2e871`. This is the first `main` commit
+Jeliya source candidate `922f620b30ee95c82426a7d4404b1f73a70c0958`
+carries the SDK-crate repin performed at `9c71fac...` and resolves upstream
+merge `a5d98b70d717f35d3ce60953a88e12e646f2e871`; the measurements recorded in
+this section were executed at `9c71fac...`. That merge is the first `main` commit
 that contains:
 
 - the provisional-peer fanout and deferred-handshake fix from

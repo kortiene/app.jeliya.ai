@@ -3,7 +3,7 @@ type: "Status Report"
 title: "Platform matrix"
 description: "Implementation, verification, packaging, and release status for every Jeliya runtime and target platform."
 tags: ["packaging", "platforms", "release", "verification"]
-timestamp: "2026-07-19T15:15:00Z"
+timestamp: "2026-07-19T23:30:00Z"
 status: "canonical"
 implementation_status: "partial"
 verification_status: "partial"
@@ -35,7 +35,7 @@ The certifying [direct](evidence/v0.6.0/direct.json) and
 Linux x86_64 musl builds to Jeliya `55024a4…`, published Iroh Rooms pin
 `71fbb500…`, and the verified toolchain; both are signed and set
 `certifiable: true` for that prior snapshot. They do not transfer to the
-current `105744b…` + `a5d98b70…` candidate. The `v0.5.0` manifests
+current `922f620…` + `a5d98b70…` candidate. The `v0.5.0` manifests
 ([direct](evidence/v0.5.0/direct.json), [relay](evidence/v0.5.0/relay.json))
 bind the released pair `c5f740e…` + `d0ceb0b…` and do not transfer to another
 pin. The earlier unsigned
