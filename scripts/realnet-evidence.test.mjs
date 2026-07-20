@@ -777,10 +777,17 @@ test("path timeout records when the observation flapped, still without identifie
   let ticks = 0;
   await assert.rejects(
     () => waitPath(peer, "room", "direct", ["secret-identity"], {
-      timeoutMs: 1,
+      // Keep the budget large enough that the first two deadline checks cannot
+      // race Date.now()'s 1ms resolution on a fast runner (issue #69 flake);
+      // the sleepFn below is what actually pushes the loop past the deadline
+      // after the second observation, so the third observation is recorded and
+      // the timeout fires deterministically.
+      timeoutMs: 50,
       intervalMs: 0,
-      // Three observations, then let the deadline pass.
-      sleepFn: async () => { ticks += 1; if (ticks >= 2) await new Promise((r) => setTimeout(r, 5)); },
+      sleepFn: async () => {
+        ticks += 1;
+        if (ticks >= 2) await new Promise((r) => setTimeout(r, 100));
+      },
     }),
     (error) => {
       assert.equal(error.code, "path_settlement_timeout");

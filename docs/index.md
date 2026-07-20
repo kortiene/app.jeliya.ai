@@ -32,6 +32,7 @@ CI rules for every page in this wiki.
 - [Agent orchestration](agent-orchestration.md) - Normative contract for agent liveness, task claims, fleet reads, and UI projections.
 - [Security and threat model](security-threat-model.md) - Assets, trust boundaries, threats, controls, and residual risks for the technical preview.
 - [Production deployment decision](production-deployment-decision.md) - Decision record adopting the capability-aware hybrid architecture and the companion-backed first slice for app.jeliya.ai, and the six amendments binding its phase gates.
+- [Production ownership record](production-ownership.md) - Who controls the jeliya.ai zone, CDN, relay, edge-token, and signing accounts, and who can approve a production change (Phase 0 deliverable, issue #24).
 - [Supported platform matrix decision](platform-matrix-decision.md) - Decision record fixing the first-slice supported desktop OS and browser matrix, its mobile position under amendment A4, the test-lane mapping, and the pairing-success denominator.
 - [Portable Iroh Rooms traits decision](iroh-rooms-portable-traits-decision.md) - Decision record choosing the audited short-lived patch path for the browser peer's portable store, blob, transport, clock, and task-scheduling traits, with its audit owner and recurring cost.
 
