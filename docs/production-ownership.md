@@ -66,7 +66,7 @@ unowned account.
 | Edge token service behind `relay-auth.jeliya.ai` | `<TODO: e.g. Cloudflare Worker, separate Worker project>` | `<TODO>` | `<TODO>` |
 | Dedicated relay 1 (primary region) | `<TODO: provider + project id>` | `<TODO>` | `<TODO>` |
 | Dedicated relay 2 (failover region) | `<TODO: provider + project id>` | `<TODO>` | `<TODO>` |
-| Relay-auth signing-key custody | process-local at launch, generated per restart; `<TODO: long-term custody decision>` | `<TODO>` | n/a (no billing surface) |
+| Relay-auth signing-key custody | `<TODO: UNRESOLVED production custody decision — the Phase 0 spike (issue [#68](https://github.com/kortiene/app.jeliya.ai/issues/68), [phase-0-relay-spike.md](evidence/phase-0-relay-spike.md) lines 127-131) generated an Ed25519 key in-process per restart as explicit spike-quality behaviour that the evidence record states is *not* the format/signing algorithm/admission rule production should adopt. A per-restart key either invalidates in-flight tokens or forces the verifying key to be re-synchronised to every relay before it can admit clients; the launch custody model (static key, sealed secret, KMS-backed key, or other) must be chosen and recorded here before the launch relay-auth design is finalised>` | `<TODO>` | n/a (no billing surface) |
 
 ### Cost ceilings
 
@@ -133,7 +133,7 @@ records the concrete plan.
 
 | Dimension | Development | Staging | Production |
 |---|---|---|---|
-| Origin | `localhost` / preview deploys | `staging.app.jeliya.ai` | `app.jeliya.ai` |
+| Origin | `localhost` (and per-branch preview deploys **only if isolated** per the note below) | `staging.app.jeliya.ai` | `app.jeliya.ai` |
 | Relay project | `<TODO: dedicated test relay or loopback>` | `<TODO: dedicated staging relay>` | dedicated relay 1 + relay 2 (§2) |
 | Trust root | local self-signed | `<TODO: staging CA / internal>` | Web PKI + `<TODO: pinning decision>` |
 | Signing credential | none (unsigned dev builds) | none (unsigned staging builds) | Apple Developer ID + Azure Artifact Signing |
@@ -146,15 +146,36 @@ they exist, and confirm that staging credentials cannot mint production
 relay capacity (the threat-model risk of environment bleed:
 security-threat-model.md TB2 "Environment bleed").>`
 
+**Preview-deploy isolation (threat-model residual,
+[security-threat-model.md](security-threat-model.md) line 261).** Per-branch
+preview deploys (Cloudflare Pages preview, Vercel, etc.) become near-production
+origins that lack the production header set, HSTS, DNSSEC, and CAA controls,
+and that any pairing or relay-auth flow would accept unless it pins the exact
+production origin. Before preview deploys are enabled on the production CDN
+project, EITHER disable them at the provider OR record them here as a separate
+isolated environment with **no** production trust roots, **no** production
+relay-auth or relay capacity, and **no** shared browser storage.
+`<TODO #24: record the choice (disable vs isolated), and if isolated, the
+exact origin allowlist that pairing and relay-auth pin to. Until that choice
+is recorded, preview deploys for the production CDN project remain disabled.>`
+
 ## 6. Credential strategy
 
-Every account in §2 must be reached through the narrowest credential the
-provider supports, preferring workload identity / OIDC where available and
+Every account in §1 and §2 must be reached through the narrowest credential
+the provider supports, preferring workload identity / OIDC where available and
 otherwise a scoped, rotated deployment token. **No shared personal login
-remains.**
+remains** — including the registrar login that controls the `jeliya.ai` zone
+and the authoritative-DNS edit credential, either of which can redirect or
+take over `app.jeliya.ai` before any CDN or relay control matters. Production
+DNS records are managed by OpenTofu under `infra/`
+([production-deployment.md](production-deployment.md):572,869), so the
+registrar and DNS credentials are deployment credentials for this section,
+not out-of-band personal logins.
 
 | Surface | Credential type | Rotation |
 |---|---|---|
+| Registrar account (zone control of `jeliya.ai`) | `<TODO: scoped API token with only DNS/zone-delegation scope, or OIDC via the registrar's OpenTofu provider — personal console login retained only for break-glass recovery>` | revocable + re-issuable from a second factor-controlled recovery path; rotate `<TODO: cadence>` |
+| Authoritative DNS zone (record edits via OpenTofu) | `<TODO: OpenTofu provider auth via GitHub Actions OIDC workload identity, else scoped API token in GitHub Actions secret>` | `<TODO: token rotation cadence; OpenTofu-applied record changes recorded in commit history>` |
 | Static CDN deploy | `<TODO: OIDC via GitHub Actions / scoped deploy token>` | `<TODO>` |
 | Edge token service deploy | `<TODO>` | `<TODO>` |
 | Relay project deploy | `<TODO>` | `<TODO>` |
