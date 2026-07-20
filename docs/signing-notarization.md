@@ -3,7 +3,7 @@ type: "Runbook"
 title: "Signing and notarization (Phase 2)"
 description: "Release-security plan and procedure for signing the Jeliya daemon release artifacts."
 tags: ["linux", "macos", "release", "security", "signing", "windows"]
-timestamp: "2026-07-16T15:30:00Z"
+timestamp: "2026-07-20T13:20:00Z"
 status: "canonical"
 implementation_status: "partial"
 verification_status: "partial"
@@ -25,6 +25,13 @@ Current status:
 - The `v0.5.0` workflow publishes only five unsigned `jeliyad` archives with
   their checksum sidecars. It contains no Developer ID signing, notarization,
   or Authenticode step.
+
+The platform input to this plan is the
+[supported platform matrix decision](platform-matrix-decision.md): Apple
+Developer enrollment and notarization cover macOS 13 or newer on arm64 and
+x86_64, Authenticode issuance covers Windows 10 22H2 or newer on x86_64, and
+the two Linux musl targets need checksum-and-provenance publication rather
+than a platform signing service.
 
 ## Goals
 

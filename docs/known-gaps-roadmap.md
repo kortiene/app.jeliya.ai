@@ -3,7 +3,7 @@ type: "Status Report"
 title: "Known gaps and roadmap"
 description: "Release blockers, deferred risks, owners, and next actions for the v0.5.0 evidence-backed technical preview."
 tags: ["gaps", "release", "risks", "roadmap"]
-timestamp: "2026-07-19T23:30:00Z"
+timestamp: "2026-07-20T13:20:00Z"
 status: "canonical"
 implementation_status: "partial"
 verification_status: "partial"
@@ -61,7 +61,16 @@ maintenance/yank warnings are tracked with mitigation and an expiry of
   `store_degraded` decision. Operators still need a documented response to real
   disk failure; and
 - mixed pre/post-repin fleets cannot complete joins, so joiners and admins must
-  upgrade together.
+  upgrade together: mixed `v0.5.0`/candidate rooms cannot complete joins in
+  either direction, so a room's members, especially its admin, must move
+  together. The published `v0.5.0` set is five daemon archives with no
+  auto-update channel, so the upgrade message reaches an already-installed
+  client only through the next release's notes and the installation
+  instructions they point to — inside the product, the join failure itself is
+  the only signal. The Phase 0 go/no-go gate therefore requires a coordinated
+  fleet-upgrade plan before any hosted surface can meet an already-published
+  client, and measuring the stranded fraction belongs to amendment A3 of the
+  [production deployment decision](production-deployment-decision.md).
 
 ## Exit criteria for the next release
 

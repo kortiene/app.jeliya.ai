@@ -3,7 +3,7 @@ type: "Architecture"
 title: "Production deployment architecture"
 description: "Repository-grounded assessment, target architecture, security boundaries, infrastructure plan, and phased gates for deploying Jeliya at app.jeliya.ai."
 tags: ["architecture", "deployment", "production", "security", "pwa", "iroh"]
-timestamp: "2026-07-19T23:30:00Z"
+timestamp: "2026-07-20T13:20:00Z"
 status: "proposal"
 implementation_status: "planned"
 verification_status: "partial"
@@ -54,7 +54,10 @@ The target is a **capability-aware hybrid**:
 For a small team of two to three engineers, the companion-backed production
 slice is estimated at **11 to 17 engineering weeks**. A robust browser-only peer
 adds approximately **10 to 14 weeks**. These are planning estimates, not release
-commitments.
+commitments. Both figures predate the decision record and its amendments and
+omit the companion update path, the accessibility and localization work, and
+the trust-and-safety and legal work that amendments A3, A5, and A6 add; they
+are re-baselined at the Phase 0 gate rather than carried forward.
 
 ## Assessment boundary and evidence
 
@@ -219,7 +222,7 @@ engineer at least part-time, and an independent security review.
 | Background agents | Not reliably supported | Companion can run subject to native OS policy | Natural fit but operationally expensive | Browser never claims always-on work; native/server may |
 | Operational complexity | Low static hosting, medium runtime/relay work | Medium: installers, pairing, relays, native lifecycle | High: accounts, databases, isolation, backups, and abuse | Medium-high, but can launch incrementally |
 | Cost shape | CDN plus relays; browser traffic is always relayed | CDN plus relays; native direct paths can reduce egress | Compute, storage, database, backup, and egress | CDN/relays first; server cost only for opted-in services |
-| First safe production | Approximately 16 to 24 engineer-weeks | Approximately 11 to 17 engineer-weeks | At least 24 weeks | First companion slice in 11 to 17 weeks; browser mode follows |
+| First safe production (pre-amendment estimates, re-baselined at the Phase 0 gate) | Approximately 16 to 24 engineer-weeks | Approximately 11 to 17 engineer-weeks | At least 24 weeks | First companion slice in 11 to 17 weeks; browser mode follows |
 
 ### Decision
 
@@ -875,7 +878,7 @@ upstream. A long-lived private fork is a security and maintenance liability.
 No phase starts implementation work that depends on an unresolved go/no-go gate
 from the previous phase.
 
-### Phase 0: freeze the claim boundary, 1 to 2 weeks
+### Phase 0: freeze the claim boundary, 1 to 2 weeks (pre-amendment estimate)
 
 Deliver:
 
@@ -890,7 +893,11 @@ Deliver:
 - update the threat model for browser origin, companion, and relays;
 - prove browser-to-native Iroh connectivity with the intended relay
   authentication;
-- confirm DNS, CDN, relay, and signing ownership.
+- confirm DNS, CDN, relay, and signing ownership;
+- re-baseline the pre-amendment duration estimates carried in this plan's
+  executive decision, deployment-model comparison, and phase headings,
+  covering the work amendments A3, A5, and A6 add, so no marked figure is
+  carried forward as a current commitment.
 
 Go/no-go gate:
 
@@ -903,8 +910,25 @@ Go/no-go gate:
 - direct and forced-relay evidence is signed and bound to that SHA and
   `a5d98b70...`;
 - a browser reaches a native test endpoint through an authenticated relay;
+- a coordinated fleet-upgrade plan exists before any hosted surface can meet
+  an already-published Jeliya client: mixed `v0.5.0`/candidate rooms cannot
+  complete joins in either direction, so a room's members, especially its
+  admin, must move together.
 
-### Phase 1: production identity and protocol primitives, 3 to 5 weeks
+The mixed-version condition has no in-product channel to an already-installed
+client: the published `v0.5.0` artifact set is five daemon archives with no
+auto-update channel, so the upgrade message rides on the release notes of the
+next release, the installation instructions they point to, and the published
+limitation copy in [Known gaps and roadmap](known-gaps-roadmap.md) and
+[Capability status](capability-status.md) — the join failure itself is the
+only signal a stranded `v0.5.0` client shows. Companion version is also
+absent from the allowed aggregate metrics above, so the stranded fraction is
+not yet measurable; adding a companion-version bucket before minimum-safe
+enforcement belongs to
+[amendment A3](production-deployment-decision.md#a3-specify-the-companion-update-path-and-measure-version-skew),
+and this gate does not claim that measurement exists.
+
+### Phase 1: production identity and protocol primitives, 3 to 5 weeks (pre-amendment estimate)
 
 Deliver:
 
@@ -927,7 +951,7 @@ Go/no-go gate:
 - replay, wrong-SAS, expired-key, and revoked-key pairing tests fail closed;
 - independent security review approves the wire formats and key lifecycle.
 
-### Phase 2: companion-backed vertical slice, 5 to 7 weeks
+### Phase 2: companion-backed vertical slice, 5 to 7 weeks (pre-amendment estimate)
 
 Deliver:
 
@@ -947,7 +971,7 @@ Go/no-go gate:
 - a 48-hour soak loses no committed event;
 - supported installers verify signatures and reject tampering.
 
-### Phase 3: production web and relay operations, 2 to 3 weeks
+### Phase 3: production web and relay operations, 2 to 3 weeks (pre-amendment estimate)
 
 Deliver:
 
@@ -969,7 +993,7 @@ Go/no-go gate:
 
 This is the first production launch gate.
 
-### Phase 4: browser peer and multi-device identity, 10 to 14 weeks
+### Phase 4: browser peer and multi-device identity, 10 to 14 weeks (pre-amendment estimate)
 
 Deliver:
 
@@ -990,9 +1014,12 @@ Go/no-go gate:
 - an active browser peer works offline and converges after reconnection;
 - a revoked device cannot author an accepted future event;
 - product copy makes no durable background-availability claim;
-- the exact upstream/browser-adapter revision receives security qualification.
+- the exact upstream/browser-adapter revision receives security
+  qualification, with the
+  [portable Iroh Rooms traits decision](iroh-rooms-portable-traits-decision.md)
+  as an input naming the qualification target.
 
-### Phase 5: components and optional server peers, 8 to 16 weeks
+### Phase 5: components and optional server peers, 8 to 16 weeks (pre-amendment estimate)
 
 Deliver:
 

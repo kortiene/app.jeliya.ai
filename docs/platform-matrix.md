@@ -3,7 +3,7 @@ type: "Status Report"
 title: "Platform matrix"
 description: "Implementation, verification, packaging, and release status for every Jeliya runtime and target platform."
 tags: ["packaging", "platforms", "release", "verification"]
-timestamp: "2026-07-19T23:30:00Z"
+timestamp: "2026-07-20T13:20:00Z"
 status: "canonical"
 implementation_status: "partial"
 verification_status: "partial"
@@ -84,3 +84,16 @@ writer verifies the sealed receipt without executing candidate bytes and
 exposes its token only to the final publishing step. It executed exactly this
 way to publish `v0.5.0`'s five-target set.
 See [Release versus main](release-vs-main.md).
+
+## Intended support matrix (decision, not status)
+
+The [supported platform matrix decision](platform-matrix-decision.md) fixes
+the first-slice support commitment for the companion-backed production slice:
+the five daemon build targets above as the supported desktop operating
+systems (macOS 13 or newer on arm64 and x86_64, Windows 10 22H2 or newer on
+x86_64, and Linux x86_64/arm64 musl with a stated reference environment),
+the latest two stable releases of Chrome, Edge, Firefox, and Safari in
+companion mode, and no mobile support in the first slice. This section
+records intent only: nothing in it changes the implementation, verification,
+or release status in the tables above, and no capability is available on a
+platform it has not run on.
