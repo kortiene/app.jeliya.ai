@@ -33,7 +33,7 @@ pair and do not transfer to the current dependency.
 | Candidate `iroh-rooms` pin | `a5d98b70d717f35d3ce60953a88e12e646f2e871` — deliberately untagged first merge carrying the `kortiene/iroh-room#121` and `kortiene/iroh-room#119` fixes plus `kortiene/iroh-room#126` follow-ups; later `main` changes only an unconsumed CLI crate |
 | Candidate verification | exact-revision upstream fanout, isolation, and store-degradation tests pass; full Jeliya workspace and 67-assertion loopback suites pass. Fresh signed direct and forced-relay evidence is required |
 | Historical network verification | schema 1 runs at Jeliya `fe870c7…` with local upstream `3702e8c…`, and the schema 2 preview run at `0f6769a…` with pre-remediation pin `3cb9bfd…`; functional evidence only |
-| Status captured | 2026-07-19 23:30 UTC |
+| Status captured | release and evidence snapshot 2026-07-19 23:30 UTC; branch-protection required-check state (#20) verified separately 2026-07-20 13:55 UTC |
 
 See [Release versus main](release-vs-main.md) for the revision boundaries and
 [Verification evidence](verification-evidence.md) for the complete ledger.
