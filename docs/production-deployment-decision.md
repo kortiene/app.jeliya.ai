@@ -3,7 +3,7 @@ type: "Decision"
 title: "Production deployment architecture — decision record"
 description: "Adopts the capability-aware hybrid architecture and the companion-backed first slice for app.jeliya.ai, subject to six binding amendments drawn from the adversarial review."
 tags: ["architecture", "deployment", "decision", "security", "roadmap", "governance"]
-timestamp: "2026-07-19T22:15:00Z"
+timestamp: "2026-07-20T13:20:00Z"
 status: "canonical"
 implementation_status: "planned"
 verification_status: "partial"
@@ -234,12 +234,21 @@ matrix twice on one immutable SHA.
 ## Decisions deferred to their own records
 
 This record adopts the architecture. It does not settle the eight decisions the
-proposal defers, which remain open and each require their own record: provider
+proposal defers, which each require their own record: provider
 selection; the companion control protocol and pairing transcript;
 recovery-bundle format and custody; multi-device and revocation semantics;
 whether optional server peers may read content; the browser signing strategy;
 component package metadata and trust-root custody; and the supported browser,
-desktop, and mobile matrix.
+desktop, and mobile matrix. Decision 8 is now recorded in the
+[supported platform matrix decision](platform-matrix-decision.md); the other
+seven remain open.
+
+One decision the proposal did not defer is registered here alongside them so
+the plan's highest-risk unknown #1 has a named owner: the upstream-or-fork
+path for the portable Iroh Rooms store, blob, transport, clock, and
+task-scheduling traits is recorded in the
+[portable Iroh Rooms traits decision](iroh-rooms-portable-traits-decision.md),
+owned by the upstream and core maintainer.
 
 ## Citations
 
