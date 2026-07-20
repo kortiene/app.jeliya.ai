@@ -31,6 +31,7 @@ CI rules for every page in this wiki.
 - [Cross-client design tokens](design-tokens.md) - Mapping from every design-token concept to its React custom property, the shared fixture, and the gate that enforces it.
 - [Agent orchestration](agent-orchestration.md) - Normative contract for agent liveness, task claims, fleet reads, and UI projections.
 - [Security and threat model](security-threat-model.md) - Assets, trust boundaries, threats, controls, and residual risks for the technical preview.
+- [Production deployment decision](production-deployment-decision.md) - Decision record adopting the capability-aware hybrid architecture and the companion-backed first slice for app.jeliya.ai, and the six amendments binding its phase gates.
 
 ## Agents
 
@@ -40,7 +41,7 @@ CI rules for every page in this wiki.
 
 - [Agent marketplace architecture](agent-marketplace.md) - Proposed, not-yet-implemented hosted-agent marketplace architecture, trust model, product flow, and delivery plan.
 - [Production deployment architecture](production-deployment.md) - Repository-grounded assessment, hybrid browser/native/server target, trust boundaries, infrastructure, release gates, and the first production slice for app.jeliya.ai.
-- [Production deployment architecture review](production-deployment-review.md) - Adversarially verified findings, refuted candidates, and confirmed claims behind the six amendments the deployment proposal needs before it becomes a decision.
+- [Production deployment architecture review](production-deployment-review.md) - Adversarially verified findings, refuted candidates, and confirmed claims behind the six amendments carried by the deployment decision record.
 
 ## Operations and release evidence
 
