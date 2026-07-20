@@ -3,7 +3,7 @@ type: "Status Report"
 title: "Verification evidence"
 description: "Revision-bound verification ledger and evidence-recording contract for the v0.6.0 candidate."
 tags: ["evidence", "networking", "release", "testing", "verification"]
-timestamp: "2026-07-19T19:05:30Z"
+timestamp: "2026-07-19T23:30:00Z"
 status: "canonical"
 implementation_status: "implemented"
 verification_status: "partial"
@@ -29,7 +29,7 @@ release from the current tree.
 |---|---|
 | Milestone | `v0.6.0 — Capability-Gated Join Candidate`, not yet published |
 | Baseline commit | `045d85cb1d066f16d564b6051363b9328063ee01` — the published `v0.5.0` tag |
-| Current source candidate | `105744b6c27633e5ccc576d86f1a15e3fe443b94` |
+| Current source candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` |
 | Network-qualified commit | `pending — fresh signed direct and relay runs required` |
 | Current public `iroh-rooms` pin | `a5d98b70d717f35d3ce60953a88e12e646f2e871` — deliberately untagged first upstream `main` merge carrying the fixes for `kortiene/iroh-room#121` and `kortiene/iroh-room#119` plus the connection-generation follow-ups |
 | Candidate upstream remediation revision | `a5d98b70d717f35d3ce60953a88e12e646f2e871` |
@@ -48,10 +48,10 @@ The retained signed direct and forced-relay runs remain valid evidence for
 `55024a4...` + `71fbb500...`: they covered three peers across two BGP origin
 ASNs, passed every recorded assertion, and set `certifiable: true`. They are
 historical for the current source candidate. Fresh manifests must bind
-`105744b...` and `a5d98b70...` before the release
+`922f620...` and `a5d98b70...` before the release
 evidence gate can return to `READY`.
 
-The current source candidate was recorded as `4261470...` while the repin was in
+The source candidate was then recorded as `4261470...` while the repin was in
 review. `main` enforces linear history, so the merge rebased that work and
 rewrote its commit SHA to `9c71fac...`. The rebased commit has the identical
 tree (`53e5ce2c...`) and the identical parent (`a24f2238...`), so it is the same
@@ -61,12 +61,22 @@ must not be used in reproduction steps. This restatement does not alter the
 `Network-qualified commit` row, which stays `pending` until fresh signed direct
 and forced-relay runs are performed.
 
-Jeliya `105744b6c27633e5ccc576d86f1a15e3fe443b94` advances the source
-candidate to include the bounded concurrent path-settlement observer and
-sanitized timeout diagnostics from `kortiene/jeliya#133`. Its tree
-(`4aeed8ce...`) and parent (`05b5f4e...`) match the reviewed PR head exactly.
-All eight hosted checks passed on public `main` run `29699530741` at the exact
-candidate commit, including the network evidence harness qualification step.
+Jeliya `922f620b30ee95c82426a7d4404b1f73a70c0958` is the current source
+candidate. It is the tip of public `main`: the superseded candidate
+`105744b6c27633e5ccc576d86f1a15e3fe443b94` plus the daemon-only cut
+(`kortiene/app.jeliya.ai#1`) and the production-deployment decision record
+(`kortiene/app.jeliya.ai#58`). `105744b...` remains a true ancestor of `main`.
+
+`105744b...` itself advanced the source candidate to include the bounded
+concurrent path-settlement observer and sanitized timeout diagnostics from
+`kortiene/jeliya#133`; its tree (`4aeed8ce...`) and parent (`05b5f4e...`)
+matched the reviewed PR head exactly, and all eight hosted checks passed on
+public `main` run `29699530741` at that exact commit, including the network
+evidence harness qualification step. That run covered the matrix as it was
+defined then and is a record of what executed at `105744b...`; it is not
+evidence for `922f620...`. No completed hosted CI run at `922f620...` is
+recorded here — a push-triggered run at the frozen candidate is still pending.
+
 The evidence gate remains `BLOCKED`: neither the prior signed manifests nor
 the local dry runs can qualify this new public commit.
 
@@ -318,12 +328,14 @@ Completed work:
    and present at immutable revision
    `a5d98b70d717f35d3ce60953a88e12e646f2e871`;
 2. public Jeliya source candidate
-   `105744b6c27633e5ccc576d86f1a15e3fe443b94` resolves that exact revision in
+   `922f620b30ee95c82426a7d4404b1f73a70c0958` resolves that exact revision in
    `Cargo.toml` and `Cargo.lock`; and
-3. the targeted fanout, isolation, and store-degradation regressions, the full
-   upstream core/net suite, the Jeliya workspace suite, and the loopback E2E
-   suite pass at source candidate
-   `105744b6c27633e5ccc576d86f1a15e3fe443b94`.
+3. the Jeliya workspace suite and the 67-assertion loopback E2E suite pass
+   locally at source candidate
+   `922f620b30ee95c82426a7d4404b1f73a70c0958`, and the targeted fanout,
+   isolation, and store-degradation regressions plus the full upstream core/net
+   suite pass at the unchanged pin
+   `a5d98b70d717f35d3ce60953a88e12e646f2e871` in a detached upstream checkout.
 
 Remaining work before `READY`:
 
@@ -341,9 +353,10 @@ snapshot but cannot clear the current candidate's gate.
 
 ## Candidate provenance: untagged upstream fixes (2026-07-19)
 
-Jeliya source candidate `105744b6c27633e5ccc576d86f1a15e3fe443b94`
-repins the SDK crates to upstream merge
-`a5d98b70d717f35d3ce60953a88e12e646f2e871`. This is the first `main` commit
+Jeliya source candidate `922f620b30ee95c82426a7d4404b1f73a70c0958`
+carries the SDK-crate repin performed at `9c71fac...` and resolves upstream
+merge `a5d98b70d717f35d3ce60953a88e12e646f2e871`; the measurements recorded in
+this section were executed at `9c71fac...`. That merge is the first `main` commit
 that contains:
 
 - the provisional-peer fanout and deferred-handshake fix from

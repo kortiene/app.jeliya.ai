@@ -3,7 +3,7 @@ type: "Status Report"
 title: "Capability status"
 description: "Evidence-aware capability matrix for the v0.5.0 technical-preview candidate and the latest public release."
 tags: ["capabilities", "release", "status", "verification"]
-timestamp: "2026-07-19T15:15:00Z"
+timestamp: "2026-07-19T23:30:00Z"
 status: "canonical"
 implementation_status: "partial"
 verification_status: "partial"
@@ -27,13 +27,13 @@ pair and do not transfer to the current dependency.
 | Field | Value |
 |---|---|
 | Released milestone | `v0.5.0 — Evidence-Backed Technical Preview`, published 2026-07-14 as a prerelease: five daemon+embedded-UI archives with `.sha256` sidecars |
-| Current source candidate | `105744b6c27633e5ccc576d86f1a15e3fe443b94` with Iroh Rooms `a5d98b70d717f35d3ce60953a88e12e646f2e871` |
+| Current source candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` with Iroh Rooms `a5d98b70d717f35d3ce60953a88e12e646f2e871` |
 | Last network-qualified `v0.6.0` snapshot | Jeliya `55024a46b3e112796ba2acf1dc408dab26dbba2e` with Iroh Rooms `71fbb5007bef4ce83631c94762ec68c2beef3d79` (tag `v0.1.0-rc.3`) |
 | Retained certified evidence | signed schema 2 direct (`1ca39cfa`) and forced-relay (`cf28bc63`) runs of 2026-07-16; valid for the last network-qualified snapshot only |
 | Candidate `iroh-rooms` pin | `a5d98b70d717f35d3ce60953a88e12e646f2e871` — deliberately untagged first merge carrying the `kortiene/iroh-room#121` and `kortiene/iroh-room#119` fixes plus `kortiene/iroh-room#126` follow-ups; later `main` changes only an unconsumed CLI crate |
 | Candidate verification | exact-revision upstream fanout, isolation, and store-degradation tests pass; full Jeliya workspace and 67-assertion loopback suites pass. Fresh signed direct and forced-relay evidence is required |
 | Historical network verification | schema 1 runs at Jeliya `fe870c7…` with local upstream `3702e8c…`, and the schema 2 preview run at `0f6769a…` with pre-remediation pin `3cb9bfd…`; functional evidence only |
-| Status captured | 2026-07-19 15:15 UTC |
+| Status captured | 2026-07-19 23:30 UTC |
 
 See [Release versus main](release-vs-main.md) for the revision boundaries and
 [Verification evidence](verification-evidence.md) for the complete ledger.
@@ -52,7 +52,7 @@ especially its admin, must move together.
 | Identity, room create/join/open, membership, and messages | implemented | certified direct and relay pass for `v0.5.0`; current pin passes local integration | released in `v0.5.0` | Known `v0.5.0` limitation: an invite minted after non-admin chat cannot complete `room.join`. The current candidate fixes this and passes all 67 loopback assertions; fresh current-pin network runs remain required. |
 | Files and BLAKE3 fetch verification | implemented | certified direct and relay pass for `v0.5.0` | released in `v0.5.0` | Cross-network transfer, byte equality, and hash verification passed in both certifying runs. |
 | Pipes | implemented | certified direct and relay pass for `v0.5.0` | released in `v0.5.0` | Authorized transfer, closure, and zero target bytes from the unauthorized third peer passed in both certifying runs. |
-| Direct cross-network P2P | implemented | certified for `v0.5.0` and the prior `v0.6.0` snapshot; current candidate pending | released in `v0.5.0` | [Signed schema 2 direct run `1ca39cfa`](evidence/v0.6.0/direct.json) certifies `55024a4…` + `71fbb500…`; it does not transfer to `105744b…` + `a5d98b70…`. |
+| Direct cross-network P2P | implemented | certified for `v0.5.0` and the prior `v0.6.0` snapshot; current candidate pending | released in `v0.5.0` | [Signed schema 2 direct run `1ca39cfa`](evidence/v0.6.0/direct.json) certifies `55024a4…` + `71fbb500…`; it does not transfer to `922f620…` + `a5d98b70…`. |
 | Deliberately forced relay | published seam pinned; verifier chain forwards through jeliya-core | certified for `v0.5.0` and the prior `v0.6.0` snapshot; current candidate pending | released in `v0.5.0` | [Signed schema 2 relay run `cf28bc63`](evidence/v0.6.0/relay.json) certifies `55024a4…` + `71fbb500…`; a new relay-only source build and signed run are required. |
 | Public room-scoped RPC isolation | implemented | verified locally and in both certifying runs | released in `v0.5.0` | A centralized guard covers the public room-scoped surface. Seventeen negative RPC checks, local-file denial, and aggregate filtering passed over the public network in the certifying runs. |
 | Upstream synchronization and provisional-peer isolation | remediated at current pin `a5d98b70…` | targeted isolation, provisional-fanout, and store-degradation regressions pass; core/net all-targets suite passes 806 tests with two ignores | released baseline in `v0.5.0`; new fixes unreleased | Local exact-revision evidence covers the upstream internals. Fresh signed network evidence is still required for Jeliya integration at the new pin. |

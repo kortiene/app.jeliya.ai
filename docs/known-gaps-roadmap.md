@@ -3,7 +3,7 @@ type: "Status Report"
 title: "Known gaps and roadmap"
 description: "Release blockers, deferred risks, owners, and next actions for the v0.5.0 evidence-backed technical preview."
 tags: ["gaps", "release", "risks", "roadmap"]
-timestamp: "2026-07-19T15:15:00Z"
+timestamp: "2026-07-19T23:30:00Z"
 status: "canonical"
 implementation_status: "partial"
 verification_status: "partial"
@@ -17,7 +17,7 @@ audience: ["contributors", "maintainers", "product", "release-engineers"]
 were met (published safe pin, signed certifying direct and relay evidence,
 hosted gates, complete verified artifact set). The table below records that
 closure and the gaps that carry forward to the current post-release source
-candidate, which repins `iroh-rooms` to the untagged upstream revision
+candidate `922f620…`, which repins `iroh-rooms` to the untagged upstream revision
 `a5d98b70...` and must earn fresh signed network evidence at that exact pin.
 
 ## NOW — closure status
@@ -29,10 +29,10 @@ candidate, which repins `iroh-rooms` to the untagged upstream revision
 | Upstream synchronization, provisional-peer, and store integrity | certified baseline for `v0.5.0` at `d0ceb0b…`; current `a5d98b70…` pin passes targeted fanout, isolation, and store-degradation regressions plus 806 core/net tests and the full Jeliya suites locally | rerun signed direct and relay qualification at `a5d98b70…` before the next release | upstream and core maintainer | current pin locally requalified; network qualification pending |
 | Agent secrets | external agent data default, ignore and tracked-secret gates pass | keep controls on the next candidate | agent maintainer | closed |
 | Dependency security | Cargo and npm report zero vulnerabilities; four unmaintained/yanked warnings have owner, mitigation, and expiry records | rerun against the next candidate's lockfiles | dependency owner | closed |
-| CI completeness | every required job of the then-current matrix passed on public `main` run `29699530741` at `105744b…`; the PR matrix passed on the identical tree after rerunning an unrelated transient Playwright offset failure; manual dispatch does not publish | run the daemon-only six-job matrix cleanly twice on the final commit | CI maintainer | current matrix run pending |
+| CI completeness | every required job of the then-current matrix passed on public `main` run `29699530741` at `105744b…`; the PR matrix passed on the identical tree after rerunning an unrelated transient Playwright offset failure; manual dispatch does not publish | run the daemon-only six-job matrix cleanly twice on the frozen candidate `922f620…` | CI maintainer | current matrix run pending |
 | Agent/fleet reliability | agent E2E passes; fleet stability passed 5/5; Linux orphan/zombie cleanup verified on `demo1` under UID `65534` | repeat in the next candidate's hosted gates | agent maintainer | closed |
-| Direct network behavior | signed runs certify released `v0.5.0` and the prior `55024a4…` + `71fbb500…` snapshot | rerun at `105744b…` + `a5d98b70…` | verification owner | current candidate pending |
-| Forced relay behavior | signed runs certify released `v0.5.0` and the prior `55024a4…` + `71fbb500…` snapshot; the relay-only verifier still builds locally | rerun the source-built relay qualification at the current revision pair | verification owner | current candidate pending |
+| Direct network behavior | signed runs certify released `v0.5.0` and the prior `55024a4…` + `71fbb500…` snapshot | rerun at `922f620…` + `a5d98b70…` | verification owner | current candidate pending |
+| Forced relay behavior | signed runs certify released `v0.5.0` and the prior `55024a4…` + `71fbb500…` snapshot; the relay-only verifier still builds locally | rerun the source-built relay qualification at the current revision pair `922f620…` + `a5d98b70…` | verification owner | current candidate pending |
 | Evidence authenticity | detached Ed25519 signatures over both certifying manifests verify against the committed public SPKI; private-key custody is out of band | keep custody; sign the next candidate's runs | release authority | closed |
 | Unix installer integrity | behavioral checksum-before-extraction tests pass; `v0.5.0` installs via the version-pinned installer path | rerun against the next artifacts | release maintainer | closed |
 | Windows installer integrity | hosted `windows-latest` behavioral job passes on `main`; a `v0.5.0` Windows zip and sidecar are published | rerun against the next artifacts | release maintainer | closed |
