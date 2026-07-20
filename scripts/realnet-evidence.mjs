@@ -2108,17 +2108,38 @@ export async function waitPath(
   roomId,
   expected,
   expectedIdentityIds,
-  { timeoutMs = WAIT_MS, intervalMs = 1_000, sleepFn = sleep } = {},
+  { timeoutMs = WAIT_MS, intervalMs = 1_000, sleepFn = sleep, abort = null } = {},
 ) {
   let consecutive = 0;
   let bestConsecutive = 0;
   let observations = 0;
   let lastPeers = [];
-  const deadline = Date.now() + timeoutMs;
+  // Every distinct change of the (sanitized) observation summary, with its
+  // offset into the wait. A timeout that shows WHEN the path flapped is
+  // diagnosable; one that shows only the final state is not (issue #65).
+  const transitions = [];
+  let transitionChanges = 0;
+  let lastSummaryJson = null;
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
   for (;;) {
+    if (abort?.aborted) {
+      const error = new Error(`${peer.role} path wait aborted: the pair claim was already proven`);
+      error.code = "path_settlement_aborted";
+      throw error;
+    }
     const { peers } = await peer.client.call("peers.status", { room_id: roomId });
     observations += 1;
     lastPeers = peers;
+    const summary = pathObservationSummary(peers, expectedIdentityIds);
+    const summaryJson = JSON.stringify(summary);
+    if (summaryJson !== lastSummaryJson) {
+      lastSummaryJson = summaryJson;
+      transitionChanges += 1;
+      if (transitions.length < 20) {
+        transitions.push({ at_ms: Date.now() - startedAt, ...summary });
+      }
+    }
     if (!pathMatchesExpectedIdentities(peers, expected, expectedIdentityIds)) {
       consecutive = 0;
     } else {
@@ -2133,16 +2154,97 @@ export async function waitPath(
       }
     }
     if (Date.now() >= deadline) {
-      const summary = pathObservationSummary(lastPeers, expectedIdentityIds);
       const error = new Error(
         `timed out after ${timeoutMs}ms waiting for ${peer.role} to report ${expected} path; `
         + `observations=${observations} best_consecutive=${bestConsecutive} `
-        + `last=${JSON.stringify(summary)}`,
+        + `last=${lastSummaryJson} `
+        + `transition_changes=${transitionChanges} transitions=${JSON.stringify(transitions)}`,
       );
       error.code = "path_settlement_timeout";
       throw error;
     }
     await sleepFn(intervalMs);
+  }
+}
+
+/** Settle a pair-level path claim from whichever endpoint's view proves it
+ *  first (issue #65).
+ *
+ *  A single validated UDP flow's path type is a property of the PAIR; each
+ *  endpoint's classification of it is advisory bookkeeping (the pinned SDK's
+ *  `diag.rs` says exactly that), and the close/re-open flow can leave that
+ *  bookkeeping stale on one side while the link demonstrably carries data:
+ *  after a re-open rebinds the UDP port, the remote's dial loop keeps
+ *  redialing the dead old address and its failed-connect path writes
+ *  `set_offline` with no generation guard, stomping the live link's state —
+ *  routed upstream against the exact pinned revision. Requiring BOTH sides
+ *  to classify the pair direct gates merges on that bookkeeping rather than
+ *  on the claim; requiring EITHER side keeps the claim fail-closed (if no
+ *  endpoint can prove a live direct path in the full budget, this still
+ *  fails) without inheriting the one-sided wedge.
+ */
+export async function waitPathEitherSide(roomId, expected, sides, options = {}) {
+  const abort = { aborted: false };
+  const attempts = sides.map((side) => (async () => {
+    const evidence = await waitPath(side.peer, roomId, expected, side.expectedIdentityIds, {
+      ...options,
+      abort,
+    });
+    return { settled_by: side.peer.role, ...evidence };
+  })());
+  try {
+    const winner = await Promise.any(attempts);
+    return winner;
+  } catch (aggregate) {
+    const reasons = (aggregate.errors ?? [aggregate]).map((error) => error.message);
+    const error = new Error(`no side of the pair settled: ${reasons.join(" | ")}`);
+    error.code = "path_settlement_timeout";
+    throw error;
+  } finally {
+    abort.aborted = true;
+    // Drain the loser so no poll outlives the measurement.
+    await Promise.allSettled(attempts);
+  }
+}
+
+/** Drive real room traffic while `run` measures path settlement (issue #65).
+ *
+ *  iroh 1.0.1 has no ConnectionType watcher: `peers.status` classifies a
+ *  peer's path from the endpoint's ACTIVE transport-address set, which iroh
+ *  maintains through use. A settlement wait that only polls `peers.status`
+ *  generates no traffic of its own, so a path that flaps once under runner
+ *  contention has nothing to recover through and the wait can only time out —
+ *  observed as `connected` with `path: none` for the full window while the
+ *  other side of the same link classified it direct. The claim being
+ *  qualified is that the suite's traffic settles on the expected path, so
+ *  traffic must flow while the classification is read. Probes are ordinary
+ *  signed chat messages; the convergence checks later in the run match their
+ *  own distinct bodies, so probe rows in the timeline are inert.
+ */
+export async function withPathTraffic(
+  driver,
+  roomId,
+  bodyPrefix,
+  run,
+  { intervalMs = 2_000, sleepFn = sleep } = {},
+) {
+  let done = false;
+  let sequence = 0;
+  const pump = (async () => {
+    while (!done) {
+      // The pump is traffic, not an assertion: a probe racing room teardown
+      // or a transient send failure must not fail the measurement itself.
+      await driver.client
+        .call("message.send", { room_id: roomId, body: `${bodyPrefix}-${sequence += 1}` })
+        .catch(() => {});
+      await sleepFn(intervalMs);
+    }
+  })();
+  try {
+    return await run();
+  } finally {
+    done = true;
+    await pump;
   }
 }
 
@@ -2386,7 +2488,12 @@ async function runFlow({ peers, expectedPath, runId, resources, record }) {
       run: () => waitPath(c, roomId, expectedPath, [identities[0].identity_id]),
     });
   }
-  const pathEvidence = await settlePathChecks(pathChecks, record);
+  const pathEvidence = await withPathTraffic(
+    a,
+    roomId,
+    `path-probe-${runId}`,
+    () => settlePathChecks(pathChecks, record),
+  );
 
   const aBody = `network-a-${runId}`;
   const bBody = `network-b-${runId}`;
@@ -2538,11 +2645,18 @@ async function runFlow({ peers, expectedPath, runId, resources, record }) {
     await b.client.call("room.open", { room_id: roomId, peers: aDialHints });
     return waitTimeline(b, roomId, (event) => event.kind === "message" && event.body === offlineBody, "offline message after reopen");
   });
-  const reconnectPath = await record(`B reconnects over ${expectedPath}`, () => waitPath(
-    b,
+  // Pair-level on purpose (issue #65): B's re-open rebinds its UDP port, and
+  // the SDK's stale-address dial loop on A can wedge one side's advisory
+  // path bookkeeping while the link carries data. Either endpoint proving a
+  // settled direct classification proves the reconnected pair.
+  const reconnectPath = await record(`B reconnects over ${expectedPath}`, () => withPathTraffic(
+    a,
     roomId,
-    expectedPath,
-    [identities[0].identity_id],
+    `reconnect-probe-${runId}`,
+    () => waitPathEitherSide(roomId, expectedPath, [
+      { peer: b, expectedIdentityIds: [identities[0].identity_id] },
+      { peer: a, expectedIdentityIds: [identities[1].identity_id] },
+    ]),
   ));
 
   const foreignAgentIdentity = c ? identities[2].identity_id : identities[0].identity_id;
