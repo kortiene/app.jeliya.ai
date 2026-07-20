@@ -75,8 +75,14 @@ matched the reviewed PR head exactly, and all eight hosted checks passed on
 public `main` run `29699530741` at that exact commit, including the network
 evidence harness qualification step. That run covered the matrix as it was
 defined then and is a record of what executed at `105744b...`; it is not
-evidence for `922f620...`. No completed hosted CI run at `922f620...` is
-recorded here — a push-triggered run at the frozen candidate is still pending.
+evidence for `922f620...`. The frozen candidate has its own hosted record: the
+complete daemon-only six-job matrix passed twice at `922f620...`, on
+push-triggered run `29713108134` and on `workflow_dispatch` run `29713781499`.
+Both executed every job — `docs-ui`, `ui-e2e`, `rust-runtime`, `msrv`,
+`windows-installer`, and `dependency-security` — and both succeeded on their
+first attempt, so no job was rerun. `workflow_dispatch` publishes nothing.
+These runs qualify the CI matrix only; signed direct and forced-relay network
+evidence at `922f620...` + `a5d98b70...` still does not exist.
 
 The evidence gate remains `BLOCKED`: neither the prior signed manifests nor
 the local dry runs can qualify this new public commit.
@@ -109,7 +115,7 @@ manifests are the certifying set.
 | Rust dependency audit | zero vulnerability advisories; three unmaintained-crate warnings and one yanked-version warning remain in the register below | PASS for vulnerability threshold |
 | npm dependency audit | zero vulnerabilities | PASS |
 | Complete CI definition | Rust, MSRV, TypeScript, docs, smoke, sidecar, agent, fleet, protocol, Windows installer, and dependency gates are configured with required-tool failures; manual dispatch is non-publishing | every job configured at that revision, including Windows installer integrity, passed on public `main` run `29688515781` at `a24f223...`; current-candidate rerun pending |
-| Repeatability | two complete hosted CI executions from clean environments | configured in `release.yml`; not executed for the current candidate |
+| Repeatability | two complete hosted CI executions from clean environments | PASS at `922f620…`: runs `29713108134` (push) and `29713781499` (`workflow_dispatch`), every job green on first attempt with no rerun |
 | Direct different-network P2P | retained schema 2 run `1ca39cfa`: three peers, three distinct observed egresses, two ASNs (AS11426 + AS24940), stable direct paths on roles A/B/C, all assertions pass | certifying PASS for `55024a4…` + `71fbb500…`; current-pin rerun required |
 | Deliberately forced relay | retained schema 2 run `cf28bc63`: the relay-only source build self-attests on all three hosts and proves relay paths on roles A/B/C | certifying PASS for `55024a4…` + `71fbb500…`; current-pin rerun required |
 | Join, reconnect, and resynchronization | the current two-daemon loopback run passes 67/67 assertions; retained network runs cover the same integration boundary at the prior dependency pin | local current-pin PASS; current-pin direct and relay evidence pending |
