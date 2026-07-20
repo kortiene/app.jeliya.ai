@@ -1,7 +1,7 @@
 ---
 type: "Decision"
 title: "Device-local self label — a friendly name for you, never signed"
-description: "Decision record defining how Jeliya gives the local user an editable, device-local display label reusing the alias store keyed by the self identity id, its fallback, validation, migration, and privacy rules, and where self is rendered consistently across both clients."
+description: "Decision record defining how Jeliya gives the local user an editable, device-local display label reusing the alias store keyed by the self identity id, its fallback, validation, migration, and privacy rules, and where self is rendered consistently."
 tags: ["ux", "identity", "naming", "privacy"]
 timestamp: "2026-07-18T12:00:00Z"
 status: "canonical"
@@ -16,15 +16,15 @@ audience: ["contributors", "maintainers", "product"]
 **Status: DECIDED 2026-07-18.** On first run a user sees an opaque hex identity
 id or a short id, with no clear "you". The identity cannot be renamed for local
 display, and invite inputs used to begin with an unexplained long self id. This
-record decides how the clients give the local user a friendly, editable name —
+record decides how the client gives the local user a friendly, editable name —
 without ever pretending it is signed or shared profile data.
 
 ## Decision
 
 The self label is **the local alias of the user's own identity id**. It reuses
-the existing device-local alias store (React `jeliya.aliases.v1` in
-localStorage; Flutter `aliases` in `app_prefs.json`), keyed by the self identity
-id. There is no new store, no new key, and no wire field.
+the existing device-local alias store (`jeliya.aliases.v1` in localStorage),
+keyed by the self identity id. There is no new store, no new key, and no wire
+field.
 
 - **Resolution.** Displaying self resolves to `alias(selfId) ?? "You"`. Peers
   keep their existing order (`alias(id) ?? suggestion ?? shortId(id)`). The
@@ -37,7 +37,7 @@ id. There is no new store, no new key, and no wire field.
   roster, and is **excluded from diagnostics** (which already redact full
   identities). Every editor states this in copy.
 
-## Validation (shared by both clients)
+## Validation
 
 - Trim surrounding whitespace on save; internal spaces are preserved (names like
   "Alex K").
@@ -74,7 +74,7 @@ settings all keep the id reachable.
 
 Invite identity inputs start **empty** with an example/help state, never
 pre-seeded with the user's own long id (there is nothing to invite yourself to).
-This was already the behaviour in both clients; it is locked here so it is not
+This was already the behaviour in the client; it is locked here so it is not
 regressed while the surrounding identity copy changes.
 
 ## First run and settings
@@ -84,11 +84,11 @@ regressed while the surrounding identity copy changes.
 - **Settings** exposes the same editor so an existing user can change the local
   label at any time, without touching the cryptographic identity.
 
-## Cross-client parity
+## What a second client must match
 
-React and Flutter share the storage shape, the `alias(selfId) ?? "You"`
+Any future client shares the storage shape, the `alias(selfId) ?? "You"`
 resolution, the trim/clear/max-length validation, the automatic migration, and
-the privacy invariant. Flutter additionally localizes every string (EN + FR).
+the privacy invariant. Every string is localized (EN + FR).
 
 See [Room attention](room-attention.md) and [Room Workbench](room-workbench.md)
 for the surrounding identity and status vocabulary.

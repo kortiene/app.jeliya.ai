@@ -114,10 +114,9 @@ describe('projectRoomList', () => {
   });
 });
 
-// The shared corpus, replayed here and (identically) in app/test/room_list_test.dart
-// so React and Flutter section, order, and disambiguate one room list from ONE
-// source (issue #64).
-describe('shared room-list fixtures (parity with Flutter)', () => {
+// The shared corpus: sectioning, ordering, and disambiguation of one room list
+// pinned from ONE source (issue #64).
+describe('shared room-list fixtures', () => {
   interface FixtureRoom {
     room_id: string;
     name: string | null;

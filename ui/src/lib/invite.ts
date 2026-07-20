@@ -1,7 +1,6 @@
 /** The protocol's invitee identity id: a bare 64-hex string (NOT the `blake3:`
  *  room id). Validated inline before `invite.create` so an obvious typo fails
- *  in the form, not as a daemon `invalid_params` error. Mirrored 1:1 in
- *  dart/jeliya_protocol/lib/src/conventions/invite.dart. */
+ *  in the form, not as a daemon `invalid_params` error. */
 const IDENTITY_ID_RE = /^[0-9a-f]{64}$/i;
 
 export function isIdentityId(value: string): boolean {

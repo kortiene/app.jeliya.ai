@@ -23,10 +23,9 @@ describe('EXPIRY_PRESETS', () => {
   });
 });
 
-// The shared corpus, replayed here and (identically) in
-// app/test/invite_lifecycle_test.dart so React and Flutter validate, build, and
-// derive the invite lifecycle from ONE source (issue #66).
-describe('shared invite-lifecycle fixtures (parity with Flutter)', () => {
+// The shared corpus: identity validation, the combined invite, and the
+// lifecycle derivation all pinned from ONE source (issue #66).
+describe('shared invite-lifecycle fixtures', () => {
   for (const c of fixtures.identity as Array<{ value: string; valid: boolean }>) {
     it(`identity ${JSON.stringify(c.value)} → ${c.valid}`, () => {
       expect(isIdentityId(c.value)).toBe(c.valid);

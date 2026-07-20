@@ -17,65 +17,6 @@ function requireMatch(path, pattern, reason) {
   if (!pattern.test(read(path))) failures.push(`${path}: ${reason}`);
 }
 
-const manifest = "app/android/app/src/main/AndroidManifest.xml";
-requireMatch(manifest, /android:allowBackup="false"/, "android:allowBackup must be false");
-requireMatch(
-  manifest,
-  /android:fullBackupContent="@xml\/backup_rules"/,
-  "legacy full-backup rules must be explicit",
-);
-requireMatch(
-  manifest,
-  /android:dataExtractionRules="@xml\/data_extraction_rules"/,
-  "API 31+ extraction rules must be explicit",
-);
-
-const legacyRules = "app/android/app/src/main/res/xml/backup_rules.xml";
-for (const domain of ["root", "file", "database", "sharedpref", "external"]) {
-  requireMatch(
-    legacyRules,
-    new RegExp(`<exclude\\s+domain=["']${domain}["']\\s+path=["']\\.["']\\s*/>`),
-    `must exclude the complete ${domain} domain`,
-  );
-}
-
-const extractionRules = "app/android/app/src/main/res/xml/data_extraction_rules.xml";
-requireMatch(extractionRules, /<cloud-backup(?:\s[^>]*)?>[\s\S]*<\/cloud-backup>/, "cloud backup rules missing");
-requireMatch(extractionRules, /<device-transfer>[\s\S]*<\/device-transfer>/, "device-transfer rules missing");
-for (const section of ["cloud-backup", "device-transfer"]) {
-  const body = read(extractionRules).match(new RegExp(`<${section}(?:\\s[^>]*)?>([\\s\\S]*?)</${section}>`))?.[1] ?? "";
-  for (const domain of [
-    "root",
-    "file",
-    "database",
-    "sharedpref",
-    "external",
-    "device_root",
-    "device_file",
-    "device_database",
-    "device_sharedpref",
-  ]) {
-    if (!new RegExp(`<exclude\\s+domain=["']${domain}["']\\s+path=["']\\.["']\\s*/>`).test(body)) {
-      failures.push(`${extractionRules}: ${section} must exclude the complete ${domain} domain`);
-    }
-  }
-}
-
-requireMatch(
-  "app/android/app/src/main/kotlin/com/incubtek/jeliya_app/MainActivity.kt",
-  /File\(noBackupFilesDir,\s*"engine"\)/,
-  "engine identity state must live under Android noBackupFilesDir",
-);
-requireMatch(
-  "app/android/app/src/main/kotlin/com/incubtek/jeliya_app/MainActivity.kt",
-  /legacyDir\.renameTo\(protectedDir\)/,
-  "legacy file-backed identities must be migrated, not silently replaced",
-);
-requireMatch(
-  "app/lib/main.dart",
-  /invokeMethod<String>\('protectedEngineDataDir'\)/,
-  "Flutter must request the protected Android engine directory",
-);
 requireMatch(
   "scripts/jeliya-agent.mjs",
   /dataDir:\s*defaultAgentDataDir\(\)/,
@@ -154,4 +95,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log("secret-storage: PASS — Android backup/transfer and local identity guards are explicit");
+console.log("secret-storage: PASS — local identity and agent data-dir guards are explicit");

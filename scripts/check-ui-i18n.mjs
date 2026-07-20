@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // React localization completeness gate (issue #74).
 //
-// `scripts/i18n-gate.mjs` guards the Flutter catalog. This is its React
-// counterpart, and it exists for the failure modes TYPES CANNOT SEE. Both
+// This is the web client's localization gate, and it exists for the failure
+// modes TYPES CANNOT SEE. Both
 // `ui/src/l10n/en.ts` and `ui/src/l10n/fr.ts` are typed `Catalog`, so `tsc`
 // already rejects a missing key. It cannot reject a key whose value is an
 // empty string, and it cannot reject a French value that is still the English
@@ -31,8 +31,8 @@
 //     invisible in review, and every one of them is wrong in a way a French
 //     reader notices immediately.
 //  5. User-visible string literals in `ui/src/App.tsx` and
-//     `ui/src/components/**` that never reach the catalog — the React
-//     equivalent of i18n-gate rule 1, using the same heuristics (comments
+//     `ui/src/components/**` that never reach the catalog — docs/i18n.md
+//     rule 1 (comments
 //     stripped string-aware, `i18n-exempt: <reason>` honored on the line or
 //     the line above). `EXEMPT_FILES` records the modules that stay English
 //     BY DECISION, with the reason, and reports an entry that no longer
@@ -147,7 +147,7 @@ export const IDENTICAL_ALLOWLIST = Object.freeze({
     'French uses the same layout while each slot supplies localized text.',
   addAgentWorkerLabel:
     '“Worker” names the runner’s configured execution backend and is kept as ' +
-    'the same technical product term in the French Flutter catalog.',
+    'the same technical product term in French.',
   roomInfoSession:
     '“Session” is the standard French networking noun as well as the English ' +
     'one, so the room-information label is correctly identical.',
@@ -702,10 +702,9 @@ export function checkCatalogs({
 // Rule 5 — literals outside the catalog
 // ---------------------------------------------------------------------------
 
-/** Letters that survive `${}` interpolation are real copy — the same test
- *  `scripts/i18n-gate.mjs` applies to Dart, so the two clients agree on what
- *  counts as a user-visible literal. Where that is not enough on its own, the
- *  callers below also constrain WHERE the literal is allowed to sit. */
+/** Letters that survive `${}` interpolation are real copy. Where that is not
+ *  enough on its own, the callers below also constrain WHERE the literal is
+ *  allowed to sit. */
 function bareLetters(text) {
   return /[A-Za-z]{2,}/.test(text.replace(/\$\{[^}]*\}/g, ' '));
 }

@@ -3,7 +3,7 @@
  *  Copy is resolved AT RENDER TIME through `useStrings()`, never captured into
  *  component state. That is what makes a language switch apply live: every
  *  consumer re-reads on the next render, so there is no restart and no stale
- *  half-translated screen. Flutter's `context.strings` is the same contract.
+ *  half-translated screen.
  *
  *  `useFormats()` is its companion for anything numeric or temporal, under the
  *  separately-chosen formatting locale.

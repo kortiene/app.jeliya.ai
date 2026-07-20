@@ -2,8 +2,7 @@
  *
  *  The daemon error code → designed-copy mapping every error surface uses,
  *  resolved AT RENDER TIME from the catalog the caller already holds, so a live
- *  language switch re-resolves error copy too. Mirrors Flutter's
- *  `app/lib/src/l10n/error_display.dart` code for code.
+ *  language switch re-resolves error copy too.
  *
  *  Why the daemon's own words are not the copy
  *  -------------------------------------------

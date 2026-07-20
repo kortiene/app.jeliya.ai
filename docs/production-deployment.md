@@ -74,12 +74,9 @@ Local verification performed during the assessment:
 - Rust core and daemon: 71 unit tests passed; one opt-in performance test was
   ignored.
 - Documentation, secret-storage, and release-contract checks passed.
-- During the initial assessment, a full `cargo test --locked --workspace` could
-  not build `jeliya-ffi` because the local environment lacked Dart SDK headers;
-  core and daemon tests passed separately.
-- Follow-up qualification on 2026-07-19 supplied the installed Dart SDK headers:
-  the full locked workspace passed 77 tests with one intentional performance
-  ignore at `9c71fac...` + `a5d98b70...`.
+- Follow-up qualification on 2026-07-19: the full locked workspace passed 77
+  tests with one intentional performance ignore at `9c71fac...` +
+  `a5d98b70...`.
 - On 2026-07-17, `jeliya.ai` and `app.jeliya.ai` had no resolvable A, AAAA, or
   CNAME record from the assessment environment.
 
@@ -109,8 +106,8 @@ come from authoritative browser, WebAssembly, and Iroh documentation listed in
   central inbox or guaranteed offline delivery.
 - Pipes are restricted to numeric loopback targets and an authorized peer.
 - The React UI works against the loopback daemon and has mock browser coverage.
-- CI pins third-party actions and includes Rust, TypeScript, Dart/Flutter,
-  platform, dependency-audit, release-sealing, and smoke-test jobs. See
+- CI pins third-party actions and includes Rust, TypeScript, MSRV, Windows
+  installer, dependency-audit, release-sealing, and smoke-test jobs. See
   [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) and
   [`.github/workflows/release.yml`](../.github/workflows/release.yml).
 
@@ -150,10 +147,9 @@ at `app.jeliya.ai`.
   store, blob, and network implementation is native, not a browser runtime.
 - Browser Iroh is supported, but current browser connections are relay-only and
   require an application-specific `wasm-bindgen` wrapper.
-- Native GUI artifacts are unreleased or incompletely verified. Android lacks
-  Keystore wrapping and remote-network evidence; iOS has no application
-  scaffold. See [Platform matrix](platform-matrix.md).
-- Bare daemon and native artifacts are unsigned. See
+- Released surfaces are limited to the daemon archives and the web UI they
+  embed. See [Platform matrix](platform-matrix.md).
+- Bare daemon artifacts are unsigned. See
   [Signing and notarization](signing-notarization.md).
 - The existing agent runner is an intentional, unsandboxed local code-execution
   surface. It must remain unavailable to the hosted browser product.
@@ -313,9 +309,9 @@ recovery, rotation, device authorization, or same-identity cross-device flow.
 
 1. Generate a long-lived profile/root key and a per-device endpoint/event key
    locally.
-2. On native platforms, wrap secrets with macOS Keychain, Windows DPAPI/CNG,
-   Android Keystore, or Linux Secret Service. An encrypted-file fallback must be
-   explicit and password-hardening parameters must be versioned.
+2. On native platforms, wrap secrets with macOS Keychain, Windows DPAPI/CNG, or
+   Linux Secret Service. An encrypted-file fallback must be explicit and
+   password-hardening parameters must be versioned.
 3. In the browser, prefer a nonextractable WebCrypto Ed25519 key when browser
    compatibility and exact wire interoperability pass. Otherwise wrap the seed
    with a nonextractable WebCrypto key and load it into Wasm only while active.
@@ -532,7 +528,7 @@ The implementation relationship is:
   for event store, blob store, sync transport, clock, and task scheduling.
 - Native uses SQLite, filesystem, and native-Iroh adapters.
 - Browser uses IndexedDB, OPFS, and an Iroh Wasm relay adapter.
-- One conformance corpus runs across native, browser, FFI, and fixture clients.
+- One conformance corpus runs across native, browser, and fixture clients.
 - Every release pins and qualifies an exact upstream revision.
 
 ### Relay design
@@ -646,8 +642,8 @@ the relevant browser policy is still experimental and platform-dependent.
 
 Every pull request runs:
 
-- the existing Rust, Dart/Flutter, TypeScript, documentation, secret, release,
-  and dependency gates;
+- the existing Rust, TypeScript, documentation, secret, release, and
+  dependency gates;
 - Wasm compilation, API compatibility, and bundle-size budgets;
 - Chromium, Firefox, and WebKit tests;
 - real companion integration through a dedicated test relay, not only a mock;

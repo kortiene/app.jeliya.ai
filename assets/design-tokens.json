@@ -1,20 +1,17 @@
 {
   "$comment": [
-    "The shared design-token fixture (issue #75). ONE source of truth for the",
-    "values both clients render, so the React and Flutter palettes cannot drift",
-    "apart again — which is exactly how the message bubble ended up with a",
-    "gradient in CSS and a matching pair of gradient TOKENS in Dart.",
+    "The design-token fixture (issue #75). ONE source of truth for the values",
+    "the web client renders, so the declared palette cannot drift from the",
+    "design record — which is exactly how the message bubble once ended up with",
+    "a gradient in CSS that DESIGN.md never sanctioned.",
     "",
     "Normative prose lives in DESIGN.md; this file is the machine-checkable",
-    "half. Two tests read it and fail on any divergence:",
+    "half. One gate reads it and fails on any divergence:",
     "  - scripts/check-design-tokens.mjs  -> ui/src/styles.css :root",
-    "  - app/test/design_tokens_test.dart -> app/lib/src/theme.dart",
     "",
-    "Scope note. Colors and radii are shared VALUES and are pinned here. Spacing",
-    "is deliberately NOT pinned: DESIGN.md names five design steps while Flutter",
-    "carries a ten-step scale with intermediate values, and forcing one onto the",
-    "other would encode a disagreement rather than resolve it. The mapping is",
-    "documented in DESIGN.md instead."
+    "Scope note. Colors and radii are pinned here. Spacing is deliberately NOT",
+    "pinned: DESIGN.md names five design steps and documents the mapping there",
+    "instead."
   ],
 
   "color": {
@@ -59,7 +56,7 @@
   },
 
   "radius": {
-    "$comment": "DESIGN.md `rounded`. Flutter mirrors these in JeliyaRadii.",
+    "$comment": "DESIGN.md `rounded`.",
     "tail": 4,
     "tight": 7,
     "sm": 8,

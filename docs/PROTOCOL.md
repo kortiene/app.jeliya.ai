@@ -1,8 +1,8 @@
 ---
 type: "Reference"
 title: "Jeliya daemon protocol (v1)"
-description: "Normative transport-neutral contract between jeliya-core and every web, Flutter, FFI, script, and test client."
-tags: ["architecture", "daemon", "ffi", "protocol", "websocket"]
+description: "Normative transport-neutral contract between jeliya-core and every web, script, and test client."
+tags: ["architecture", "daemon", "protocol", "websocket"]
 timestamp: "2026-07-12T19:25:00Z"
 status: "canonical"
 implementation_status: "implemented"
@@ -14,15 +14,13 @@ audience: ["client-authors", "contributors", "maintainers"]
 # Jeliya daemon protocol (v1)
 
 The contract between the Rust core (`jeliya-core`, sole consumer of the
-`iroh-rooms` SDK — resident as the `jeliyad` daemon, or in-process on mobile)
-and any Jeliya shell (desktop web UI, the Flutter app, scripts, e2e tests).
+`iroh-rooms` SDK — resident as the `jeliyad` daemon) and any Jeliya shell (the
+web UI, scripts, e2e tests).
 
 - Transport: **WebSocket**, JSON text frames, `ws://127.0.0.1:<port>/ws`
   (default port **7420**, `--port` to override; `--port 0` lets the OS pick —
   read the truth back from the ready line or portfile). Local-only: the daemon
   binds `127.0.0.1` and MUST refuse to bind non-loopback interfaces in v1.
-  On mobile the same frames travel over an in-process FFI bridge instead of a
-  socket — see *In-process transport (FFI)* below.
 - Authenticated: every `/ws` connect (and `/api/files/*` request) must present
   the daemon's per-start token — `?token=<hex>` or `Authorization: Bearer`.
   See **Process supervision** below for how each client kind obtains it.
@@ -31,9 +29,9 @@ and any Jeliya shell (desktop web UI, the Flutter app, scripts, e2e tests).
 
 ## Process supervision
 
-The contract for any parent process (the desktop app, an agent script, a
-service manager) that owns `jeliyad` as a sidecar — and for second clients
-attaching to a daemon someone else started.
+The contract for any parent process (an agent script, a service manager) that
+owns `jeliyad` as a sidecar — and for second clients attaching to a daemon
+someone else started.
 
 ### Spawn and the ready line
 
@@ -57,8 +55,8 @@ the child's stdin pipe open and it dies within seconds of you dying, even on
 ### The portfile (`<data_dir>/daemon.json`)
 
 Written atomically after bind, removed on graceful shutdown, `0600` on Unix.
-The canonical discovery point for native clients (scripts, the desktop app
-adopting a daemon it did not spawn):
+The canonical discovery point for native clients (scripts and supervisors,
+including one adopting a daemon it did not spawn):
 
 ```json
 { "schema": 1, "pid": 4242, "port": 54443, "http": "…", "ws": "…",
@@ -521,71 +519,6 @@ conformant client therefore:
   never replayed (see *Pushes*). Until the cursor reservation lands, that means
   re-reading `room.open` / `room.timeline` in full.
 
-## In-process transport (FFI)
-
-On mobile there is no sidecar process (iOS forbids spawning one), so the same
-core runs **in-process**: the app drives `crates/jeliya-ffi` over `dart:ffi`
-(the `FfiClient` in `dart/jeliya_protocol`), and every request, response, and
-push travels as the **same JSON envelope frames** defined above. The bridge is
-a pure pass-through, and both transports share one dispatch implementation
-(`jeliya_core::engine::Engine`), so the golden conformance corpus replays
-against this transport unchanged — it is the third oracle next to the daemon
-and the mock. Corpus conformance is exercised by host replay (CI builds the
-host dylib; the current workflow does not cross-build the Android libraries).
-A physical Android 13 smoke exercised engine startup, local room operations,
-pushes, and persistence with the engine configured for real networking
-(`loopback: false`). It did **not** establish a peer connection to another
-network, observe a direct or relay path, or exercise NAT traversal. Android
-cross-network behavior therefore remains unverified for `v0.5.0`. Because the
-bridge never interprets frame contents, every reserved minor above (`client_msg_id`, the
-`after_event_id`/`since_ts` cursor, the `delivery` marker, `min_protocol`)
-rides through it with no bridge change.
-
-What changes is everything that presumed a socket and a second process — each
-piece reinterpreted truthfully, never simulated:
-
-- **Connection = engine lifecycle.** `connecting` while the engine
-  initializes, `connected` once dispatch is servable, `disconnected` after
-  `stop()`, a failed start, or once a call observes the engine itself is gone
-  (`daemon.shutdown` performs real teardown — the client must report the
-  death rather than keep rendering `connected` against a dead engine). A
-  `stop()` that cannot tear the engine down cleanly (rooms left open) throws
-  instead of reporting a clean stop — the client is stopped either way, but
-  the failure surfaces rather than being masked. There
-  is **no `reconnecting` state**: no transport exists that can drop
-  independently of the app process, and fabricating one would break the
-  honesty rules (the state renders in Settings).
-- **`daemon.status` stays truthful.** `port` is `0`, meaning *no listener* —
-  unambiguous, because a bound daemon can never truthfully report 0; `pid` is
-  the app's **own** process id (the engine's process *is* the app); `version`
-  is the compiled core crate's version; `data_dir` is the app's engine
-  directory.
-- **No token, portfile, or HTTP surface.** The *Process supervision* contract
-  (ready line, portfile, auth token, adopt-vs-respawn) and the `/api/*`
-  endpoints do not exist in-process; the trust boundary they defended
-  collapses into OS app-process isolation. Native file sharing keeps the same
-  staging convention (copy into `<data_dir>/uploads`, `file.share`, delete) —
-  pure file I/O, no HTTP. The version-skew rule still binds: read
-  `daemon.status` once after start and treat an unsupported `protocol` as a
-  hard incompatibility (in-process it guards Dart-package vs compiled-core
-  build skew).
-- **Re-sync on app resume.** Pushes remain lossy (same bounded broadcast
-  buffer) and the mobile OS suspends the process, but the reconnect that
-  triggers re-sync on socket transports can never happen here. The client
-  therefore re-runs the full re-sync (`room.open` / `room.timeline` re-read,
-  as under *Connection lifecycle*) on app-lifecycle **resume** — the honest
-  in-process equivalent of a transport gap.
-- **`daemon.shutdown` performs real teardown.** It replies
-  `{ shutting_down: true }`, then actually stops the push loop, closes every
-  open room (releasing blob locks), and drops the engine — never a
-  reply-without-teardown.
-- **"Long-running by design" does not hold on mobile.** While the OS has the
-  app suspended, the node serves no blob fetches or pipe forwards — file
-  `available` counts and pipe listeners degrade in background (foreground
-  service work is deferred and tracked). The local-open URL
-  (`GET /api/files/local`) has no in-process equivalent yet; a native engine
-  accessor is the tracked follow-up.
-
 ## Honesty rules (bind the UI too)
 
 1. Delivery is best-effort P2P: there is no "delivered" **confirmation** — never
@@ -616,8 +549,7 @@ cross-client parity. The reference implementations are cited.
 `agent_status.label` is free-form wire data; its color is derived, and **green
 must be earned** (honesty rule 4) — a label this contract cannot read renders
 neutral, never a reassuring green. Algorithm
-(`dart/jeliya_protocol/lib/src/conventions/format.dart` `labelTone`; the
-retiring web client's `ui/src/lib/format.ts` is the historical source),
+(`ui/src/lib/format.ts` `labelTone` is the reference implementation),
 applied to the label lowercased with `_`/`-` collapsed to spaces, in this
 precedence:
 
@@ -666,6 +598,6 @@ Free to differ per client; **not** semantic:
 - **Last-room restore** (precedence: in-memory current → persisted → first
   active, filtered to non-`left`/`removed`), **per-room drafts** (restored if a
   send throws), and **local display aliases** are client-local storage
-  (`localStorage` in the web UI; a Dart client uses its own store). Aliases are
+  (`localStorage` in the web UI; another client uses its own store). Aliases are
   device-local **by necessity** — the protocol has no display-name field, so
   names must never be treated as wire data.

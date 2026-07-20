@@ -16,9 +16,9 @@ export function Composer({
   roomId: string;
   roomName: string;
   disabled: boolean;
-  /** Compact widths get the touch-composer behavior (web parity with the
-   *  Flutter composer): Enter inserts a newline and the ➤ button is the
-   *  explicit send, so the "Enter to send" hint — false there — is withheld. */
+  /** Compact widths get the touch-composer behavior: Enter inserts a newline and
+   *  the ➤ button is the explicit send, so the "Enter to send" hint — false
+   *  there — is withheld. */
   compact: boolean;
   onSend(body: string): Promise<void>;
   onShareFile(file: File): Promise<void>;

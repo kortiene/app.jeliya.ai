@@ -3,7 +3,7 @@
 // A single corpus of scenarios is replayed against ANY implementation of the
 // `Client` interface — the real daemon (over WebSocket) and the in-memory
 // mock — and asserted at the ENVELOPE level, never at the WebSocket level, so
-// the same vectors will later validate a Dart client too. Nondeterministic
+// the same vectors can validate any future client or transport. Nondeterministic
 // scalars (ids, timestamps, ports, paths, addrs) are normalized to type tags
 // before comparison; see `normalize`.
 

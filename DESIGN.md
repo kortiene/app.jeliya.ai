@@ -348,10 +348,10 @@ whether it is open — collapsing it *is* navigating to Activity.
   change, an inspector toggle, and a destination switch.
 - **Connection status reserves space.** It never overlays Back, a header, or
   list content, and a transition is announced once through one live region.
-- **Touch targets:** ≥44px/44dp on touch and compact viewports. The desktop
+- **Touch targets:** ≥44px on touch and compact viewports. The desktop
   26px icon buttons stand only where a pointer is the input.
 - Coverage: 360, 899, 900, 920, 1280 logical px, plus safe-area insets and
-  200% text; Flutter covers English and French.
+  200% text, in English and French.
 
 ### Identity Marks (signature)
 The brand mark is the flat single-accent meeting tree (`TreeMark` — see

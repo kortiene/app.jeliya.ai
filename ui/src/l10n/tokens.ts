@@ -1,6 +1,6 @@
 /** Strings that are NOT copy, and must never reach a translator.
  *
- *  The Flutter client keeps these in `l10n/tokens.dart` for the same reason
+ *  They are held apart from the catalog on purpose
  *  (`docs/i18n.md`, rule 1): a naive extractor sweeps glyphs, shell commands
  *  and wire-format examples into the catalog, where a translator is then asked
  *  to localize `jeliyad` or `▦`. Worse, `docs/glossary-fr.md` Tier 2 makes some

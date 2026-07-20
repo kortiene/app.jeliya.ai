@@ -30,8 +30,8 @@ export function QrCode({
   const qr = useMemo(() => encodeQr(value), [value]);
   // Both the encode and the path string are memoized on the value: InviteModal
   // re-renders once a SECOND while a time-boxed ticket counts down, and neither
-  // is cheap. Dark modules are coalesced into one subpath per horizontal run
-  // (the Flutter painter does the same), which keeps `d` small on big symbols.
+  // is cheap. Dark modules are coalesced into one subpath per horizontal run,
+  // which keeps `d` small on big symbols.
   const d = useMemo(() => {
     if (!qr) return '';
     let out = '';

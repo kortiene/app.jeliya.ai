@@ -111,9 +111,7 @@ Rules:
 4. **The web keeps these as URL paths.** `crates/jeliyad/src/serve.rs`
    already falls back to `index.html` for extensionless unknown paths, so
    deep links work in production without a daemon change.
-5. **Flutter uses the same strings as named routes.** One spelling, two
-   clients; a route in this table means the same destination in both.
-6. **Query and fragment are not navigation state.** `?daemon=`, `?mock…`
+5. **Query and fragment are not navigation state.** `?daemon=`, `?mock…`
    are transport and fixture inputs. Any canonicalizing redirect
    **must preserve `location.search`** — dropping it silently unfixtures
    the e2e suite and re-points the client at a different daemon.
@@ -135,8 +133,8 @@ fact is true:
 keeps the subject in the member set, so `require_local_room_access` still
 passes and `room.open` on a left or removed room is authorized — it returns
 the roster and the full local timeline (`supervisor.rs`; `room.list`
-deliberately keeps "joined-then-left archives"). Both clients nonetheless
-stop at the signed fact, which is what shipped before this record and what
+deliberately keeps "joined-then-left archives"). The client nonetheless
+stops at the signed fact, which is what shipped before this record and what
 it keeps.
 
 That is a product decision, not a protocol constraint, and it is worth
@@ -156,10 +154,9 @@ rather than 404s, and the redirect preserves the rest of the query string.
 
 ### Restoration
 
-`localStorage['jeliya.lastRoom']` (web) and `prefs.lastRoomId` (Flutter)
-restore *which room*, and **only from the bare root** — `/` on the web,
-a cold start with no route on Flutter. Every route in the table above is an
-explicit destination and is honored as one: `/rooms`, `/fleet`, and
+`localStorage['jeliya.lastRoom']` restores *which room*, and **only from the
+bare root** (`/`). Every route in the table above is an explicit destination
+and is honored as one: `/rooms`, `/fleet`, and
 `/settings` name no room *on purpose*, and restoring one into them would
 make a direct link to Settings open a room, and a deliberate "Back to Rooms"
 undo itself.
@@ -226,11 +223,11 @@ Binding rules:
   Rooms → leave the app. Back never mutates state the user cannot see.
 
 Coverage: 360, 899, 900, 920, and 1280 logical pixels, plus safe-area
-insets and 200% text. Flutter runs its coverage in English and French,
+insets and 200% text. The client runs its coverage in English and French,
 because French copy is longer and is where overflow shows up first.
 
-The existing 44px/44dp touch floor and the 58px/58dp tab-bar *minimum*
-(a minimum, not a cap — it grows with text scale) are unchanged.
+The existing 44px touch floor and the 58px tab-bar *minimum* (a minimum, not
+a cap — it grows with text scale) are unchanged.
 
 ## Decision 4 — the status vocabulary
 
@@ -332,16 +329,15 @@ unbound peer endpoints, not a second id-shortening rule. Rules:
 - Creating a room whose name collides locally **warns and proceeds**. The
   name is a label; the product does not own the user's vocabulary.
 - Room search accepts the name and the short id.
-- Both clients use the same rule and the same facts.
+- Every surface uses the same rule and the same facts.
 
 ## What this record does not decide
 
 - **No protocol change.** No method, field, or wire value moves.
-- **No new dependency.** The web router is the History API; Flutter stays
-  on Navigator 1.0 with an explicit route model. Adding a routing library
-  to a project whose entire runtime dependency set is `react` +
-  `react-dom` would need its own decision, with the rationale and
-  provenance that `app/pubspec.yaml` records for Flutter plugins.
+- **No new dependency.** The web router is the History API. Adding a
+  routing library to a project whose entire runtime dependency set is
+  `react` + `react-dom` would need its own decision, with its own
+  rationale and provenance.
 - **`labelTone`'s dependence on wire prose.** Recorded above as a known
   residual, not fixed here.
 - **Calls.** Hidden, not designed.
@@ -352,9 +348,8 @@ unbound peer endpoints, not a second id-shortening rule. Rules:
 |---|---|
 | #59 | Web: routes become canonical navigation state. |
 | #61 | Web: scoped compact navigation and the room app bar. |
-| #60 | Flutter: the nested Room Workbench. |
-| #62 | Both: adaptive wide/medium/compact shells. |
-| #49 | Both: homonymous room disambiguation. |
+| #62 | Web: adaptive wide/medium/compact shells. |
+| #49 | Web: homonymous room disambiguation. |
 
 Each slice tests against this record. Where an implementation and this
 document disagree, one of them is a bug — say which in the pull request.

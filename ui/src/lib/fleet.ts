@@ -1,8 +1,7 @@
 // Fleet attention projection — the shared classifier behind the Agent Fleet's
 // "Needs Attention" section (docs/room-attention.md, decision 4: a CLOSED set
-// of actionable states, folded from real evidence only). Mirrored 1:1 in
-// dart/jeliya_protocol/lib/src/conventions/fleet.dart so React and Flutter
-// group and rank agents identically.
+// of actionable states, folded from real evidence only). Every surface that
+// groups or ranks agents goes through here, so the ordering is decided once.
 //
 // Every state here is provable from a `FleetAgent` the daemon already returns —
 // its derived `liveness` and its latest signed `agent_status` label. Nothing is

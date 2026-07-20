@@ -67,10 +67,9 @@ describe('runSummary', () => {
   });
 });
 
-// The shared corpus, replayed here and (identically) in
-// app/test/timeline_runs_test.dart so React and Flutter fold runs, classify
-// activity, and count new items from ONE source (issue #65).
-describe('shared timeline-runs fixtures (parity with Flutter)', () => {
+// The shared corpus: run folding, activity classification, and the new-item
+// count all pinned from ONE source (issue #65).
+describe('shared timeline-runs fixtures', () => {
   const grouping = fixtures.grouping as Array<{
     name: string;
     events: FixtureEvent[];

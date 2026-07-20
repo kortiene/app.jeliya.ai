@@ -16,8 +16,8 @@
      (WCAG 1.4.11). `--border-strong` measures 1.35-1.51:1 against the app's
      surfaces — invisible to anyone who needs contrast — but it also encodes
      selected/active state on several controls, so this is a SEPARATE token
-     rather than a widening of that one. Mirrors Flutter's `borderInteractive`
-     (issue #73); both answer to assets/design-tokens.json. */
+     rather than a widening of that one (issue #73); it answers to
+     assets/design-tokens.json. */
   --border-interactive: #41707e;
   --accent: #2fd6a4;
   --accent-2: #1fb4a8;
@@ -4399,8 +4399,7 @@ select {
     justify-content: center;
   }
 
-  /* Touch floor for the composer attach button (web parity with the Flutter
-     44dp share affordance). */
+  /* Touch floor for the composer attach button (44px share affordance). */
   .composer-attach {
     width: 44px;
     height: 44px;

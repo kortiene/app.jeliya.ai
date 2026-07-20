@@ -2,9 +2,8 @@
  *
  *  PROTOCOL.md values in, UI copy out. This is the only place in the React
  *  client that turns a role, a member status, a peer path, a daemon mode or a
- *  connection state into a word on the screen, and it mirrors Flutter's
- *  `app/lib/src/l10n/wire_display.dart` map for map so the two clients cannot
- *  drift into different words for the same protocol value.
+ *  connection state into a word on the screen — one map per enum, so a protocol
+ *  value cannot acquire two different words in two different surfaces.
  *
  *  Why the seam exists at all
  *  --------------------------
@@ -42,7 +41,7 @@
  *  What this file must NOT be used for
  *  -----------------------------------
  *  `labelTone()` in `lib/format.ts` is an ENGLISH-TOKEN CONTRACT (docs/
- *  PROTOCOL.md, `docs/glossary-fr.md` decision 3, mirrored in Dart): it derives
+ *  PROTOCOL.md, `docs/glossary-fr.md` decision 3): it derives
  *  chip and dot tone from known English tokens in a free-form agent-status
  *  label. It must keep receiving the RAW wire label. Translating before
  *  `labelTone` would make every French label render neutral — or worse,
@@ -162,8 +161,8 @@ export function daemonMode(s: S, mode: string): string {
 }
 
 /** Client connection state, mid-sentence. Standalone capitalized badges (the
- *  Sidebar's `CONN_LABEL`) use the shell area's `shellConn*` keys instead —
- *  Flutter draws the same line, and a badge is not a clause.
+ *  Sidebar's `CONN_LABEL`) use the shell area's `shellConn*` keys instead — a
+ *  badge is not a clause.
  *
  *  `ConnectionState` is a closed union in `lib/protocol.ts`, so all four arms
  *  are covered; the parameter is widened to `string` and the default passes

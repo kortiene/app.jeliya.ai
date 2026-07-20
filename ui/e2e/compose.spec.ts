@@ -10,9 +10,7 @@ import { expect, test, MOCK_ROOMS } from './fixtures';
 //
 // Enter behavior forks by shell (#67 P20): desktop sends on Enter (Shift+Enter
 // is a newline); on compact Enter inserts a newline and the ➤ button is the
-// explicit send — so the "Enter to send" hint, false there, is withheld. That
-// mirrors the Flutter composer (hardware Enter via a key handler, soft-keyboard
-// newline, width-gated hint).
+// explicit send — so the "Enter to send" hint, false there, is withheld.
 
 test('desktop: Enter sends and renders it as a delivered event', async ({ app, compact }) => {
   test.skip(compact, 'compact inserts a newline on Enter — see the mobile test');

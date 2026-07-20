@@ -12,12 +12,11 @@
  *  first string was written). Someone may read the interface in French while
  *  expecting dates and numbers in their region's conventions, or read English
  *  while living somewhere that writes 1 234,56. Collapsing them into one
- *  "locale" is the mistake this design exists to avoid, and Flutter already
- *  models it this way — `PrefsStore.textLocale` and `.formattingLocale` are two
- *  persisted preferences.
+ *  "locale" is the mistake this design exists to avoid — the text locale and the
+ *  formatting locale are two separate persisted preferences.
  *
- *  The accepted deviation, carried over from Flutter so the two clients agree:
- *  byte-unit WORDS and the Today/Yesterday/"ago" phrases follow the TEXT
+ *  The accepted deviation: byte-unit WORDS and the Today/Yesterday/"ago" phrases
+ *  follow the TEXT
  *  locale, because they are vocabulary. Only numeric and calendar conventions
  *  follow the formatting locale.
  *

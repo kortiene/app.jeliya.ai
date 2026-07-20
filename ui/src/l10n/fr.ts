@@ -10,11 +10,10 @@
  *    U+2019 `’` and U+2026 `…` are typed directly: they are visible, and are
  *    already the English catalog's norm.
  *
- *  Two places where the Flutter `app_fr.arb` does NOT meet decision 7 and this
- *  catalog does: the guillemets in `roomsNoMatch` (Flutter's
- *  `sidebarNoRoomsMatch` has no inner narrow spaces) and the percent sign in
- *  `formatPercent` (Flutter's `commonPercent` uses a plain space). Both are
- *  worth fixing there; neither is worth copying here.
+ *  Two places are easy to get wrong and are held to decision 7 here: the
+ *  guillemets in `roomsNoMatch` carry their inner narrow no-break spaces, and
+ *  the percent sign in `formatPercent` is preceded by a narrow no-break space,
+ *  not a plain one.
  *
  *  Register: vouvoiement, sentence case (never Title Case), accents kept on
  *  capitals, calm and concrete — the honest tone of the English catalog, not a
@@ -26,8 +25,9 @@
  *  endpoint and identity ids — and most of it lives in `tokens.ts`, outside this
  *  file entirely. Tier 3, the brand, is never translated.
  *
- *  Where the Flutter catalog already translates a string, its French is REUSED
- *  verbatim. The two clients must not ship two French words for one English one.
+ *  Historical note: where an earlier French catalog already translated a string,
+ *  its wording was REUSED verbatim rather than re-translated, so one English
+ *  term keeps one French word across the product's history.
  */
 
 import type { LocaleCatalog } from './catalog';
@@ -255,13 +255,13 @@ export const fr: LocaleCatalog = {
   roomsSectionArchived: 'Archivés',
   roomsSectionCount: (n, formatted = String(n)) => `(${formatted})`,
   roomsEmpty: 'Aucun salon pour l’instant',
-  // Guillemets with their inner narrow no-break spaces (decision 7). The Flutter
-  // catalog's `sidebarNoRoomsMatch` is missing them; this follows the contract.
+  // Guillemets with their inner narrow no-break spaces (decision 7) — easy to
+  // drop by hand, so they are written as escapes and kept here deliberately.
   roomsNoMatch: (query) => `Aucun salon ne correspond à «\u202f${query}\u202f».`,
   roomsNoneInFilter: 'Aucun salon dans ce filtre.',
   roomsUnread: 'Non lu',
   // French treats 0 as singular, unlike English: « 0 membre », « 1 membre »,
-  // « 2 membres ». Pinned the same way the Flutter `strings_fr_test` pins it.
+  // « 2 membres ». The plural threshold is n >= 2, not n != 1.
   roomsMemberCount: (n, formatted = String(n)) =>
     n < 2 ? `${formatted} membre` : `${formatted} membres`,
   roomsUntitled: 'Salon sans titre',
