@@ -3,7 +3,7 @@ type: "Runbook"
 title: "Signing and notarization (Phase 2)"
 description: "Release-security plan and procedure for signing the Jeliya daemon release artifacts."
 tags: ["linux", "macos", "release", "security", "signing", "windows"]
-timestamp: "2026-07-20T13:20:00Z"
+timestamp: "2026-07-20T16:10:00Z"
 status: "canonical"
 implementation_status: "partial"
 verification_status: "partial"
@@ -32,6 +32,86 @@ Developer enrollment and notarization cover macOS 13 or newer on arm64 and
 x86_64, Authenticode issuance covers Windows 11 and serviced Windows 10 22H2
 on x86_64, and the two Linux musl targets need checksum-and-provenance
 publication rather than a platform signing service.
+
+## Procurement status (Phase 0)
+
+Enrollment is tracked here because it is calendar lead time, not engineering
+time: the Phase 2 gate needs signed packages, so both credential chains start
+during Phase 0. Nothing in this section claims any artifact is signed or
+notarized today, and nothing in `release.yml` signs today.
+
+### Eligibility, confirmed before ordering
+
+- Microsoft's managed code-signing service is now named **Azure Artifact
+  Signing** (formerly Trusted Signing). Its public-trust restriction was
+  confirmed from the primary documentation on 2026-07-20: "For Public Trust
+  certificates, Artifact Signing is currently available to organizations in
+  the USA, Canada, the European Union, and the United Kingdom, as well as
+  individual developers in the USA and Canada" — see the
+  [Artifact Signing FAQ](https://learn.microsoft.com/en-us/azure/artifact-signing/faq).
+- The enrolling identity is an individual developer resident in the
+  USA/Canada region, so the service is available and no fallback CA is
+  required. If eligibility ever changes, the recorded fallback is a
+  cloud-signing CA whose keys stay in the CA's HSM (SSL.com eSigner,
+  DigiCert KeyLocker, or Certum SimplySign) — never a raw `.pfx` file.
+- Two constraints of the chosen service, recorded so nobody rediscovers
+  them later: it requires a paid Azure subscription (free, trial, and
+  sponsored subscriptions are rejected), and it issues no EV certificates —
+  SmartScreen reputation accrues from download history instead of from the
+  certificate class.
+
+### Recorded decisions
+
+- **Apple: individual enrollment.** The Apple Developer Program membership
+  is applied for as an **individual** under the maintainer's legal name
+  ($99/year; no D-U-N-S number, entity verification, or org-domain website
+  required). The Developer ID and notarization identity therefore carry the
+  maintainer's personal legal name; switching to an organizational identity
+  later is a new enrollment and a new decision. Notarization uses the
+  `xcrun notarytool` app-specific-password route recorded above, not an App
+  Store Connect API key. The Team ID is recorded here once issued.
+- **Windows: Azure Artifact Signing.** Of the three routes recorded below —
+  Azure Artifact Signing / cloud HSM, a CA-backed remote signing service,
+  or a password-protected `.pfx` secret — the first is chosen. Reasons:
+  signing keys are generated and kept in the service's FIPS 140-2 Level 3
+  HSMs and are never handed to the project, which satisfies "keep Apple and
+  Windows signing material in platform-approved secret/HSM services" with
+  no certificate file to custody at all; CI authenticates with a scoped
+  Microsoft Entra identity instead of a stored certificate; and the ongoing
+  cost is small. The `.pfx` mode remains documented below only as the shape
+  this plan rejected.
+
+### Custody, rotation, and incident response
+
+- The release authority holds every signing credential: the Apple Developer
+  account, the notarization app-specific password, and the Azure
+  subscription with its Artifact Signing account. All credential values
+  live in GitHub Actions repository or environment secrets; none are
+  committed to the repository.
+- Rotation: the app-specific password is revocable and re-issuable from the
+  Apple account at any time; Artifact Signing certificates are short-lived
+  and rotate automatically inside the service.
+- Incident response: on suspected compromise the release authority revokes
+  the affected credential at its platform — app-specific-password
+  revocation for the notarization path, certificate revocation through the
+  Artifact Signing service for Windows — and signing fails closed: no
+  unsigned artifact ships from a signing-enabled job.
+- Degraded mode while the sole credential holder is unavailable: no
+  promotions and no signing-enabled releases; rollback to already-published
+  artifacts only. A named deputy does not exist yet; naming one belongs to
+  the production ownership record (Phase 0), alongside DNS, CDN, and relay
+  ownership.
+
+### Dated log
+
+| Date (UTC) | Track | State |
+|---|---|---|
+| 2026-07-20 | Windows | Eligibility confirmed from the Artifact Signing FAQ; Artifact Signing route chosen and recorded; the paid Azure subscription and Artifact Signing account are not yet created |
+| 2026-07-20 | Apple | Individual-enrollment decision recorded; enrollment not yet submitted |
+
+Phase 0 exits with enrollment SUBMITTED and eligibility confirmed — not with
+issuance completed. Completed issuance is a Phase 2 entry precondition for
+the gate item "supported installers verify signatures and reject tampering".
 
 ## Goals
 
@@ -101,12 +181,16 @@ of the secrets below exist. This section is the plan.
 
 Required Windows assets:
 
-- Code-signing certificate from a trusted CA, ideally EV if SmartScreen
-  reputation is a launch concern.
+- A publicly trusted code-signing capability. EV was once preferred here for
+  SmartScreen; the chosen Artifact Signing route issues no EV certificates,
+  and SmartScreen reputation accrues from download history — see
+  [Procurement status](#procurement-status-phase-0).
 - Signing key available to GitHub Actions via one of:
-  - Azure Trusted Signing / cloud HSM,
+  - Azure Artifact Signing (formerly Trusted Signing) / cloud HSM — the
+    chosen route (see [Procurement status](#procurement-status-phase-0)),
   - a CA-backed remote signing service,
-  - or a password-protected `.pfx` secret (least preferred operationally).
+  - or a password-protected `.pfx` secret (least preferred operationally;
+    rejected by the recorded decision).
 
 Suggested GitHub secrets for `.pfx` mode:
 
