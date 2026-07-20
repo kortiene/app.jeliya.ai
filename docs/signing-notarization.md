@@ -3,7 +3,7 @@ type: "Runbook"
 title: "Signing and notarization (Phase 2)"
 description: "Release-security plan and procedure for signing the Jeliya daemon release artifacts."
 tags: ["linux", "macos", "release", "security", "signing", "windows"]
-timestamp: "2026-07-20T16:10:00Z"
+timestamp: "2026-07-20T17:50:00Z"
 status: "canonical"
 implementation_status: "partial"
 verification_status: "partial"
@@ -50,10 +50,15 @@ notarized today, and nothing in `release.yml` signs today.
   individual developers in the USA and Canada" — see the
   [Artifact Signing FAQ](https://learn.microsoft.com/en-us/azure/artifact-signing/faq).
 - The enrolling identity is an individual developer resident in the
-  USA/Canada region, so the service is available and no fallback CA is
-  required. If eligibility ever changes, the recorded fallback is a
-  cloud-signing CA whose keys stay in the CA's HSM (SSL.com eSigner,
-  DigiCert KeyLocker, or Certum SimplySign) — never a raw `.pfx` file.
+  USA/Canada region, so the service is expected to be available. One
+  prerequisite stands before the fallback is dropped for good: individual
+  public-trust identity validation is sourced from the Azure billing
+  account, whose type, name, and address must match the intended
+  certificate subject — and the paid subscription does not exist yet, so
+  that match is unverified. Until identity validation completes, the
+  recorded fallback remains a cloud-signing CA whose keys stay in the CA's
+  HSM (SSL.com eSigner, DigiCert KeyLocker, or Certum SimplySign) — never
+  a raw `.pfx` file.
 - Two constraints of the chosen service, recorded so nobody rediscovers
   them later: it requires a paid Azure subscription (free, trial, and
   sponsored subscriptions are rejected), and it issues no EV certificates —
@@ -78,8 +83,8 @@ notarized today, and nothing in `release.yml` signs today.
   Windows signing material in platform-approved secret/HSM services" with
   no certificate file to custody at all; CI authenticates with a scoped
   Microsoft Entra identity instead of a stored certificate; and the ongoing
-  cost is small. The `.pfx` mode remains documented below only as the shape
-  this plan rejected.
+  cost is small. The `.pfx` mode is rejected outright; its procedure is no
+  longer documented and its secrets must never be created.
 
 ### Custody, rotation, and incident response
 
@@ -90,11 +95,21 @@ notarized today, and nothing in `release.yml` signs today.
   committed to the repository.
 - Rotation: the app-specific password is revocable and re-issuable from the
   Apple account at any time; Artifact Signing certificates are short-lived
-  and rotate automatically inside the service.
-- Incident response: on suspected compromise the release authority revokes
-  the affected credential at its platform — app-specific-password
-  revocation for the notarization path, certificate revocation through the
-  Artifact Signing service for Windows — and signing fails closed: no
+  and rotate automatically inside the service. That rotation stops if the
+  Artifact Signing identity validation lapses, so the release authority
+  also owns identity-validation renewal, starts it at Microsoft's first
+  reminder sixty days before expiry, and records it in the dated log — an
+  expired validation halts release signing even though certificates
+  otherwise rotate on their own.
+- Incident response: on suspected compromise the release authority cuts
+  off the ability to produce new signatures first, then revokes what was
+  issued — for the Apple chain, revoking the Developer ID certificate
+  through the Apple Developer account and the notarization app-specific
+  password (the password alone does not stop code signing with a stolen
+  key); for the Windows chain, disabling the scoped Microsoft Entra
+  principal or removing its Artifact Signing Certificate Profile Signer
+  role assignment so no further signatures can be requested, then revoking
+  issued certificates through the service. Signing fails closed: no
   unsigned artifact ships from a signing-enabled job.
 - Degraded mode while the sole credential holder is unavailable: no
   promotions and no signing-enabled releases; rollback to already-published
@@ -176,8 +191,8 @@ Notes:
 
 ## Windows Authenticode signing
 
-Not implemented — nothing in `release.yml` signs `jeliyad.exe` today, and none
-of the secrets below exist. This section is the plan.
+Not implemented — nothing in `release.yml` signs `jeliyad.exe` today, and no
+signing identity or configuration exists yet. This section is the plan.
 
 Required Windows assets:
 
@@ -192,20 +207,24 @@ Required Windows assets:
   - or a password-protected `.pfx` secret (least preferred operationally;
     rejected by the recorded decision).
 
-Suggested GitHub secrets for `.pfx` mode:
+Workflow outline for the chosen Artifact Signing route:
 
-| Secret | Purpose |
-| --- | --- |
-| `WINDOWS_CERTIFICATE_PFX_BASE64` | Base64-encoded Authenticode `.pfx`. |
-| `WINDOWS_CERTIFICATE_PASSWORD` | Password for the `.pfx`. |
-
-Workflow outline:
-
-1. Import the certificate in the Windows release job.
+1. Authenticate the Windows release job to Azure with the scoped Microsoft
+   Entra identity holding the Artifact Signing Certificate Profile Signer
+   role — workload identity federation (OIDC) preferred, so no certificate
+   or client secret is stored in CI at all.
 2. Build `jeliyad.exe` with `embed-ui` as today.
-3. Sign with `signtool sign /fd SHA256 /tr <timestamp-url> /td SHA256 ... jeliyad.exe`.
+3. Sign with SignTool through the Artifact Signing dlib and metadata file
+   (endpoint, account name, and certificate-profile name), or with the
+   Artifact Signing GitHub Action; the certificate itself is never
+   downloaded — the service returns only signed bytes.
 4. Verify with `signtool verify /pa /v jeliyad.exe`.
 5. Zip the signed executable and generate `.sha256` from final bytes.
+
+The `.pfx` certificate-import flow this section previously outlined is the
+rejected route and is deliberately no longer documented as a procedure; its
+secrets (`WINDOWS_CERTIFICATE_PFX_BASE64`, `WINDOWS_CERTIFICATE_PASSWORD`)
+must not be created.
 
 ## Acceptance checklist
 
