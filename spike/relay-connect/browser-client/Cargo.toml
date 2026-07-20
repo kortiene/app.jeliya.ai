@@ -1,0 +1,41 @@
+[package]
+name = "spike-browser-client"
+version = "0.0.0-spike"
+edition = "2021"
+publish = false
+description = "THROWAWAY Phase 0 spike (#23): wasm-bindgen wrapper around iroh for the browser."
+
+# Empty workspace table: keeps this cdylib OUT of both the Jeliya workspace
+# (../../Cargo.toml) and the spike workspace (../Cargo.toml). It is built only
+# by `wasm-pack build --target web` from this directory, never by a workspace
+# `cargo build`. The wasm target (wasm32-unknown-unknown) and the iroh feature
+# set (default-features = false) differ from every native crate, so isolating
+# the resolver graph here is the correct boundary.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# iroh with default features OFF: no portmapper, no fast-apple-datapath, no
+# tokio runtime. The wasm32-unknown-unknown target deps in iroh's Cargo.toml
+# (wasm-bindgen-futures, getrandom/wasm_js, time/wasm-bindgen) take over.
+iroh = { version = "=1.0.1", default-features = false, features = ["tls-ring"] }
+iroh-relay = { version = "=1.0.1", default-features = false }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+serde-wasm-bindgen = "0.6"
+web-sys = { version = "0.3", features = ["Window", "Request", "RequestInit", "RequestMode", "Response", "Headers", "Performance"] }
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+getrandom = { version = "0.3", features = ["wasm_js"] }
+hex = "0.4"
+base64ct = { version = "1", features = ["alloc"] }
+tracing = "0.1"
+# silence unused warnings on non-wasm targets (used only for type-checking)
+log = "0.4"
+
+[lints.rust]
+unsafe_code = "forbid"
