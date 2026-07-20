@@ -47,6 +47,7 @@ CI rules for every page in this wiki.
 
 ## Operations and release evidence
 
+- [Phase 0 relay-connect spike result](evidence/phase-0-relay-spike.md) - Recorded PASS verdict for the Phase 0 browser-to-native Iroh-through-authenticated-relay gate item (issue #23); Chromium, Firefox, and WebKit all pass.
 - [Accessibility release checklist](accessibility-checklist.md) - The screen-reader and keyboard behaviours automated checks cannot prove, verified by hand before a release.
 - [Real-network NAT runbook](realnet-runbook.md) - Procedure for proving direct or relayed connectivity across two networks.
 - [Historical Gate A result](gate-a-result.md) - Older direct-connectivity evidence that does not certify the v0.5.0 candidate.

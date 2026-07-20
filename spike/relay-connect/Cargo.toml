@@ -1,0 +1,49 @@
+# THROWAWAY Phase 0 spike workspace (#23).
+#
+# This Cargo.toml is a workspace root ONLY for the spike subprojects. It is
+# intentionally NOT a member of the Jeliya workspace at
+# /home/sekou/AGI/app.jeliya.ai/Cargo.toml: the parent's `cargo build
+# --workspace`, `cargo test --workspace`, and release.yml never reach in here,
+# and the spike's dependency tree (iroh-relay server, wasm-bindgen, ...) never
+# enters the Jeliya Cargo.lock. To ship any code from here it must survive its
+# own review and land under a real crate directory.
+[workspace]
+resolver = "2"
+members = [
+    "native-endpoint",
+    "relay-auth",
+    "relay-server",
+]
+
+# The browser-client is a cdylib built for wasm32-unknown-unknown with a
+# different feature set (no default iroh features). It is built with
+# `wasm-pack build` directly from its own manifest, not via `cargo build` from
+# this workspace, so it is excluded from the members list to keep native and
+# wasm target builds from colliding in one resolver graph.
+exclude = ["browser-client"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.91"
+
+[workspace.dependencies]
+iroh = { version = "=1.0.1", default-features = false, features = ["tls-ring"] }
+iroh-relay = { version = "=1.0.1", default-features = false }
+n0-error = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "net"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive", "env"] }
+ed25519-dalek = { version = "2", features = ["rand_core", "pkcs8"] }
+rand = "0.8"
+http = "1"
+hyper = { version = "1", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+url = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

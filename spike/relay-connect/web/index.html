@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Jeliya Phase 0 spike — browser→native Iroh through authenticated relay</title>
+  <style>
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 2rem; max-width: 80ch; }
+    h1 { font-size: 1.1rem; }
+    pre { background: #f4f4f4; padding: 0.5rem; white-space: pre-wrap; word-break: break-all; }
+    .ok { color: #080; }
+    .fail { color: #c00; }
+    button { font: inherit; padding: 0.3rem 0.8rem; }
+    label { display: block; margin: 0.3rem 0; }
+    input { font: inherit; width: 100%; max-width: 60ch; }
+  </style>
+</head>
+<body>
+  <h1>Phase 0 spike #23 — browser→native Iroh through authenticated relay</h1>
+  <p>THROWAWAY. See <code>spike/relay-connect/README.md</code>.</p>
+
+  <div id="config">
+    <label>relay-auth URL: <input id="relayAuthUrl" value="http://127.0.0.1:7780" /></label>
+    <label>relay URL: <input id="relayUrl" value="http://127.0.0.1:3340" /></label>
+    <label>native endpoint id (64 hex): <input id="nativeEndpointId" /></label>
+    <label>payload: <input id="payload" value="ping from the browser" /></label>
+    <button id="run">Run round trip</button>
+  </div>
+
+  <p id="status">idle</p>
+  <pre id="result"></pre>
+
+  <script type="module" src="./spike.mjs"></script>
+</body>
+</html>

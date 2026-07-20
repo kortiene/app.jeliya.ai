@@ -1,0 +1,32 @@
+[package]
+name = "spike-relay-auth"
+version = "0.0.0-spike"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+description = "THROWAWAY Phase 0 spike (#23): relay-auth service issuing short-lived endpoint-bound credentials after proof of possession."
+
+[[bin]]
+name = "spike-relay-auth"
+path = "src/main.rs"
+
+[dependencies]
+n0-error = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+http-body-util = { workspace = true }
+http = { workspace = true }
+base64ct = { version = "1", features = ["alloc"] }
+hex = "0.4"
+
+[lints]
+workspace = true
