@@ -11,12 +11,13 @@
 //   node scripts/realnet-evidence.mjs --local-dryrun [--with-third]
 //
 // Certifying different-network direct-path candidate run. The independently
-// supplied digest must match the official Zig 0.15.2 installation archive:
+// supplied digest must match the official Zig 0.15.2 archive for the operator's
+// own platform (the archive runs on the operator to cross-compile the remote):
 //   node scripts/realnet-evidence.mjs \
 //     --remote user@kilo \
 //     --third-remote user@stargate-03 \
 //     --build-from-source \
-//     --zig-archive <zig-x86_64-macos-0.15.2.tar.xz> \
+//     --zig-archive <official-zig-0.15.2-<arch>-<os>.tar.xz> \
 //     --zig-archive-sha256 <official-archive-sha256> \
 //     --expect-path direct
 //
@@ -75,8 +76,47 @@ const REQUIRED_RUST_TOOLCHAIN = "1.91.0";
 const REQUIRED_NODE_VERSION = "v22.22.3";
 const REQUIRED_NPM_VERSION = "10.9.8";
 const REQUIRED_ZIG_VERSION = "0.15.2";
-const REQUIRED_ZIG_ARCHIVE_SHA256 = "375b6909fc1495d16fc2c7db9538f707456bfc3373b14ee83fdd3e22b3d43f7f";
-const REQUIRED_ZIG_ARCHIVE_ROOT = "zig-x86_64-macos-0.15.2";
+// Official Zig 0.15.2 release digests, keyed by the archive's host triple
+// (arch-os). Each entry is the reviewed tarball's top-level directory name and
+// SHA-256 as published at https://ziglang.org/download/index.json. The harness
+// runs Zig on the operator to cross-compile the remote x86_64-musl binary, so
+// the accepted archive must be the official 0.15.2 build that runs on the
+// operator's own platform — not a single fixed archive. Selecting the
+// operator-platform entry preserves the "independently digest-verified official
+// release" property while supporting operators that are not macOS x86_64.
+export const OFFICIAL_ZIG_0_15_2_ARCHIVES = Object.freeze({
+  "x86_64-macos": {
+    root: "zig-x86_64-macos-0.15.2",
+    sha256: "375b6909fc1495d16fc2c7db9538f707456bfc3373b14ee83fdd3e22b3d43f7f",
+  },
+  "aarch64-macos": {
+    root: "zig-aarch64-macos-0.15.2",
+    sha256: "3cc2bab367e185cdfb27501c4b30b1b0653c28d9f73df8dc91488e66ece5fa6b",
+  },
+  "x86_64-linux": {
+    root: "zig-x86_64-linux-0.15.2",
+    sha256: "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239",
+  },
+  "aarch64-linux": {
+    root: "zig-aarch64-linux-0.15.2",
+    sha256: "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f",
+  },
+});
+
+export function operatorZigPlatformKey(platform = process.platform, arch = process.arch) {
+  if (platform === "darwin" && arch === "x64") return "x86_64-macos";
+  if (platform === "darwin" && arch === "arm64") return "aarch64-macos";
+  if (platform === "linux" && arch === "x64") return "x86_64-linux";
+  if (platform === "linux" && arch === "arm64") return "aarch64-linux";
+  throw new Error(
+    `unsupported Zig 0.15.2 operator platform ${platform}/${arch}; supported: darwin/x64, darwin/arm64, linux/x64, linux/arm64`,
+  );
+}
+
+export function operatorZigBinding(platform = process.platform, arch = process.arch) {
+  const platformKey = operatorZigPlatformKey(platform, arch);
+  return { ...OFFICIAL_ZIG_0_15_2_ARCHIVES[platformKey], platformKey };
+}
 const DISABLED_CARGO_ZIGBUILD_PYTHON_PATH = "/dev/null/jeliya-python-zig-discovery-disabled";
 const REQUIRED_CARGO_ZIGBUILD_VERSION = "cargo-zigbuild 0.23.0";
 const REQUIRED_CARGO_BUILD_JOBS = "2";
@@ -1255,12 +1295,13 @@ function zigEnvString(output, name) {
   return JSON.parse(match[1]);
 }
 
-export function zigArchiveMembersValid(listing) {
-  const prefix = `${REQUIRED_ZIG_ARCHIVE_ROOT}/`;
+export function zigArchiveMembersValid(listing, root) {
+  if (typeof root !== "string" || root === "") return false;
+  const prefix = `${root}/`;
   return Array.isArray(listing)
     && listing.length > 0
     && listing.every((entry) => (
-      (entry === REQUIRED_ZIG_ARCHIVE_ROOT || entry.startsWith(prefix))
+      (entry === root || entry.startsWith(prefix))
       && !entry.startsWith("/")
       && !entry.includes("\\")
       && !entry.split("/").includes("..")
@@ -1303,10 +1344,15 @@ export function installVerifiedZig({
   targetDir,
   tarPath,
   env,
+  platform = process.platform,
+  arch = process.arch,
 }) {
+  const archiveBinding = operatorZigBinding(platform, arch);
   const expected = parseExpectedSha256(expectedArchiveSha256);
-  if (expected !== REQUIRED_ZIG_ARCHIVE_SHA256) {
-    throw new Error("Zig archive digest is not the reviewed x86_64-macos 0.15.2 release digest");
+  if (expected !== archiveBinding.sha256) {
+    throw new Error(
+      `Zig archive digest is not the reviewed ${archiveBinding.platformKey} 0.15.2 release digest (expected ${archiveBinding.sha256})`,
+    );
   }
   const sourceArchive = resolve(archivePath);
   if (!existsSync(sourceArchive) || !statSync(sourceArchive).isFile()) {
@@ -1325,8 +1371,10 @@ export function installVerifiedZig({
     env,
     maxBuffer: 16 * 1024 * 1024,
   }).trim().split(/\r?\n/).filter(Boolean);
-  if (!zigArchiveMembersValid(listing)) {
-    throw new Error("the verified Zig archive has an unexpected member layout");
+  if (!zigArchiveMembersValid(listing, archiveBinding.root)) {
+    throw new Error(
+      `the verified Zig archive has an unexpected member layout (expected root ${archiveBinding.root})`,
+    );
   }
 
   const installationRoot = join(targetDir, "zig-installation");
@@ -1354,6 +1402,7 @@ export function installVerifiedZig({
     sha256: sha256File(path),
     archive_sha256: actualArchiveSha256,
     expected_archive_sha256: expected,
+    archive_platform: archiveBinding.platformKey,
     archive_integrity_verified: true,
     installation_root_bound: true,
     lib_dir_bound: true,
