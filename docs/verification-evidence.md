@@ -195,23 +195,26 @@ that:
   dependency, and attested before a forced-relay run starts.
 
 The current `Cargo.toml` and `Cargo.lock` resolve `a5d98b70...`, and the local
-isolation regression was repeated there. The certifying network evidence below
-binds the prior `55024a4...` + `71fbb500...` snapshot; it has not been repeated
-at the current pin.
+isolation regression was repeated there. The certifying direct run below is now
+repeated at the current pin (`922f620...` + `a5d98b70...`); the forced-relay run
+still binds the prior `55024a4...` + `71fbb500...` snapshot, pending a fresh
+source-built relay qualification at the current pair.
 
 ## Certifying network evidence
 
-Both certifying runs used the published network-qualified Jeliya commit
-`55024a46b3e112796ba2acf1dc408dab26dbba2e` and the exact public Iroh Rooms pin
-`71fbb5007bef4ce83631c94762ec68c2beef3d79`. The operator role ran on macOS
-x86_64. Roles B and C ran on `root@demo1` and `root@demo2`, both Ubuntu x86_64.
-SSH connected as root, but both remote daemons executed through `setpriv` as
-UID/GID `65534`.
+The two certifying runs now bind different revision pairs. The direct run is
+the current candidate's evidence, produced with `--source-commit 922f620…` from
+harness commit `eeb1eff…` (main) carrying the operator-platform-aware Zig
+support, so its manifest records `source.harness_commit = eeb1eff…` alongside
+`source.commit = 922f620…`. The forced-relay run is the retained run at the
+prior snapshot. In both cases roles B and C ran on `root@demo1` and
+`root@demo2`, both Ubuntu x86_64; SSH connected as root, but both remote
+daemons executed through `setpriv` as UID/GID `65534`.
 
 | Path | Run and UTC window | Result | Manifest | Signature |
 |---|---|---|---|---|
-| direct | `20260716T201318Z-1ca39cfa`, 20:13:18–20:34:25 | certifiable; 36/36 assertions; A/B/C each remained direct for three consecutive observations | [`direct.json`](evidence/v0.6.0/direct.json) | [`direct.json.sig`](evidence/v0.6.0/direct.json.sig) |
-| forced relay | `20260716T203450Z-cf28bc63`, 20:34:50–20:56:31 | certifiable; 36/36 assertions; the relay-only source build self-attested on the operator host and both remote hosts, then A/B/C each remained relay for three consecutive observations | [`relay.json`](evidence/v0.6.0/relay.json) | [`relay.json.sig`](evidence/v0.6.0/relay.json.sig) |
+| direct | `20260721T122840Z-098c4979`, 12:28:40–12:36:54 | certifiable; binds `922f620…` + `a5d98b70…`; operator linux arm64 (`AS11426`); 36/36 assertions; A/B/C each remained direct for three consecutive observations | [`direct.json`](evidence/v0.6.0/direct.json) | [`direct.json.sig`](evidence/v0.6.0/direct.json.sig) |
+| forced relay | `20260716T203450Z-cf28bc63`, 20:34:50–20:56:31 | certifiable; binds the prior `55024a4…` + `71fbb500…` snapshot; operator macOS x86_64 (`AS11426`); 36/36 assertions; the relay-only source build self-attested on the operator host and both remote hosts, then A/B/C each remained relay for three consecutive observations | [`relay.json`](evidence/v0.6.0/relay.json) | [`relay.json.sig`](evidence/v0.6.0/relay.json.sig) |
 
 Each run observed three pairwise-distinct public egress values across two BGP
 origin ASNs (`AS11426` for the operator, `AS24940` for both remote roles)
@@ -224,13 +227,20 @@ process remaining on either remote host.
 
 Both manifests are evidence schema 2 and record the isolated source build,
 complete Zig archive verification, exact tool identities, binary hashes,
-assertions, digest-only log summaries, and cleanup. Each binds the published
-Jeliya commit and the published, remediated Iroh Rooms revision, sets
-`certifiable: true` and `source.releaseable: true`, and carries a detached
-Ed25519 signature (`.sig`) that verifies against the pinned release-evidence
-public SPKI. The forced-relay run is the reviewed safety boundary exercised end
-to end: the harness required the compile-time seam, the binary attested itself
-as a relay-only build, and the path assertions held over relay.
+assertions, digest-only log summaries, and cleanup. Each binds its recorded
+Jeliya commit and Iroh Rooms revision, sets `certifiable: true` and
+`source.releaseable: true`, and carries a detached Ed25519 signature (`.sig`)
+that verifies against the pinned release-evidence public SPKI. The direct
+manifest records the official Zig 0.15.2 `aarch64-linux` archive (the operator
+ran on linux arm64); the relay manifest records the `x86_64-macos` archive.
+The forced-relay run is the reviewed safety boundary exercised end to end: the
+harness required the compile-time seam, the binary attested itself as a
+relay-only build, and the path assertions held over relay.
+
+The prior direct run `20260716T201318Z-1ca39cfa` is superseded as certifying
+direct evidence by `098c4979`; it certified only the prior `55024a4…` +
+`71fbb500…` snapshot and does not transfer to `922f620…` + `a5d98b70…`. It
+remains in the repository history and is named here as a label only.
 
 ## Historical schema 1 local-remediation evidence
 
