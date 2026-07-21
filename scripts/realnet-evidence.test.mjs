@@ -58,6 +58,9 @@ import {
   validBuildDirectory,
   validRunId,
   validSshTarget,
+  OFFICIAL_ZIG_0_15_2_ARCHIVES,
+  operatorZigBinding,
+  operatorZigPlatformKey,
   validateZigInstallationBinding,
   waitForLogCollectors,
   waitForReady,
@@ -538,6 +541,27 @@ test("source archives ignore checkout-local attributes and bind the committed tr
   assert.equal(readFileSync(join(extracted, "bound.txt"), "utf8"), "committed bytes\n");
 });
 
+test("operator Zig binding selects the official archive for each supported platform", () => {
+  assert.equal(operatorZigPlatformKey("darwin", "x64"), "x86_64-macos");
+  assert.equal(operatorZigPlatformKey("darwin", "arm64"), "aarch64-macos");
+  assert.equal(operatorZigPlatformKey("linux", "x64"), "x86_64-linux");
+  assert.equal(operatorZigPlatformKey("linux", "arm64"), "aarch64-linux");
+  assert.throws(() => operatorZigPlatformKey("freebsd", "x64"), /unsupported Zig 0\.15\.2 operator platform/);
+
+  // Each entry is the reviewed official 0.15.2 digest for its host triple, so a
+  // cross-platform operator cannot silently substitute another platform's archive.
+  for (const [key, entry] of Object.entries(OFFICIAL_ZIG_0_15_2_ARCHIVES)) {
+    assert.equal(entry.root, `zig-${key}-0.15.2`);
+    assert.match(entry.sha256, /^[0-9a-f]{64}$/);
+  }
+  const macosX64 = operatorZigBinding("darwin", "x64");
+  assert.equal(macosX64.platformKey, "x86_64-macos");
+  assert.equal(macosX64.sha256, "375b6909fc1495d16fc2c7db9538f707456bfc3373b14ee83fdd3e22b3d43f7f");
+  const linuxArm64 = operatorZigBinding("linux", "arm64");
+  assert.equal(linuxArm64.platformKey, "aarch64-linux");
+  assert.equal(linuxArm64.sha256, "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f");
+});
+
 test("Zig archive verification fails before extraction on a digest mismatch", () => {
   const root = mkdtempSync(join(tmpdir(), "jeliya-zig-digest-"));
   temporary.push(root);
@@ -549,23 +573,53 @@ test("Zig archive verification fails before extraction on a digest mismatch", ()
     targetDir: root,
     tarPath: join(root, "tar-must-not-run"),
     env: {},
+    platform: "darwin",
+    arch: "x64",
   }), /does not match the reviewed SHA-256/);
   assert.equal(existsSync(join(root, "zig-installation")), false);
 });
 
+test("Zig archive selection rejects a SHA for a different operator platform", () => {
+  const root = mkdtempSync(join(tmpdir(), "jeliya-zig-platform-"));
+  temporary.push(root);
+  const archive = join(root, "wrong-platform.tar.xz");
+  writeFileSync(archive, "an aarch64-linux archive supplied to a darwin operator");
+  // The operator is darwin/x64 (official SHA 375b6909...) but the supplied SHA
+  // is the aarch64-linux official SHA; the harness must reject it before
+  // touching the file, naming the platform whose digest it expected.
+  assert.throws(() => installVerifiedZig({
+    archivePath: archive,
+    expectedArchiveSha256: "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f",
+    targetDir: root,
+    tarPath: join(root, "tar-must-not-run"),
+    env: {},
+    platform: "darwin",
+    arch: "x64",
+  }), /is not the reviewed x86_64-macos 0\.15\.2 release digest/);
+  assert.equal(existsSync(join(root, "zig-installation")), false);
+});
+
 test("Zig archive layout and installation roots fail closed", () => {
+  const macosRoot = "zig-x86_64-macos-0.15.2";
   assert.equal(zigArchiveMembersValid([
-    "zig-x86_64-macos-0.15.2/",
-    "zig-x86_64-macos-0.15.2/zig",
-    "zig-x86_64-macos-0.15.2/lib/zig/std/std.zig",
-  ]), true);
+    `${macosRoot}/`,
+    `${macosRoot}/zig`,
+    `${macosRoot}/lib/zig/std/std.zig`,
+  ], macosRoot), true);
   for (const members of [
     ["other-root/zig"],
-    ["zig-x86_64-macos-0.15.2/../../outside"],
-    ["zig-x86_64-macos-0.15.2\\outside"],
+    [`${macosRoot}/../../outside`],
+    [`${macosRoot}\\outside`],
   ]) {
-    assert.equal(zigArchiveMembersValid(members), false);
+    assert.equal(zigArchiveMembersValid(members, macosRoot), false);
   }
+  // An empty/missing root and a foreign-platform root are both rejected.
+  assert.equal(zigArchiveMembersValid([`${macosRoot}/zig`], undefined), false);
+  assert.equal(zigArchiveMembersValid([`${macosRoot}/zig`], ""), false);
+  assert.equal(
+    zigArchiveMembersValid(["zig-aarch64-linux-0.15.2/zig"], macosRoot),
+    false,
+  );
 
   const root = mkdtempSync(join(tmpdir(), "jeliya-zig-root-"));
   const outside = mkdtempSync(join(tmpdir(), "jeliya-zig-outside-"));

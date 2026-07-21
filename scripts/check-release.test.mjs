@@ -286,6 +286,30 @@ test("certifying network evidence has a closed, secret-free schema", () => {
   assert.deepEqual(validate(networkManifest("direct", commit, upstream)), { valid: true });
   assert.deepEqual(validate(networkManifest("relay", commit, upstream), "relay"), { valid: true });
 
+  // The retained fixtures above use the historical darwin/x64 operator. The
+  // harness now also accepts the official Zig 0.15.2 archive for other operator
+  // platforms; the verifier must accept a consistent aarch64-linux operator
+  // manifest (different Zig archive, archive_platform, rustc host line, and
+  // native build target) and, below, reject one whose toolchain evidence is for
+  // a different platform than the operator it records.
+  const linuxArm64 = networkManifest("direct", commit, upstream);
+  linuxArm64.hosts[0] = { ...linuxArm64.hosts[0], os: "linux", architecture: "arm64" };
+  linuxArm64.build.targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-musl"];
+  linuxArm64.build.toolchain.rustc = {
+    ...linuxArm64.build.toolchain.rustc,
+    version: linuxArm64.build.toolchain.rustc.version.replace(
+      "host: x86_64-apple-darwin",
+      "host: aarch64-unknown-linux-gnu",
+    ),
+  };
+  linuxArm64.build.toolchain.zig = {
+    ...linuxArm64.build.toolchain.zig,
+    archive_sha256: "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f",
+    expected_archive_sha256: "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f",
+    archive_platform: "aarch64-linux",
+  };
+  assert.deepEqual(validate(linuxArm64), { valid: true });
+
   const negativeCases = [
     {
       name: "top-level auth token",
@@ -468,6 +492,23 @@ test("certifying network evidence has a closed, secret-free schema", () => {
       name: "mismatched Zig archive digest",
       mutate: (manifest) => {
         manifest.build.toolchain.zig.expected_archive_sha256 = "34".repeat(32);
+      },
+      error: /pinned and fully identified release toolchain/,
+    },
+    {
+      name: "Zig archive digest for a different operator platform",
+      mutate: (manifest) => {
+        // Operator stays darwin/x64, but the Zig archive is the official
+        // aarch64-linux one; the verifier must reject the cross-platform swap.
+        manifest.build.toolchain.zig.archive_sha256 = "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f";
+        manifest.build.toolchain.zig.expected_archive_sha256 = "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f";
+      },
+      error: /pinned and fully identified release toolchain/,
+    },
+    {
+      name: "Zig archive platform mismatched with operator host",
+      mutate: (manifest) => {
+        manifest.build.toolchain.zig.archive_platform = "aarch64-linux";
       },
       error: /pinned and fully identified release toolchain/,
     },
