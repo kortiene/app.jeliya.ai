@@ -310,6 +310,14 @@ test("certifying network evidence has a closed, secret-free schema", () => {
   };
   assert.deepEqual(validate(linuxArm64), { valid: true });
 
+  // A --source-commit run (harness HEAD differs from the daemon commit) records
+  // harness_commit and harness_working_tree_dirty; both are accepted when the
+  // harness commit is a well-formed published commit and its tree was clean.
+  const withHarnessCommit = networkManifest("direct", commit, upstream);
+  withHarnessCommit.source.harness_commit = "ef".repeat(20);
+  withHarnessCommit.source.harness_working_tree_dirty = false;
+  assert.deepEqual(validate(withHarnessCommit), { valid: true });
+
   const negativeCases = [
     {
       name: "top-level auth token",
@@ -511,6 +519,22 @@ test("certifying network evidence has a closed, secret-free schema", () => {
         manifest.build.toolchain.zig.archive_platform = "aarch64-linux";
       },
       error: /pinned and fully identified release toolchain/,
+    },
+    {
+      name: "dirty harness working tree at a --source-commit run",
+      mutate: (manifest) => {
+        manifest.source.harness_commit = "ef".repeat(20);
+        manifest.source.harness_working_tree_dirty = true;
+      },
+      error: /invalid harness-commit provenance/,
+    },
+    {
+      name: "malformed harness commit",
+      mutate: (manifest) => {
+        manifest.source.harness_commit = "not-a-sha";
+        manifest.source.harness_working_tree_dirty = false;
+      },
+      error: /invalid harness-commit provenance/,
     },
     {
       name: "malformed tool digest",

@@ -77,6 +77,14 @@ function operatorProfileFor(host, relativePath) {
 // carries the field, retained evidence does not, and both must validate.
 const CLOSED_SCHEMA_OPTIONAL = Symbol("closed-schema-optional");
 
+// Paths whose contents determine the daemon bytes the candidate built. When a
+// decoupled (--source-commit) run qualified an older candidate with a newer
+// harness, changes between the candidate and the release checkout are allowed
+// everywhere EXCEPT here: touching any of these means the daemon the release
+// would build no longer matches the network-qualified candidate, so the
+// qualification no longer applies.
+const DAEMON_RUNTIME_INPUT_PATH = /^(?:crates\/|Cargo\.toml$|Cargo\.lock$|ui\/src\/|ui\/package\.json$|ui\/package-lock\.json$|packaging\/)/;
+
 function fail(message) {
   throw new Error(`release-integrity: ${message}`);
 }
@@ -226,7 +234,36 @@ export function validateEvidenceReadiness({
   if (!releaseContext.candidateIsAncestor) {
     fail("network-qualified commit is not an ancestor of the release checkout");
   }
-  const disallowed = releaseContext.changedPaths.filter((path) => !path.startsWith("docs/"));
+  // A decoupled (--source-commit) run records a harness_commit when the harness
+  // version differs from the network-qualified candidate. That is permitted only
+  // when (a) each manifest's harness commit is part of the published release
+  // history (an ancestor of the release checkout HEAD, so the harness bytes are
+  // reproducible from origin), and (b) nothing between the candidate and the
+  // release checkout touches a daemon runtime input. The candidate is still
+  // what got network-qualified; the intervening commits may only be harness,
+  // docs, tests, or other non-daemon changes.
+  const decoupled = manifests.direct.source?.harness_commit !== undefined
+    || manifests.relay.source?.harness_commit !== undefined;
+  if (decoupled) {
+    for (const [path, manifest] of Object.entries(manifests)) {
+      const harnessCommit = manifest.source?.harness_commit;
+      if (harnessCommit === undefined) continue;
+      try {
+        execFileSync(
+          "git",
+          ["merge-base", "--is-ancestor", harnessCommit, releaseContext.headCommit],
+          { cwd: root, stdio: "ignore" },
+        );
+      } catch {
+        fail(`${path} harness_commit ${harnessCommit} is not reachable from the release checkout`);
+      }
+    }
+  }
+  const disallowed = releaseContext.changedPaths.filter((path) => {
+    if (path.startsWith("docs/")) return false;
+    if (decoupled) return DAEMON_RUNTIME_INPUT_PATH.test(path);
+    return true;
+  });
   if (disallowed.length > 0) {
     fail(`runtime or release inputs changed after network qualification: ${disallowed.join(", ")}`);
   }
@@ -323,6 +360,12 @@ const CERTIFYING_NETWORK_SCHEMA_V1 = {
       published_at_origin: null,
     },
     releaseable: null,
+    // Present only when the harness ran with --source-commit (the daemon is
+    // built from source.commit while the harness itself is at harness_commit);
+    // absent from retained pre-multiplatform evidence and from runs where the
+    // harness HEAD equals the candidate.
+    harness_commit: CLOSED_SCHEMA_OPTIONAL,
+    harness_working_tree_dirty: CLOSED_SCHEMA_OPTIONAL,
   },
   build: {
     mode: null,
@@ -807,6 +850,17 @@ export function validateNetworkEvidenceManifest(manifest, {
         || manifest.source?.iroh_rooms?.published_at_origin !== true
         || manifest.source?.iroh_rooms?.releaseable !== true) {
       fail(`${relativePath} does not bind to the releaseable upstream revision`);
+    }
+    // When the harness ran with --source-commit, it records which harness
+    // version produced the run; require it to be an exact published commit, and
+    // require that harness's working tree was clean at run time so the harness
+    // bytes are a reproducible committed version.
+    if (manifest.source?.harness_commit !== undefined) {
+      if (!/^[0-9a-f]{40}$/.test(manifest.source.harness_commit)
+          || !publicGitHubGitUrl(manifest.source?.origin)
+          || manifest.source?.harness_working_tree_dirty !== false) {
+        fail(`${relativePath} recorded an invalid harness-commit provenance`);
+      }
     }
   } else {
     const localCheckout = manifest.source?.iroh_rooms?.local_checkout;
