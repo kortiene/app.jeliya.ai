@@ -974,7 +974,9 @@ class MockClient implements Client {
         const p = params as MethodMap['room.timeline']['params'];
         const room = this.needRoom(p.room_id);
         const events = [...room.timeline].sort((a, b) => a.ts - b.ts);
-        return { events: p.limit ? events.slice(-p.limit) : events };
+        // The mock returns the full newest-`limit` slice and no forward cursor;
+        // the real daemon pages via after_event_id + next_cursor (Phase 1 D3).
+        return { events: p.limit ? events.slice(-p.limit) : events, next_cursor: null };
       }
 
       case 'room.members': {

@@ -37,6 +37,9 @@ CI rules for every page in this wiki.
 - [Supported platform matrix decision](platform-matrix-decision.md) - Decision record fixing the first-slice supported desktop OS and browser matrix, its mobile position under amendment A4, the test-lane mapping, and the pairing-success denominator.
 - [Portable Iroh Rooms traits decision](iroh-rooms-portable-traits-decision.md) - Decision record choosing the audited short-lived patch path for the browser peer's portable store, blob, transport, clock, and task-scheduling traits, with its audit owner and recurring cost.
 - [Phase 0 go/no-go gate verdict](phase-0-gate-verdict.md) - Dated verdict against each of the six Phase 0 gate conditions for the v0.6.0 candidate (922f620 + a5d98b70), each with linked evidence (issue #31).
+- [Phase 1 implementation plan](phase-1-plan.md) - Sequencing, dependency order, gate mapping, and per-deliverable tasks for the seven Phase 1 production-identity and protocol-primitive deliverables unlocked by the Phase 0 gate.
+- [Recovery bundle decision](recovery-bundle-decision.md) - Proposed (ADR #3) versioned authenticated-encryption recovery bundle keyed by a random 256-bit key, user-held custody, and optional opaque cloud hosting; unblocks Phase 1 deliverable D1.
+- [Companion control protocol decision](companion-control-protocol-decision.md) - Proposed (ADR #2) mutually-authenticated E2EE browser-to-companion control protocol (Noise XX-equivalent), SAS-confirmed pairing, non-extractable bounded-lifetime control key, default-deny scopes, replay defense, and revocation; unblocks Phase 1 deliverable D5.
 - [Code-signing deferral decision](signing-deferral-decision.md) - Decision record deferring code-signing (the signing gate and #25) until after the full system is deployed and tested, so signing never blocks development.
 
 ## Agents
@@ -54,6 +57,7 @@ CI rules for every page in this wiki.
 - [Phase 0 relay-connect spike result](evidence/phase-0-relay-spike.md) - Recorded PASS verdict for the Phase 0 browser-to-native Iroh-through-authenticated-relay gate item (issue #23); Chromium, Firefox, and WebKit all pass.
 - [Accessibility release checklist](accessibility-checklist.md) - The screen-reader and keyboard behaviours automated checks cannot prove, verified by hand before a release.
 - [Real-network NAT runbook](realnet-runbook.md) - Procedure for proving direct or relayed connectivity across two networks.
+- [Store-degraded runbook](store-degraded-runbook.md) - Operator procedure for detecting and responding to a durable CRITICAL `store_degraded` trust decision (Phase 1 D7).
 - [Historical Gate A result](gate-a-result.md) - Older direct-connectivity evidence that does not certify the v0.5.0 candidate.
 - [Signing and notarization](signing-notarization.md) - Release-security plan for macOS and Windows artifacts.
 

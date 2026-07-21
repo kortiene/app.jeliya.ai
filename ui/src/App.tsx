@@ -682,7 +682,14 @@ export default function App({ client }: { client: Client }) {
     }
 
     try {
-      const { event_id } = await client.call('message.send', { room_id: rid, body });
+      // Pass the per-intent clientId as client_msg_id so a lost-response retry
+      // (retryPendingMessage reuses the same clientId) is deduped by the daemon
+      // instead of authoring a duplicate (Phase 1 D2).
+      const { event_id } = await client.call('message.send', {
+        room_id: rid,
+        body,
+        client_msg_id: clientId,
+      });
       const alreadyVisible = timelineRef.current.some((event) => event.event_id === event_id);
       updatePendingForRoom(rid, (messages) =>
         alreadyVisible

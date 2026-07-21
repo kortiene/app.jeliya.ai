@@ -48,6 +48,13 @@ pub struct RoomMeta {
     /// Files this daemon fetched and verified locally, keyed by `file_<hex>`.
     #[serde(default)]
     pub fetched_files: BTreeMap<String, FetchedFileMeta>,
+    /// `message.send` idempotency index: a client-supplied `client_msg_id`
+    /// mapped to the bare event id hex of the event that send authored. Lets a
+    /// lost-response retry against this daemon return the original event
+    /// instead of authoring a duplicate (Phase 1 deliverable D2). Daemon-local:
+    /// cross-peer exactly-once still needs the id inside the signed content.
+    #[serde(default)]
+    pub client_msg_ids: BTreeMap<String, String>,
 }
 
 /// Daemon-local record of a verified file fetch.
@@ -134,6 +141,7 @@ fn room_entry<'a>(state: &'a mut LocalState, room_id: &str) -> &'a mut RoomMeta 
         added_at_ms: crate::now_ms(),
         peer_hints: Vec::new(),
         fetched_files: BTreeMap::new(),
+        client_msg_ids: BTreeMap::new(),
     })
 }
 
@@ -236,6 +244,37 @@ pub fn fetched_file(data_dir: &Path, room_id: &str, file_id: &str) -> Option<Fet
         .clone();
     let ok = std::fs::metadata(&meta.path).is_ok_and(|m| m.is_file() && m.len() == meta.bytes);
     ok.then_some(meta)
+}
+
+/// The event id a prior `message.send` with this `client_msg_id` authored, if
+/// any. A retry against this daemon returns this id instead of authoring a
+/// duplicate (Phase 1 deliverable D2).
+#[must_use]
+pub fn message_event_id(data_dir: &Path, room_id: &str, client_msg_id: &str) -> Option<String> {
+    load(data_dir)
+        .ok()?
+        .rooms
+        .get(room_id)?
+        .client_msg_ids
+        .get(client_msg_id)
+        .cloned()
+}
+
+/// Record the event id a `client_msg_id` resolved to, durably. Called only after
+/// the event was authored and published, so a crash before this write may
+/// re-send on next attempt — but never silently duplicates within a live
+/// daemon (the in-process send path is serialized per room).
+pub fn remember_message(
+    data_dir: &Path,
+    room_id: &str,
+    client_msg_id: &str,
+    event_id: &str,
+) -> CoreResult<()> {
+    update(data_dir, |state| {
+        room_entry(state, room_id)
+            .client_msg_ids
+            .insert(client_msg_id.to_owned(), event_id.to_owned());
+    })
 }
 
 #[cfg(test)]

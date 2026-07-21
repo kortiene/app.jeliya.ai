@@ -23,7 +23,7 @@ use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::error::{CoreError, CoreResult, ErrorKind};
-use crate::{identity, supervisor::RoomSupervisor};
+use crate::{identity, recovery, supervisor::RoomSupervisor};
 
 /// Major version of the protocol spoken over any transport
 /// (`docs/PROTOCOL.md`). Part of the supervision contract: an app adopts a
@@ -52,7 +52,9 @@ fn requires_room_access_preflight(method: &str) -> bool {
             | "room.leave"
             | "room.timeline"
             | "room.members"
+            | "room.health"
             | "invite.create"
+            | "invite.cancel"
             | "message.send"
             | "status.post"
             | "file.share"
@@ -211,6 +213,35 @@ impl Engine {
                 }))
             }
 
+            // ---- Recovery (Phase 1 D1, ADR #3) -------------------------------
+            // The bundle is hex over this loopback channel (the same channel
+            // that already transports the daemon token); the recovery_key
+            // phrase is shown to the user once at export and must be saved out
+            // of band — the daemon does not persist it.
+            "recovery.export" => {
+                let (bundle, key) = recovery::export_bundle_from_dir(self.data_dir())?;
+                Ok(json!({
+                    "bundle": hex::encode(&bundle),
+                    "recovery_key": key.to_phrase(),
+                }))
+            }
+            "recovery.restore" => {
+                let p: RecoveryRestoreParams = params(raw_params)?;
+                let bundle = hex::decode(p.bundle.trim()).map_err(|e| {
+                    CoreError::invalid(format!("recovery bundle is not valid hex: {e}"))
+                })?;
+                let key = recovery::RecoveryKey::from_phrase(&p.recovery_key)?;
+                let profile = recovery::restore_to_dir(self.data_dir(), &bundle, &key)?;
+                Ok(json!({
+                    "identity_id": profile.identity_id,
+                    "device_id": profile.device_id,
+                }))
+            }
+            "recovery.test_restore" => {
+                recovery::test_restore(self.data_dir())?;
+                Ok(json!({}))
+            }
+
             // ---- Rooms --------------------------------------------------------
             "room.create" => {
                 let p: CreateRoomParams = params(raw_params)?;
@@ -235,11 +266,27 @@ impl Engine {
             }
             "room.timeline" => {
                 let p: TimelineParams = params(raw_params)?;
-                Ok(json!({ "events": sup.timeline(&p.room_id, p.limit).await? }))
+                if let Some(after) = p.after_event_id.as_deref() {
+                    let (events, next_cursor) =
+                        sup.timeline_after(&p.room_id, after, p.limit).await?;
+                    Ok(json!({ "events": events, "next_cursor": next_cursor }))
+                } else {
+                    // No cursor: the established newest-`limit` snapshot. The
+                    // null next_cursor signals "you are at the front; page
+                    // forward only with after_event_id".
+                    Ok(json!({
+                        "events": sup.timeline(&p.room_id, p.limit).await?,
+                        "next_cursor": Value::Null
+                    }))
+                }
             }
             "room.members" => {
                 let p: RoomIdParams = params(raw_params)?;
                 Ok(json!({ "members": sup.members(&p.room_id).await? }))
+            }
+            "room.health" => {
+                let p: RoomIdParams = params(raw_params)?;
+                Ok(json!({ "decisions": sup.room_health(&p.room_id)? }))
             }
             "invite.create" => {
                 let p: InviteParams = params(raw_params)?;
@@ -248,6 +295,11 @@ impl Engine {
                     .create_invite(&p.room_id, &p.identity_id, &p.role, expiry.as_deref())
                     .await?;
                 Ok(json!({ "ticket": ticket }))
+            }
+            "invite.cancel" => {
+                let p: InviteCancelParams = params(raw_params)?;
+                let event_id = sup.cancel_invite(&p.room_id, &p.invite_id).await?;
+                Ok(json!({ "event_id": event_id }))
             }
             "room.join" => {
                 let p: JoinParams = params(raw_params)?;
@@ -264,7 +316,9 @@ impl Engine {
             // ---- Messages & agent status ---------------------------------------
             "message.send" => {
                 let p: SendParams = params(raw_params)?;
-                let event_id = sup.send_message(&p.room_id, &p.body).await?;
+                let event_id = sup
+                    .send_message(&p.room_id, &p.body, p.client_msg_id.as_deref())
+                    .await?;
                 Ok(json!({ "event_id": event_id }))
             }
             "status.post" => {
@@ -565,6 +619,12 @@ struct OpenRoomParams {
 struct TimelineParams {
     room_id: String,
     limit: Option<u32>,
+    /// Optional cursor (Phase 1 D3): the event id a reconnecting client last
+    /// saw. When present, the result is the events strictly after it in
+    /// canonical `(lamport, event_id)` order plus a `next_cursor`, instead of
+    /// the newest-`limit` snapshot.
+    #[serde(default)]
+    after_event_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -573,6 +633,20 @@ struct InviteParams {
     identity_id: String,
     role: String,
     expiry: Option<Value>,
+}
+
+#[derive(Deserialize)]
+struct InviteCancelParams {
+    room_id: String,
+    invite_id: String,
+}
+
+#[derive(Deserialize)]
+struct RecoveryRestoreParams {
+    /// The sealed bundle as hex (opaque to the client).
+    bundle: String,
+    /// The recovery key as a grouped-hex phrase (or raw hex).
+    recovery_key: String,
 }
 
 #[derive(Deserialize)]
@@ -586,6 +660,11 @@ struct JoinParams {
 struct SendParams {
     room_id: String,
     body: String,
+    /// Optional client-supplied id for exactly-once retries on this daemon
+    /// (Phase 1 D2). Omitted by older clients; the send is then non-idempotent
+    /// as before.
+    #[serde(default)]
+    client_msg_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -771,5 +850,54 @@ mod tests {
             .await
             .expect("pre-identity room.list must not inspect the store");
         assert_eq!(result, json!({ "rooms": [] }));
+    }
+
+    #[tokio::test]
+    async fn recovery_rpc_round_trips_through_dispatch() {
+        // The Phase 1 D1 gate, end-to-end through the engine: export an
+        // identity, restore it into a fresh install, and test-restore there.
+        let dir = TempDir::new().expect("tempdir");
+        let engine = test_engine(&dir);
+        let created = engine
+            .dispatch("identity.create", json!({}))
+            .await
+            .expect("identity.create");
+        let original_id = created["identity_id"].as_str().unwrap().to_owned();
+
+        let exported = engine
+            .dispatch("recovery.export", json!({}))
+            .await
+            .expect("recovery.export");
+        let bundle = exported["bundle"].as_str().unwrap().to_owned();
+        let phrase = exported["recovery_key"].as_str().unwrap().to_owned();
+        assert!(!bundle.is_empty() && !phrase.is_empty());
+
+        // Restore into a fresh data dir (a fresh install).
+        let fresh = TempDir::new().expect("tempdir");
+        let fresh_engine = test_engine(&fresh);
+        let restored = fresh_engine
+            .dispatch(
+                "recovery.restore",
+                json!({ "bundle": bundle, "recovery_key": phrase }),
+            )
+            .await
+            .expect("recovery.restore");
+        assert_eq!(restored["identity_id"].as_str(), Some(original_id.as_str()));
+
+        // The fresh install's test-restore passes too.
+        fresh_engine
+            .dispatch("recovery.test_restore", json!({}))
+            .await
+            .expect("recovery.test_restore");
+
+        // A second restore into the now-populated dir refuses to clobber.
+        let err = fresh_engine
+            .dispatch(
+                "recovery.restore",
+                json!({ "bundle": bundle, "recovery_key": phrase }),
+            )
+            .await
+            .expect_err("restore must refuse to clobber an existing identity");
+        assert_eq!(err.kind, ErrorKind::IdentityExists);
     }
 }

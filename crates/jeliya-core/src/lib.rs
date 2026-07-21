@@ -17,6 +17,9 @@
 //!   the source of truth.
 //! * [`materializer`] — pure `StoredEvent -> TimelineEvent` JSON view-models
 //!   per `docs/PROTOCOL.md`.
+//! * [`recovery`] — Phase 1 D1 recovery bundle (ADR #3): a versioned
+//!   authenticated-encryption envelope keyed by a random 256-bit recovery key,
+//!   so an accountless identity can be backed up and restored to a fresh install.
 //! * [`supervisor`] — `RoomSupervisor`: one experimental `Node` per open room
 //!   (spawned the way the reference CLI spawns its room session), plus the
 //!   offline flows (create/invite/join/reads) mirrored from the CLI.
@@ -27,6 +30,7 @@ pub mod fleet;
 pub mod identity;
 pub mod localstate;
 pub mod materializer;
+pub mod recovery;
 pub mod supervisor;
 
 pub use engine::{Engine, EngineConfig, PROTOCOL_VERSION};

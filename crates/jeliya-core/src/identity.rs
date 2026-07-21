@@ -2,13 +2,25 @@
 //! CLI's on-disk layout (IR-0101): a public `identity.json` profile and a
 //! secret-bearing `identity.secret`, both owner-only (`0600`, dir `0700`).
 //!
-//! Seeds are stored plaintext under owner-only permissions (the SDK MVP threat
-//! model); the secret file is only ever opened by [`SecretKeys::load`].
+//! **At-rest encryption (Phase 1 D1b, gate row #2).** When a password is
+//! configured (the `JELIYA_IDENTITY_PASSWORD` env var, or the `_with` variants
+//! in tests), `identity.secret` is sealed as a versioned AES-256-GCM envelope
+//! keyed by Argon2id(password, salt) — the "explicit, password-hardened
+//! fallback" of [Production deployment architecture](../../docs/production-deployment.md).
+//! Without a password the seeds are stored plaintext under owner-only
+//! permissions (the SDK MVP threat model) — the dev/test default. [`SecretKeys::load`]
+//! auto-detects the format from the file's first byte (`{` ⇒ plaintext JSON;
+//! the envelope version byte ⇒ encrypted), so an existing plaintext identity
+//! keeps loading after a password is introduced (with a warning). OS-backed
+//! keystores (Keychain / DPAPI / Secret Service) are a future backend.
 
 use std::fs::OpenOptions;
 use std::io::{ErrorKind as IoErrorKind, Write};
 use std::path::Path;
 
+use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Key, Nonce};
+use argon2::{Algorithm, Argon2, Params, Version};
 use iroh_rooms::identity::SigningKey;
 use zeroize::{Zeroize, Zeroizing};
 
@@ -25,6 +37,98 @@ const SEED_LEN: usize = 32;
 /// Display name recorded in the profile — the daemon protocol has no name
 /// parameter on `identity.create`, so a fixed local default is used.
 const DEFAULT_NAME: &str = "jeliya";
+
+/// The env var a daemon reads for the at-rest password (Phase 1 D1b). When set,
+/// [`create`]/[`write_existing`] seal `identity.secret` and [`SecretKeys::load`]
+/// decrypts it. When unset, the seeds are stored plaintext (the dev default).
+pub const IDENTITY_PASSWORD_ENV: &str = "JELIYA_IDENTITY_PASSWORD";
+
+/// First byte of an encrypted `identity.secret` (envelope version). A plaintext
+/// file starts with `{` (`0x7B`), so the first byte distinguishes the formats
+/// unambiguously and [`SecretKeys::load`] can auto-detect without a sidecar.
+const ENCRYPTED_VERSION: u8 = 1;
+/// Argon2id salt length.
+const ARGON_SALT_LEN: usize = 16;
+/// AES-256-GCM nonce length (96 bits).
+const AEAD_NONCE_LEN: usize = 12;
+/// AEAD key length (256 bits).
+const AEAD_KEY_LEN: usize = 32;
+/// Argon2id memory cost (KiB). Versioned via the envelope; changing it is a
+/// migration, not a silent break. Initial value is the RFC 9106 example-1 tier
+/// — legitimate and fast; strengthening before launch is a security-review item.
+const ARGON_M_COST: u32 = 19_456;
+/// Argon2id time cost (iterations).
+const ARGON_T_COST: u32 = 2;
+/// Argon2id parallelism (lanes).
+const ARGON_P_COST: u32 = 1;
+
+/// Read the at-rest password from [`IDENTITY_PASSWORD_ENV`] (empty ⇒ `None`).
+fn password_from_env() -> Option<String> {
+    std::env::var(IDENTITY_PASSWORD_ENV)
+        .ok()
+        .filter(|s| !s.is_empty())
+}
+
+/// Derive a 256-bit AEAD key from `password` and `salt` via Argon2id.
+fn derive_kek(password: &str, salt: &[u8]) -> CoreResult<[u8; AEAD_KEY_LEN]> {
+    let params = Params::new(ARGON_M_COST, ARGON_T_COST, ARGON_P_COST, Some(AEAD_KEY_LEN))
+        .map_err(|e| CoreError::internal(format!("invalid Argon2 params: {e}")))?;
+    let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    let mut key = Zeroizing::new([0u8; AEAD_KEY_LEN]);
+    argon
+        .hash_password_into(password.as_bytes(), salt, key.as_mut_slice())
+        .map_err(|e| CoreError::internal(format!("Argon2 derivation failed: {e}")))?;
+    Ok(*key)
+}
+
+/// Seal `plaintext` (the JSON secret body) into `version || salt || nonce || ct+tag`.
+fn encrypt_secret_bytes(plaintext: &[u8], password: &str) -> CoreResult<Vec<u8>> {
+    let mut salt = [0u8; ARGON_SALT_LEN];
+    getrandom::fill(&mut salt)
+        .map_err(|e| CoreError::internal(format!("OS CSPRNG unavailable: {e}")))?;
+    let mut nonce = [0u8; AEAD_NONCE_LEN];
+    getrandom::fill(&mut nonce)
+        .map_err(|e| CoreError::internal(format!("OS CSPRNG unavailable: {e}")))?;
+    let key = derive_kek(password, &salt)?;
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+    let ciphertext = cipher
+        .encrypt(Nonce::from_slice(&nonce), plaintext)
+        .map_err(|_| CoreError::internal("could not encrypt identity.secret"))?;
+    let mut out = Vec::with_capacity(1 + ARGON_SALT_LEN + AEAD_NONCE_LEN + ciphertext.len());
+    out.push(ENCRYPTED_VERSION);
+    out.extend_from_slice(&salt);
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+/// Open an encrypted envelope back to the plaintext JSON body. Fails closed on
+/// truncation, an unknown version, or a wrong password (AEAD tag mismatch).
+fn decrypt_secret_bytes(blob: &[u8], password: &str) -> CoreResult<Vec<u8>> {
+    let header = 1 + ARGON_SALT_LEN + AEAD_NONCE_LEN;
+    if blob.len() < header {
+        return Err(CoreError::internal(
+            "encrypted identity.secret is truncated",
+        ));
+    }
+    let version = blob[0];
+    if version != ENCRYPTED_VERSION {
+        return Err(CoreError::internal(format!(
+            "unsupported encrypted identity.secret version {version}"
+        )));
+    }
+    let salt = &blob[1..1 + ARGON_SALT_LEN];
+    let nonce = Nonce::from_slice(&blob[1 + ARGON_SALT_LEN..1 + ARGON_SALT_LEN + AEAD_NONCE_LEN]);
+    let ciphertext = &blob[header..];
+    let key = derive_kek(password, salt)?;
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+    cipher.decrypt(nonce, ciphertext).map_err(|_| {
+        CoreError::invalid(
+            "could not decrypt identity.secret (wrong password, or the file is corrupt)",
+        )
+        .with_hint("set JELIYA_IDENTITY_PASSWORD to the identity's password")
+    })
+}
 
 /// The public identity profile (no secret bytes; safe to serialize/log).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -101,11 +205,21 @@ pub fn load_profile(data_dir: &Path) -> CoreResult<Option<Profile>> {
     Ok(Some(profile))
 }
 
-/// Create a fresh identity (and device) keypair under `data_dir`.
+/// Create a fresh identity (and device) keypair under `data_dir`, using the
+/// at-rest password from [`IDENTITY_PASSWORD_ENV`] (encrypted when set,
+/// plaintext when unset).
 ///
 /// # Errors
 /// [`ErrorKind::IdentityExists`] if either identity file already exists.
 pub fn create(data_dir: &Path) -> CoreResult<Profile> {
+    let pw = password_from_env();
+    create_with(data_dir, pw.as_deref())
+}
+
+/// Like [`create`] but with an explicit at-rest password (`Some` ⇒ encrypted
+/// `identity.secret`, `None` ⇒ plaintext). Tests use this to avoid touching the
+/// process environment.
+pub fn create_with(data_dir: &Path, password: Option<&str>) -> CoreResult<Profile> {
     ensure_dir(data_dir)?;
     let identity_path = data_dir.join(IDENTITY_FILE);
     let secret_path = data_dir.join(SECRET_FILE);
@@ -128,16 +242,81 @@ pub fn create(data_dir: &Path) -> CoreResult<Profile> {
     let profile_json = serde_json::to_vec(&profile)
         .map_err(|e| CoreError::internal(format!("could not encode identity.json: {e}")))?;
 
-    // The only secret-bearing buffer; wiped before return.
-    let mut secret_json = secret_file_contents(&identity_key, &device_key);
-    let write = write_new_owner_only(&secret_path, secret_json.as_bytes())
-        .and_then(|()| write_new_owner_only(&identity_path, &profile_json));
-    secret_json.zeroize();
-    write.map_err(|e| {
-        // `create_new(true)` is the atomic guard: the exists() pre-check above
-        // has a TOCTOU window, so two concurrent `identity.create` calls can both
-        // clear it, and the loser's exclusive open fails with `AlreadyExists`.
-        // That is the protocol's `identity_exists`, not an `internal` bug.
+    write_secret_and_profile(
+        &secret_path,
+        &identity_path,
+        &identity_key,
+        &device_key,
+        &profile_json,
+        password,
+        data_dir,
+    )?;
+    Ok(profile)
+}
+
+/// Write an already-existing identity (a caller-supplied profile + secret keys)
+/// into a fresh `data_dir` — the restore side of Phase 1 D1 recovery — using the
+/// at-rest password from [`IDENTITY_PASSWORD_ENV`]. Like [`create`], it refuses
+/// to clobber an existing identity and writes both files owner-only; unlike
+/// [`create`] it does not generate new keys. The supplied profile's public ids
+/// must match the keys (a restored bundle whose halves disagree is rejected,
+/// mirroring [`SecretKeys::load`]'s guard).
+pub fn write_existing(data_dir: &Path, profile: &Profile, keys: &SecretKeys) -> CoreResult<()> {
+    let pw = password_from_env();
+    write_existing_with(data_dir, profile, keys, pw.as_deref())
+}
+
+/// Like [`write_existing`] but with an explicit at-rest password.
+pub fn write_existing_with(
+    data_dir: &Path,
+    profile: &Profile,
+    keys: &SecretKeys,
+    password: Option<&str>,
+) -> CoreResult<()> {
+    ensure_dir(data_dir)?;
+    let identity_path = data_dir.join(IDENTITY_FILE);
+    let secret_path = data_dir.join(SECRET_FILE);
+    if identity_path.exists() || secret_path.exists() {
+        return Err(CoreError::new(
+            ErrorKind::IdentityExists,
+            format!("an identity already exists in {}", data_dir.display()),
+        ));
+    }
+    if keys.identity.identity_key().to_string() != profile.identity_id
+        || keys.device.device_key().to_string() != profile.device_id
+    {
+        return Err(CoreError::internal(
+            "cannot write an identity whose secret keys do not match the profile",
+        ));
+    }
+    let profile_json = serde_json::to_vec(profile)
+        .map_err(|e| CoreError::internal(format!("could not encode identity.json: {e}")))?;
+    write_secret_and_profile(
+        &secret_path,
+        &identity_path,
+        &keys.identity,
+        &keys.device,
+        &profile_json,
+        password,
+        data_dir,
+    )?;
+    Ok(())
+}
+
+/// Write `identity.secret` (sealed with `password` when set; plaintext
+/// otherwise) then `identity.json`, both owner-only and exclusive. The secret
+/// JSON bytes are zeroized after use. Maps the TOCTOU `AlreadyExists` to
+/// [`ErrorKind::IdentityExists`].
+fn write_secret_and_profile(
+    secret_path: &Path,
+    identity_path: &Path,
+    identity_key: &SigningKey,
+    device_key: &SigningKey,
+    profile_json: &[u8],
+    password: Option<&str>,
+    data_dir: &Path,
+) -> CoreResult<()> {
+    let map_io = |e: std::io::Error| -> CoreError {
         if e.kind() == IoErrorKind::AlreadyExists {
             CoreError::new(
                 ErrorKind::IdentityExists,
@@ -149,19 +328,49 @@ pub fn create(data_dir: &Path) -> CoreResult<Profile> {
                 data_dir.display()
             ))
         }
-    })?;
-    Ok(profile)
+    };
+    // The only secret-bearing buffer; zeroized after it is sealed or written.
+    let mut plaintext = secret_file_contents(identity_key, device_key).into_bytes();
+    let secret_write = match password {
+        Some(pw) => {
+            let sealed = encrypt_secret_bytes(&plaintext, pw)
+                .map_err(|e| CoreError::internal(format!("could not seal identity.secret: {e}")));
+            plaintext.zeroize();
+            sealed.and_then(|enc| write_new_owner_only(secret_path, &enc).map_err(map_io))
+        }
+        None => {
+            let w = write_new_owner_only(secret_path, &plaintext);
+            plaintext.zeroize();
+            w.map_err(map_io)
+        }
+    };
+    secret_write.and_then(|()| write_new_owner_only(identity_path, profile_json).map_err(map_io))
 }
 
 impl SecretKeys {
-    /// Load and cross-check the secret keys against the public profile.
+    /// Load and cross-check the secret keys against the public profile, using
+    /// the at-rest password from [`IDENTITY_PASSWORD_ENV`]. Auto-detects whether
+    /// `identity.secret` is plaintext or encrypted (Phase 1 D1b).
     ///
     /// # Errors
-    /// [`ErrorKind::IdentityMissing`] if no identity exists; internal errors on
-    /// corruption or a secret/public mismatch. No seed bytes appear in errors.
+    /// [`ErrorKind::IdentityMissing`] if no identity exists; [`ErrorKind::InvalidParams`]
+    /// if the file is encrypted but no password is set, or the password is
+    /// wrong; internal errors on corruption or a secret/public mismatch. No
+    /// seed bytes appear in errors.
     pub fn load(data_dir: &Path) -> CoreResult<Self> {
+        let pw = password_from_env();
+        Self::load_with(data_dir, pw.as_deref())
+    }
+
+    /// Like [`SecretKeys::load`] but with an explicit at-rest password. The
+    /// format is auto-detected from the file's first byte, so a plaintext
+    /// identity keeps loading after a password is introduced (with a warning):
+    /// the gate is that a fresh identity created with a password is sealed, not
+    /// that legacy plaintext files are force-migrated on read (which would race
+    /// under concurrent loads).
+    pub fn load_with(data_dir: &Path, password: Option<&str>) -> CoreResult<Self> {
         let path = data_dir.join(SECRET_FILE);
-        let mut bytes = match std::fs::read(&path) {
+        let blob = match std::fs::read(&path) {
             Ok(bytes) => bytes,
             Err(err) if err.kind() == IoErrorKind::NotFound => {
                 return Err(CoreError::new(
@@ -176,8 +385,26 @@ impl SecretKeys {
                 )))
             }
         };
-        let parsed: Result<SecretFile, _> = serde_json::from_slice(&bytes);
-        bytes.zeroize();
+        // Auto-detect: a plaintext file begins with `{`; an encrypted envelope
+        // begins with its version byte (which is never `{`).
+        let mut plaintext_bytes = if blob.first() == Some(&b'{') {
+            if password.is_some() {
+                tracing::warn!(
+                    "identity.secret is stored plaintext although a password is configured; \
+                     re-create the identity (or recovery.restore) under the password to seal it at rest"
+                );
+            }
+            blob
+        } else {
+            let pw = password.ok_or_else(|| {
+                CoreError::invalid(
+                    "identity.secret is encrypted; set JELIYA_IDENTITY_PASSWORD to unlock it",
+                )
+            })?;
+            decrypt_secret_bytes(&blob, pw)?
+        };
+        let parsed: Result<SecretFile, _> = serde_json::from_slice(&plaintext_bytes);
+        plaintext_bytes.zeroize();
         let mut parsed = parsed.map_err(|_| {
             CoreError::internal(format!("identity files are corrupt: {}", path.display()))
         })?;
@@ -263,7 +490,7 @@ fn write_new_owner_only(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{create, load_profile, SecretKeys, IDENTITY_FILE, SECRET_FILE};
+    use super::{create, create_with, load_profile, SecretKeys, IDENTITY_FILE, SECRET_FILE};
     use crate::error::ErrorKind;
     use tempfile::tempdir;
 
@@ -331,5 +558,110 @@ mod tests {
             let mode = std::fs::metadata(dir.path().join(name)).unwrap().mode();
             assert_eq!(mode & 0o777, 0o600, "{name} must be 0600");
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 1 D1b — at-rest encryption (gate row #2)
+    // ------------------------------------------------------------------
+
+    /// Read the first byte of `identity.secret` (0x7B `{` ⇒ plaintext JSON; the
+    /// envelope version byte ⇒ encrypted).
+    fn secret_first_byte(dir: &tempfile::TempDir) -> u8 {
+        std::fs::read(dir.path().join(SECRET_FILE)).unwrap()[0]
+    }
+
+    #[test]
+    fn create_with_password_seals_the_secret_not_plaintext() {
+        // The Phase 1 D1b gate: in production mode (password set), the on-disk
+        // secret is NOT the plaintext JSON.
+        let dir = tempdir().unwrap();
+        let profile = create_with(dir.path(), Some("correct horse battery staple")).unwrap();
+        assert_ne!(
+            secret_first_byte(&dir),
+            b'{',
+            "a password-created identity.secret must not be plaintext JSON"
+        );
+        // And it still loads + reproduces the public ids.
+        let keys = SecretKeys::load_with(dir.path(), Some("correct horse battery staple")).unwrap();
+        assert_eq!(
+            keys.identity.identity_key().to_string(),
+            profile.identity_id
+        );
+        assert_eq!(keys.device.device_key().to_string(), profile.device_id);
+    }
+
+    #[test]
+    fn encrypted_secret_stays_owner_only() {
+        let dir = tempdir().unwrap();
+        create_with(dir.path(), Some("pw")).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let mode = std::fs::metadata(dir.path().join(SECRET_FILE))
+                .unwrap()
+                .mode();
+            assert_eq!(
+                mode & 0o777,
+                0o600,
+                "encrypted identity.secret must be 0600"
+            );
+        }
+    }
+
+    #[test]
+    fn load_with_a_wrong_password_fails_closed() {
+        let dir = tempdir().unwrap();
+        create_with(dir.path(), Some("right-pw")).unwrap();
+        let err = match SecretKeys::load_with(dir.path(), Some("wrong-pw")) {
+            Ok(_) => panic!("a wrong password must fail closed"),
+            Err(e) => e,
+        };
+        assert_eq!(err.kind, ErrorKind::InvalidParams);
+    }
+
+    #[test]
+    fn load_an_encrypted_secret_without_a_password_fails_closed() {
+        let dir = tempdir().unwrap();
+        create_with(dir.path(), Some("right-pw")).unwrap();
+        let err = match SecretKeys::load_with(dir.path(), None) {
+            Ok(_) => panic!("an encrypted secret without a password must fail closed"),
+            Err(e) => e,
+        };
+        assert_eq!(err.kind, ErrorKind::InvalidParams);
+    }
+
+    #[test]
+    fn plaintext_identity_still_loads_after_a_password_is_introduced() {
+        // Backward compatibility: an identity created without a password stays
+        // plaintext on disk, and a later load with a password set still reads it
+        // (auto-detect), so introducing JELIYA_IDENTITY_PASSWORD does not lock
+        // existing dev identities out.
+        let dir = tempdir().unwrap();
+        let profile = create_with(dir.path(), None).unwrap();
+        assert_eq!(
+            secret_first_byte(&dir),
+            b'{',
+            "no-password create is plaintext"
+        );
+        let keys = SecretKeys::load_with(dir.path(), Some("now-a-password")).unwrap();
+        assert_eq!(
+            keys.identity.identity_key().to_string(),
+            profile.identity_id
+        );
+    }
+
+    #[test]
+    fn wrong_password_does_not_leak_seed_bytes_in_the_error() {
+        let dir = tempdir().unwrap();
+        create_with(dir.path(), Some("right-pw")).unwrap();
+        let err = match SecretKeys::load_with(dir.path(), Some("wrong-pw")) {
+            Ok(_) => panic!("a wrong password must fail closed"),
+            Err(e) => e,
+        };
+        let msg = format!("{err:?}{err}");
+        assert!(!msg.contains("identity_secret"), "no seed field name");
+        // The encrypted bytes on disk do not start with the plaintext JSON marker.
+        let on_disk = std::fs::read(dir.path().join(SECRET_FILE)).unwrap();
+        assert!(!on_disk.starts_with(b"{"));
     }
 }
