@@ -445,6 +445,9 @@ const CERTIFYING_NETWORK_SCHEMA_V1 = {
       message_authored_while_closed: null,
       offline_message_resynchronized: null,
       settled_path: {
+        // Recorded by the post-#67 path-settlement harness (which side proved
+        // the claim); absent from retained pre-#67 evidence.
+        settled_by: CLOSED_SCHEMA_OPTIONAL,
         expected_identities: null,
         consecutive_observations: null,
         expected_path: null,

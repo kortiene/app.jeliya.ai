@@ -30,12 +30,15 @@ snapshot. A source build or passing test is not a release.
 | Linux x86_64 musl (`x86_64-unknown-linux-musl`) | implemented | certifying signed schema 2 direct and relay runs pass on Ubuntu x86_64 under UID `65534`; installer behavior passes | `v0.5.0` archive and sidecar | certified for `v0.5.0` and the prior `v0.6.0` snapshot; current candidate pending |
 | Windows x86_64 MSVC (`x86_64-pc-windows-msvc`) | implemented | hosted behavioral installer/checksum/tamper, simulated reparse, and native daemon smoke jobs pass on `main` | `v0.5.0` archive and sidecar | released; no platform network run |
 
-The certifying [direct](evidence/v0.6.0/direct.json) and
-[relay](evidence/v0.6.0/relay.json) schema 2 manifests bind macOS x86_64 and
-Linux x86_64 musl builds to Jeliya `55024a4…`, published Iroh Rooms pin
-`71fbb500…`, and the verified toolchain; both are signed and set
-`certifiable: true` for that prior snapshot. They do not transfer to the
-current `922f620…` + `a5d98b70…` candidate. The `v0.5.0` manifests
+The certifying [direct](evidence/v0.6.0/direct.json) schema 2 manifest (run
+`098c4979`) binds the current candidate `922f620…` + Iroh Rooms pin
+`a5d98b70…`, exercised from a linux arm64 operator (AS11426) over `demo1`/`demo2`
+(AS24940); the remote role ran the `x86_64-unknown-linux-musl` daemon. The
+retained [relay](evidence/v0.6.0/relay.json) schema 2 manifest (`cf28bc63`)
+still binds the prior `55024a4…` + `71fbb500…` snapshot, which was exercised
+from a macOS x86_64 operator. macOS-specific network certification therefore
+rests on that retained run and has not been repeated at the current candidate.
+The `v0.5.0` manifests
 ([direct](evidence/v0.5.0/direct.json), [relay](evidence/v0.5.0/relay.json))
 bind the released pair `c5f740e…` + `d0ceb0b…` and do not transfer to another
 pin. The earlier unsigned
