@@ -298,6 +298,31 @@ test("source-build mode rejects ambiguous binaries and requires a verified Zig a
   assert.equal(config.zigArchive, "/tmp/zig.tar.xz");
 });
 
+test("--source-commit selects the daemon commit independently of the harness HEAD", () => {
+  const remote = ["--remote", "user@kilo", "--third-remote", "user@stargate-03"];
+  const sha = "ab".repeat(20);
+  const archive = ["--zig-archive", "/tmp/zig.tar.xz", "--zig-archive-sha256", "cd".repeat(32)];
+  // Requires --build-from-source (it selects the commit the daemon is built from).
+  assert.throws(
+    () => parseCli([...remote, "--source-commit", sha]),
+    /only meaningful with --build-from-source/,
+  );
+  // Must be an exact 40-character hex SHA.
+  assert.throws(
+    () => parseCli([...remote, "--build-from-source", ...archive, "--source-commit", "deadbeef"]),
+    /40-character commit SHA/,
+  );
+  assert.throws(
+    () => parseCli([...remote, "--build-from-source", ...archive, "--source-commit", "xz".repeat(20)]),
+    /40-character commit SHA/,
+  );
+  // Accepted with --build-from-source and an exact SHA.
+  const config = parseCli([...remote, "--build-from-source", ...archive, "--source-commit", sha]);
+  assert.equal(config.sourceCommit, sha);
+  // Absent by default (harness HEAD == candidate, the historical behavior).
+  assert.equal(parseCli([...remote, "--build-from-source", ...archive]).sourceCommit, null);
+});
+
 test("certifying source builds fail fast on every pinned tool version", () => {
   const exact = {
     rustcVersion: "rustc 1.91.0 (f8297e351 2025-10-28)\nbinary: rustc",

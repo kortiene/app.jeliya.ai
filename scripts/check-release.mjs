@@ -323,6 +323,12 @@ const CERTIFYING_NETWORK_SCHEMA_V1 = {
       published_at_origin: null,
     },
     releaseable: null,
+    // Present only when the harness ran with --source-commit (the daemon is
+    // built from source.commit while the harness itself is at harness_commit);
+    // absent from retained pre-multiplatform evidence and from runs where the
+    // harness HEAD equals the candidate.
+    harness_commit: CLOSED_SCHEMA_OPTIONAL,
+    harness_working_tree_dirty: CLOSED_SCHEMA_OPTIONAL,
   },
   build: {
     mode: null,
@@ -807,6 +813,17 @@ export function validateNetworkEvidenceManifest(manifest, {
         || manifest.source?.iroh_rooms?.published_at_origin !== true
         || manifest.source?.iroh_rooms?.releaseable !== true) {
       fail(`${relativePath} does not bind to the releaseable upstream revision`);
+    }
+    // When the harness ran with --source-commit, it records which harness
+    // version produced the run; require it to be an exact published commit, and
+    // require that harness's working tree was clean at run time so the harness
+    // bytes are a reproducible committed version.
+    if (manifest.source?.harness_commit !== undefined) {
+      if (!/^[0-9a-f]{40}$/.test(manifest.source.harness_commit)
+          || !publicGitHubGitUrl(manifest.source?.origin)
+          || manifest.source?.harness_working_tree_dirty !== false) {
+        fail(`${relativePath} recorded an invalid harness-commit provenance`);
+      }
     }
   } else {
     const localCheckout = manifest.source?.iroh_rooms?.local_checkout;

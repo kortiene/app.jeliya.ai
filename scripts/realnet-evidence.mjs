@@ -851,23 +851,48 @@ export function dependencyIdentity(cargoToml, lock, context = null) {
   }
 }
 
-export function sourceIdentity(context = null) {
+export function sourceIdentity(context = null, sourceCommitOverride = null) {
   const ownedContext = context ? null : gitExecutionContext();
   const gitContext = context ?? ownedContext;
   try {
-    const cargoToml = readFileSync(join(REPO_ROOT, "Cargo.toml"), "utf8");
-    const lock = readFileSync(join(REPO_ROOT, "Cargo.lock"), "utf8");
-    const dependency = dependencyIdentityWithContext(cargoToml, lock, gitContext);
     const origin = requireCredentialFreeGitSource(
       git(["config", "--get", "remote.origin.url"], gitContext),
       "Jeliya origin",
     );
-    const dirty = git(["status", "--porcelain"], gitContext) !== "";
-    const commit = git(["rev-parse", "HEAD"], gitContext);
+    const harnessCommit = git(["rev-parse", "HEAD"], gitContext);
+    const workingTreeDirty = git(["status", "--porcelain"], gitContext) !== "";
+    let commit;
+    let dirty;
+    let cargoToml;
+    let lock;
+    if (sourceCommitOverride) {
+      // Bind the daemon and its dependency evidence to an explicit candidate
+      // commit that may differ from the harness HEAD (which carries this
+      // harness's own version). Read the Cargo manifest from THAT commit so the
+      // recorded dependency identity matches the bytes that get built, and treat
+      // the candidate as a clean immutable commit. Record the harness commit
+      // separately so a reader can see which harness version produced the run.
+      const resolved = git(["rev-parse", `${sourceCommitOverride}^{commit}`], gitContext);
+      if (resolved !== sourceCommitOverride) {
+        throw new Error(
+          `--source-commit ${sourceCommitOverride} did not resolve to that exact commit (got ${resolved})`,
+        );
+      }
+      commit = sourceCommitOverride;
+      dirty = false;
+      cargoToml = git(["show", `${sourceCommitOverride}:Cargo.toml`], gitContext);
+      lock = git(["show", `${sourceCommitOverride}:Cargo.lock`], gitContext);
+    } else {
+      commit = harnessCommit;
+      dirty = workingTreeDirty;
+      cargoToml = readFileSync(join(REPO_ROOT, "Cargo.toml"), "utf8");
+      lock = readFileSync(join(REPO_ROOT, "Cargo.lock"), "utf8");
+    }
+    const dependency = dependencyIdentityWithContext(cargoToml, lock, gitContext);
     const sourcePublished = commitPublishedAtOrigin(origin, commit, gitContext);
     const dependencyPublished = dependency.public_source
       && commitPublishedAtOrigin(dependency.source, dependency.resolved_revision, gitContext);
-    return {
+    const result = {
       commit,
       dirty,
       origin,
@@ -884,6 +909,11 @@ export function sourceIdentity(context = null) {
         && dependency.releaseable
         && dependencyPublished,
     };
+    if (sourceCommitOverride) {
+      result.harness_commit = harnessCommit;
+      result.harness_working_tree_dirty = workingTreeDirty;
+    }
+    return result;
   } finally {
     ownedContext?.cleanup();
   }
@@ -3020,6 +3050,13 @@ export function parseCli(argv) {
   if (buildFromSource && (!args["zig-archive"] || !args["zig-archive-sha256"])) {
     die("--build-from-source requires --zig-archive and the official --zig-archive-sha256");
   }
+  const sourceCommit = args["source-commit"] ? String(args["source-commit"]) : null;
+  if (sourceCommit && !buildFromSource) {
+    die("--source-commit is only meaningful with --build-from-source (it selects the commit the daemon is built from)");
+  }
+  if (sourceCommit && !/^[0-9a-f]{40}$/.test(sourceCommit)) {
+    die("--source-commit must be an exact 40-character commit SHA");
+  }
   return {
     args,
     localDryrun,
@@ -3039,6 +3076,7 @@ export function parseCli(argv) {
     zigArchiveSha256: args["zig-archive-sha256"]
       ? String(args["zig-archive-sha256"])
       : null,
+    sourceCommit,
   };
 }
 
@@ -3046,9 +3084,12 @@ async function main(argv = process.argv.slice(2)) {
   const config = parseCli(argv);
   const now = new Date();
   const runId = `${now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}-${randomBytes(4).toString("hex")}`;
-  const source = sourceIdentity();
+  const source = sourceIdentity(null, config.sourceCommit);
   if (source.dirty && !config.allowDirty) {
     die("the working tree is dirty; commit the exact candidate or use --allow-dirty for a non-certifying machinery run");
+  }
+  if (config.sourceCommit && source.harness_working_tree_dirty) {
+    die("the operator working tree is dirty; commit the harness before a --source-commit run so the harness bytes are a reproducible committed version");
   }
   if (!config.localDryrun && !config.buildFromSource && (!config.linuxBin || !config.linuxSha256)) {
     die("remote prebuilt mode requires --linux-bin and an independently supplied --linux-sha256");
