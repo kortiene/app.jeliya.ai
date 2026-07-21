@@ -6,7 +6,7 @@ tags: ["evidence", "networking", "release", "testing", "verification"]
 timestamp: "2026-07-19T23:30:00Z"
 status: "canonical"
 implementation_status: "implemented"
-verification_status: "partial"
+verification_status: "verified"
 release_status: "unreleased"
 audience: ["contributors", "maintainers", "operators", "release-engineers"]
 ---
@@ -17,12 +17,11 @@ This ledger separates a functional test result from release-qualifying
 evidence. A result is transferable to a release candidate only when it binds
 the exact public Jeliya commit, public immutable dependency revisions,
 environment, timestamps, assertions, retained sanitized manifest, and detached
-signature. The retained forced-relay schema 2 run meets that bar for the
-earlier Jeliya `55024a4...` + Iroh Rooms `71fbb500...` snapshot. The current
-source candidate repins Iroh Rooms to `a5d98b70...`; the direct half is now
-re-qualified at that current pin (run `098c4979`), while the forced-relay signed
-manifest still binds the prior snapshot and does not by itself authorize a
-`v0.6.0` release from the current tree.
+signature. The direct (`098c4979`) and forced-relay (`8bda01e6`) schema 2 runs
+both meet that bar for the current Jeliya `922f620...` + Iroh Rooms `a5d98b70...`
+candidate, and the release evidence gate is READY for that pair. The retained
+runs that bound the earlier `55024a4...` + `71fbb500...` snapshot are named
+below as superseded historical labels.
 
 ## Candidate identity
 
@@ -31,13 +30,13 @@ manifest still binds the prior snapshot and does not by itself authorize a
 | Milestone | `v0.6.0 — Capability-Gated Join Candidate`, not yet published |
 | Baseline commit | `045d85cb1d066f16d564b6051363b9328063ee01` — the published `v0.5.0` tag |
 | Current source candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` |
-| Network-qualified commit | direct half qualified at `922f620…` (run `098c4979`); forced-relay half still pending at the current pin |
+| Network-qualified commit | `922f620b30ee95c82426a7d4404b1f73a70c0958` |
 | Current public `iroh-rooms` pin | `a5d98b70d717f35d3ce60953a88e12e646f2e871` — deliberately untagged first upstream `main` merge carrying the fixes for `kortiene/iroh-room#121` and `kortiene/iroh-room#119` plus the connection-generation follow-ups |
 | Candidate upstream remediation revision | `a5d98b70d717f35d3ce60953a88e12e646f2e871` |
-| Last network-qualified snapshot | Jeliya `55024a46b3e112796ba2acf1dc408dab26dbba2e` + Iroh Rooms `71fbb5007bef4ce83631c94762ec68c2beef3d79` (tag `v0.1.0-rc.3`) |
-| Retained evidence signatures | direct signature valid for the current pin (`098c4979`); relay signature retained for the prior snapshot, pending re-signing at the current pin |
-| Release evidence gate | BLOCKED (forced-relay half still pending) |
-| Evidence window | local exact-revision qualification on 2026-07-19 UTC; direct network evidence 2026-07-21 UTC (run `098c4979`); relay network evidence pending |
+| Last network-qualified snapshot | Jeliya `55024a46b3e112796ba2acf1dc408dab26dbba2e` + Iroh Rooms `71fbb5007bef4ce83631c94762ec68c2beef3d79` (tag `v0.1.0-rc.3`) — superseded by the current candidate |
+| Retained evidence signatures | both the direct (`098c4979`) and forced-relay (`8bda01e6`) signatures verify against the pinned public SPKI for the current pin `922f620…` + `a5d98b70…` |
+| Release evidence gate | READY |
+| Evidence window | local exact-revision qualification on 2026-07-19 UTC; direct network evidence 2026-07-21 UTC (run `098c4979`); forced-relay network evidence 2026-07-21 UTC (run `8bda01e6`) |
 
 The current pin is the first upstream `main` merge containing both required
 fixes. The two commits after it change only `iroh-rooms-cli`, which Jeliya does
@@ -58,9 +57,9 @@ rewrote its commit SHA to `9c71fac...`. The rebased commit has the identical
 tree (`53e5ce2c...`) and the identical parent (`a24f2238...`), so it is the same
 source in the same position in history and the recorded local qualification
 results carry over unchanged. The pre-merge SHA is not reachable from `main` and
-must not be used in reproduction steps. This restatement does not alter the
-`Network-qualified commit` row, which stays `pending` until fresh signed direct
-and forced-relay runs are performed.
+must not be used in reproduction steps. Fresh signed direct (`098c4979`) and
+forced-relay (`8bda01e6`) runs at `922f620…` + `a5d98b70…` have now been
+performed, so the `Network-qualified commit` row carries that exact commit.
 
 Jeliya `922f620b30ee95c82426a7d4404b1f73a70c0958` is the current source
 candidate. It was the tip of public `main` when this designation was made:
@@ -110,7 +109,7 @@ manifests are the certifying set.
 | Accepted-room provenance | create/join failure injection proves provenance is accepted before irreversible event publication; 24 concurrent mutations retain every room; direct reads reuse the authorized snapshot cache; Unix mode is pinned to `0600`; exact `atomicwrites 0.4.4` uses synchronized Unix directory replacement and Windows write-through replacement | local PASS; Windows semantics source-reviewed but not behaviorally executed on `windows-latest` |
 | Pre-identity protocol contract | `room.list` returns the successful empty onboarding result `{ rooms: [] }` consistently across the core engine, the TypeScript mock, and the golden-corpus replay against a real daemon | local PASS |
 | Upstream synchronization isolation | malicious `WantEvents`, foreign-parent, and administrative-tip checks pass at `a5d98b70d717f35d3ce60953a88e12e646f2e871`, which carries forward the isolation remediation first published at `d0ceb0b320f1ff3a576b63d8b24aa1bf76a2d3bb` | local exact-revision PASS. NOT network-certified: the retained manifests set `synchronization_isolation_claimed: false` and do not exercise these internals |
-| Unproven provisional-peer fanout and teardown | live-fanout denial plus the superseded-link and deauthorization-state generation regressions pass at `a5d98b70...`; Jeliya's 67-assertion loopback suite covers capability-proven join integration | local exact-revision PASS; current-pin direct and relay evidence pending |
+| Unproven provisional-peer fanout and teardown | live-fanout denial plus the superseded-link and deauthorization-state generation regressions pass at `a5d98b70...`; Jeliya's 67-assertion loopback suite covers capability-proven join integration | local exact-revision PASS; covered by the current-pin direct and relay runs |
 | Store insert recovery and degradation | five deterministic upstream tests cover retry recovery, local hole healing under descendants, exhausted-budget durable critical `store_degraded`, queue overflow, and exactly-once peer re-serve | local exact-revision PASS at `a5d98b70...`; disk failure remains possible and must surface operationally |
 | Agent secret location | platform data directory outside the checkout, deny-all state-directory Git guard, repository ignore rules, and commit-prevention validation | local PASS |
 | Rust dependency audit | zero vulnerability advisories; three unmaintained-crate warnings and one yanked-version warning remain in the register below | PASS for vulnerability threshold |
@@ -118,9 +117,9 @@ manifests are the certifying set.
 | Complete CI definition | Rust, MSRV, TypeScript, docs, smoke, sidecar, agent, fleet, protocol, Windows installer, and dependency gates are configured with required-tool failures; manual dispatch is non-publishing | every job configured at that revision, including Windows installer integrity, passed on public `main` run `29688515781` at `a24f223...`; current-candidate rerun pending |
 | Repeatability | two complete hosted CI executions from clean environments | PASS at `922f620…`: runs `29713108134` (push) and `29713781499` (`workflow_dispatch`), every job green on first attempt with no rerun |
 | Direct different-network P2P | schema 2 run `098c4979` at `922f620…` + `a5d98b70…`: three peers, three distinct observed egresses, two ASNs (AS11426 + AS24940), stable direct paths on roles A/B/C, all assertions pass (operator linux arm64; remotes `demo1`/`demo2`) | certifying PASS for `922f620…` + `a5d98b70…` |
-| Deliberately forced relay | retained schema 2 run `cf28bc63`: the relay-only source build self-attests on all three hosts and proves relay paths on roles A/B/C | certifying PASS for `55024a4…` + `71fbb500…`; current-pin rerun required |
-| Join, reconnect, and resynchronization | the current two-daemon loopback run passes 67/67 assertions; retained network runs cover the same integration boundary at the prior dependency pin | local current-pin PASS; current-pin direct and relay evidence pending |
-| Messages, files, and pipes | current loopback covers messages, byte-identical BLAKE3-verified file fetch, authorized pipe, and unauthorized denial; retained network runs cover the prior dependency pin | local current-pin PASS; current-pin direct and relay evidence pending |
+| Deliberately forced relay | schema 2 run `8bda01e6` at `922f620…` + `a5d98b70…`: the relay-only source build self-attests on all three hosts and proves relay paths on roles A/B/C (operator linux arm64; remotes `demo1`/`demo2`) | certifying PASS for `922f620…` + `a5d98b70…` |
+| Join, reconnect, and resynchronization | the current two-daemon loopback run passes 67/67 assertions; the current-pin direct and relay network runs cover the same integration boundary | local current-pin PASS; current-pin direct and relay evidence certified |
+| Messages, files, and pipes | current loopback covers messages, byte-identical BLAKE3-verified file fetch, authorized pipe, and unauthorized denial; the current-pin direct and relay network runs cover the same surface | local current-pin PASS; current-pin direct and relay evidence certified |
 | Installer integrity | Unix behavioral tests verify checksum-before-extraction; Windows jobs execute checksum/tamper behavior, simulate reparse rejection, and smoke the native daemon | Unix PASS; hosted `windows-latest` job passes on `main` |
 | Complete asset-set visibility | an execution-free read-only job validates and seals the complete set, a separate read-only job performs smoke execution, and the sole writer verifies the receipt without candidate execution before its final token-bearing step; the release stays draft until all uploaded bytes match | executed end to end for `v0.5.0`, which built, verified, and published the five-archive set with sidecars; the same path executes for `v0.6.0` on release dispatch and has not yet run at this candidate. GitHub tag and release operations remain non-transactional |
 | Version consistency | local source checks bind daemon/UI/lockfile/changelog naming to `0.6.0` | PASS locally at `105744b`; the public `v0.6.0` tag does not exist yet |
@@ -201,26 +200,23 @@ that:
   dependency, and attested before a forced-relay run starts.
 
 The current `Cargo.toml` and `Cargo.lock` resolve `a5d98b70...`, and the local
-isolation regression was repeated there. The certifying direct run below is now
-repeated at the current pin (`922f620...` + `a5d98b70...`); the forced-relay run
-still binds the prior `55024a4...` + `71fbb500...` snapshot, pending a fresh
-source-built relay qualification at the current pair.
+isolation regression was repeated there. Both certifying runs below are now
+performed at the current pin (`922f620...` + `a5d98b70...`): the direct run is
+`098c4979` and the source-built forced-relay run is `8bda01e6`.
 
 ## Certifying network evidence
 
-The two certifying runs now bind different revision pairs. The direct run is
-the current candidate's evidence, produced with `--source-commit 922f620…` from
-harness commit `eeb1eff…` (main) carrying the operator-platform-aware Zig
-support, so its manifest records `source.harness_commit = eeb1eff…` alongside
-`source.commit = 922f620…`. The forced-relay run is the retained run at the
-prior snapshot. In both cases roles B and C ran on `root@demo1` and
-`root@demo2`, both Ubuntu x86_64; SSH connected as root, but both remote
-daemons executed through `setpriv` as UID/GID `65534`.
+The two certifying runs now bind the same current revision pair. Both were
+produced with `--source-commit 922f620…` from harness commit `4ec87e7…` (main)
+carrying the operator-platform-aware Zig support, so each manifest records
+`source.harness_commit` alongside `source.commit = 922f620…`. Roles B and C ran
+on `root@demo1` and `root@demo2`, both Ubuntu x86_64; SSH connected as root,
+but both remote daemons executed through `setpriv` as UID/GID `65534`.
 
 | Path | Run and UTC window | Result | Manifest | Signature |
 |---|---|---|---|---|
 | direct | `20260721T122840Z-098c4979`, 12:28:40–12:36:54 | certifiable; binds `922f620…` + `a5d98b70…`; operator linux arm64 (`AS11426`); 36/36 assertions; A/B/C each remained direct for three consecutive observations | [`direct.json`](evidence/v0.6.0/direct.json) | [`direct.json.sig`](evidence/v0.6.0/direct.json.sig) |
-| forced relay | `20260716T203450Z-cf28bc63`, 20:34:50–20:56:31 | certifiable; binds the prior `55024a4…` + `71fbb500…` snapshot; operator macOS x86_64 (`AS11426`); 36/36 assertions; the relay-only source build self-attested on the operator host and both remote hosts, then A/B/C each remained relay for three consecutive observations | [`relay.json`](evidence/v0.6.0/relay.json) | [`relay.json.sig`](evidence/v0.6.0/relay.json.sig) |
+| forced relay | `20260721T130958Z-8bda01e6`, 13:09:58–13:18:24 | certifiable; binds `922f620…` + `a5d98b70…`; operator linux arm64 (`AS11426`); 36/36 assertions; the relay-only source build self-attested on the operator host and both remote hosts, then A/B/C each remained relay for three consecutive observations | [`relay.json`](evidence/v0.6.0/relay.json) | [`relay.json.sig`](evidence/v0.6.0/relay.json.sig) |
 
 Each run observed three pairwise-distinct public egress values across two BGP
 origin ASNs (`AS11426` for the operator, `AS24940` for both remote roles)
@@ -243,10 +239,11 @@ The forced-relay run is the reviewed safety boundary exercised end to end: the
 harness required the compile-time seam, the binary attested itself as a
 relay-only build, and the path assertions held over relay.
 
-The prior direct run `20260716T201318Z-1ca39cfa` is superseded as certifying
-direct evidence by `098c4979`; it certified only the prior `55024a4…` +
-`71fbb500…` snapshot and does not transfer to `922f620…` + `a5d98b70…`. It
-remains in the repository history and is named here as a label only.
+The prior direct run `20260716T201318Z-1ca39cfa` and forced-relay run
+`20260716T203450Z-cf28bc63` are superseded as certifying evidence by `098c4979`
+and `8bda01e6` respectively; they certified only the prior `55024a4…` +
+`71fbb500…` snapshot and do not transfer to `922f620…` + `a5d98b70…`. They
+remain in the repository history and are named here as labels only.
 
 ## Historical schema 1 local-remediation evidence
 
