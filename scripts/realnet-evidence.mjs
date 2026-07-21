@@ -1492,9 +1492,13 @@ function buildCandidateFromSource({
   zigArchiveSha256,
   sourceCommit,
 }) {
-  if (process.platform !== "darwin" || process.arch !== "x64") {
-    throw new Error("the certifying source-build harness is pinned to the x86_64-macos operator toolchain");
-  }
+  // The certifying source build runs Zig on the operator to cross-compile the
+  // remote musl binary, so the operator must be a platform with an official
+  // Zig 0.15.2 archive. installVerifiedZig selects and verifies that archive;
+  // fail fast here so an unsupported operator reports the supported set before
+  // any build work runs. Supported today: darwin/x64, darwin/arm64, linux/x64,
+  // linux/arm64.
+  operatorZigPlatformKey(process.platform, process.arch);
   // Reject ambient build controls before any tool is executed. Tool discovery
   // receives a minimal environment, while unlisted credentials remain
   // available to the later SSH phase but never reach build subprocesses.

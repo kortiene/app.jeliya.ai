@@ -15,6 +15,7 @@ import {
 import { isIP } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { OFFICIAL_ZIG_0_15_2_ARCHIVES } from "./realnet-evidence.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -25,6 +26,56 @@ const TARGETS = Object.freeze([
   ["x86_64-unknown-linux-musl", "tar.gz", "jeliyad"],
   ["x86_64-pc-windows-msvc", "zip", "jeliyad.exe"],
 ]);
+
+// The certifying source build runs Zig on the operator, so the operator must be
+// a platform with an official Zig 0.15.2 archive. The manifest records the
+// operator host as Node's process.platform/process.arch values (e.g. linux/arm64);
+// each profile maps that to the matching Zig host triple, the operator's native
+// Rust target, and the rustc host triple. The verifier accepts any operator
+// platform listed here and requires the rest of the toolchain evidence (the Zig
+// archive digest, the native build target, the rustc host line) to be the ones
+// for THAT platform — so an operator cannot silently substitute another
+// platform's archive or host.
+const OPERATOR_PROFILES = Object.freeze({
+  "darwin:x64": {
+    zigKey: "x86_64-macos",
+    nativeTarget: "x86_64-apple-darwin",
+    rustcHost: "x86_64-apple-darwin",
+  },
+  "darwin:arm64": {
+    zigKey: "aarch64-macos",
+    nativeTarget: "aarch64-apple-darwin",
+    rustcHost: "aarch64-apple-darwin",
+  },
+  "linux:x64": {
+    zigKey: "x86_64-linux",
+    nativeTarget: "x86_64-unknown-linux-gnu",
+    rustcHost: "x86_64-unknown-linux-gnu",
+  },
+  "linux:arm64": {
+    zigKey: "aarch64-linux",
+    nativeTarget: "aarch64-unknown-linux-gnu",
+    rustcHost: "aarch64-unknown-linux-gnu",
+  },
+});
+
+function operatorProfileFor(host, relativePath) {
+  const os = host?.os;
+  const arch = host?.architecture;
+  const profile = OPERATOR_PROFILES[`${os}:${arch}`];
+  if (!profile) {
+    fail(
+      `${relativePath} operator platform ${os ?? "(missing)"}/${arch ?? "(missing)"} is not a reviewed Zig 0.15.2 source-build host`,
+    );
+  }
+  return profile;
+}
+
+// A schema leaf marker for a field that may be absent. Used for evidence fields
+// added after the retained manifests were signed (e.g. the Zig archive_platform
+// field added when the harness became operator-platform-aware): new evidence
+// carries the field, retained evidence does not, and both must validate.
+const CLOSED_SCHEMA_OPTIONAL = Symbol("closed-schema-optional");
 
 function fail(message) {
   throw new Error(`release-integrity: ${message}`);
@@ -423,6 +474,7 @@ const CERTIFYING_NETWORK_SCHEMA_V2 = {
         sha256: null,
         archive_sha256: null,
         expected_archive_sha256: null,
+        archive_platform: CLOSED_SCHEMA_OPTIONAL,
         archive_integrity_verified: null,
         installation_root_bound: null,
         lib_dir_bound: null,
@@ -478,6 +530,12 @@ const LOG_ROLE_SCHEMA = {
 };
 
 function closedSchema(value, schema, path) {
+  if (schema === CLOSED_SCHEMA_OPTIONAL) {
+    if (value !== null && typeof value === "object") {
+      fail(`${path} must be a scalar or null`);
+    }
+    return;
+  }
   if (schema === LOCAL_CHECKOUT_SCHEMA) {
     if (value === null) return;
     closedSchema(value, { commit: null, dirty: null, origin: null }, path);
@@ -498,7 +556,9 @@ function closedSchema(value, schema, path) {
   }
   const expected = Object.keys(schema);
   const actual = Object.keys(value);
-  const missing = expected.filter((key) => !Object.hasOwn(value, key));
+  const missing = expected.filter(
+    (key) => schema[key] !== CLOSED_SCHEMA_OPTIONAL && !Object.hasOwn(value, key),
+  );
   const unknown = actual.filter((key) => !Object.hasOwn(schema, key));
   if (missing.length > 0 || unknown.length > 0) {
     const details = [
@@ -507,7 +567,13 @@ function closedSchema(value, schema, path) {
     ].filter(Boolean).join("; ");
     fail(`${path} violates the closed evidence schema: ${details}`);
   }
-  for (const key of expected) closedSchema(value[key], schema[key], `${path}.${key}`);
+  for (const key of expected) {
+    if (schema[key] === CLOSED_SCHEMA_OPTIONAL) {
+      if (Object.hasOwn(value, key)) closedSchema(value[key], schema[key], `${path}.${key}`);
+      continue;
+    }
+    closedSchema(value[key], schema[key], `${path}.${key}`);
+  }
 }
 
 function secretBearingEvidenceKey(key) {
@@ -768,6 +834,9 @@ export function validateNetworkEvidenceManifest(manifest, {
     ? ["embed-ui", "relay-only-test"]
     : ["embed-ui"];
   const featureArgument = expectedFeatures.join(",");
+  // The toolchain evidence must match the operator platform the manifest
+  // records (hosts[0]); compute that profile before the per-field checks.
+  const operatorProfile = operatorProfileFor(manifest.hosts?.[0], relativePath);
   const expectedBuildCommandsV1 = [
     `git archive ${candidateCommit}`,
     "npm ci",
@@ -794,7 +863,7 @@ export function validateNetworkEvidenceManifest(manifest, {
       || !/^[0-9a-f]{64}$/.test(manifest.build?.embedded_ui?.package_lock_sha256 ?? "")
       || JSON.stringify(manifest.build?.features) !== JSON.stringify(expectedFeatures)
       || JSON.stringify(manifest.build?.targets)
-        !== JSON.stringify(["x86_64-apple-darwin", "x86_64-unknown-linux-musl"])
+        !== JSON.stringify([operatorProfile.nativeTarget, "x86_64-unknown-linux-musl"])
       || JSON.stringify(manifest.build?.commands) !== JSON.stringify(expectedBuildCommands)) {
     fail(`${relativePath} was not built source-bound with the lockfile`);
   }
@@ -826,7 +895,7 @@ export function validateNetworkEvidenceManifest(manifest, {
     "binary: rustc",
     "commit-hash: f8297e351a40c1439a467bbbb6879088047f50b3",
     "commit-date: 2025-10-28",
-    "host: x86_64-apple-darwin",
+    `host: ${operatorProfile.rustcHost}`,
     "release: 1.91.0",
     "LLVM version: 21.1.2",
   ].join("\n");
@@ -851,8 +920,12 @@ export function validateNetworkEvidenceManifest(manifest, {
       || toolchain.zig.filename !== "zig"
       || toolchain.zig.version !== "0.15.2"
       || !toolDigestValid(toolchain.zig)
+      // archive_platform is absent from retained pre-multplatform evidence and
+      // is otherwise required to match the operator's recorded platform.
+      || !(toolchain.zig.archive_platform === undefined
+        || toolchain.zig.archive_platform === operatorProfile.zigKey)
       || toolchain.zig.archive_sha256
-        !== "375b6909fc1495d16fc2c7db9538f707456bfc3373b14ee83fdd3e22b3d43f7f"
+        !== OFFICIAL_ZIG_0_15_2_ARCHIVES[operatorProfile.zigKey].sha256
       || toolchain.zig.expected_archive_sha256 !== toolchain.zig.archive_sha256
       || toolchain.zig.archive_integrity_verified !== true
       || toolchain.zig.installation_root_bound !== true
@@ -988,8 +1061,7 @@ export function validateNetworkEvidenceManifest(manifest, {
   const expectedRelayAttestationStatus = expectedRelayOnly ? 0 : 2;
   if (JSON.stringify(hostRoles) !== JSON.stringify(["a", "b", "c"])
       || operatorHost.host !== "operator-local"
-      || operatorHost.os !== "darwin"
-      || operatorHost.architecture !== "x64"
+      || !OPERATOR_PROFILES[`${operatorHost.os}:${operatorHost.architecture}`]
       || new Set(remoteHosts.map((host) => host.host)).size !== 2
       || !/^[0-9a-f]{64}$/.test(remoteDigest ?? "")
       || remoteHosts.some((host) => !/^[A-Za-z0-9][A-Za-z0-9._@-]*$/.test(host.host)
