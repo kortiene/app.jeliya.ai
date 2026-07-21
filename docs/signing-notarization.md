@@ -1,6 +1,6 @@
 ---
 type: "Runbook"
-title: "Signing and notarization (Phase 2)"
+title: "Signing and notarization (post-deploy signing gate)"
 description: "Release-security plan and procedure for signing the Jeliya daemon release artifacts."
 tags: ["linux", "macos", "release", "security", "signing", "windows"]
 timestamp: "2026-07-20T17:50:00Z"
@@ -11,7 +11,7 @@ release_status: "unreleased"
 audience: ["contributors", "maintainers", "release-engineers"]
 ---
 
-# Signing and notarization (Phase 2)
+# Signing and notarization (post-deploy signing gate)
 
 Release binaries to date are unsigned (`v0.1.0`/`v0.2.0` were
 released under the project's former name Bantaba — see `docs/naming.md`).
@@ -36,9 +36,13 @@ publication rather than a platform signing service.
 ## Procurement status (Phase 0)
 
 Enrollment is tracked here because it is calendar lead time, not engineering
-time: the Phase 2 gate needs signed packages, so both credential chains start
-during Phase 0. Nothing in this section claims any artifact is signed or
-notarized today, and nothing in `release.yml` signs today.
+time: the post-deploy signing gate ("supported installers verify signatures and
+reject tampering") needs signed packages. Code-signing is deferred out of the
+development path per the
+[Code-signing deferral decision](signing-deferral-decision.md), so both
+credential chains start once that gate nears (not during Phase 0). Nothing in
+this section claims any artifact is signed or notarized today, and nothing in
+`release.yml` signs today.
 
 ### Eligibility, confirmed before ordering
 

@@ -32,7 +32,9 @@ and it does not advance any implementation, verification, or release status.
 2. The first production release pairs that PWA with a local companion over a
    new mutually authenticated, end-to-end-encrypted Iroh control protocol. The
    companion is **unsigned in the first slice**; signing (Apple Developer ID /
-   notarization and Windows Authenticode) is added at the Phase 2 gate, so the
+   notarization and Windows Authenticode) is added at a **post-deploy signing
+   gate** (after the system is deployed and tested end-to-end — see
+   [Code-signing deferral decision](signing-deferral-decision.md)), so the
    initial deployment distributes the companion as a native archive from the
    GitHub release with the SHA-256 checksum sidecar and accepted OS-trust
    friction.
@@ -53,13 +55,13 @@ runtime.
 ### The companion is not the deleted native client
 
 The companion is a headless local process, not a graphical application. It is
-**unsigned in the first slice** (signing is a Phase 2 gate item). Removing the
-Flutter client (`app/`), the Dart client (`dart/jeliya_protocol`), and the
+**unsigned in the first slice** (signing is a post-deploy gate item). Removing
+the Flutter client (`app/`), the Dart client (`dart/jeliya_protocol`), and the
 mobile FFI shim (`crates/jeliya-ffi`) does not remove any component this
 decision depends on. `jeliyad` already has the companion's shape, and
 `.github/workflows/release.yml` already produces the five archives it needs.
 The remaining companion work is the control protocol and pairing; signing is
-added at the Phase 2 gate — not a client rewrite.
+added at the post-deploy signing gate — not a client rewrite.
 
 ## Evidence this decision rests on
 

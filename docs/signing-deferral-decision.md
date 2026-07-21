@@ -48,9 +48,13 @@ re-sequencing of a release-gate, not a change to the architecture.
   lead time (Apple organizational/identity verification, CA vetting), not
   engineering time; leaving it on the Phase 2 critical path would stall later
   phases on that lead time.
-- During build, deploy, and test, release integrity is provided by the SHA-256
-  checksum sidecars on the GitHub release; full OS-trust signing is added once
-  the system is proven, as a final hardening step.
+- During build, deploy, and test, the SHA-256 checksum sidecar on the GitHub
+  release detects accidental corruption or an archive/sidecar mismatch; it does
+  not authenticate the artifact against a trusted root (a replaced release can
+  replace both), so the unsigned-install risk recorded in the
+  [Security threat model](security-threat-model.md) stands through this period.
+  Full OS-trust signing is added once the system is proven, as a final
+  hardening step.
 
 ## Consequence accepted
 

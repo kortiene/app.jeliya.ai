@@ -1100,16 +1100,17 @@ by downloading its native archive from the GitHub release published in this
 repository; the first slice ships no auto-update channel (companion auto-update,
 version-skew measurement, and an in-browser upgrade prompt are amendment A3,
 Phase 2). The first-slice archive is **unsigned** — `.github/workflows/release.yml`
-does not sign today, and signing procurement (Apple Developer ID / notarization
-and Windows Authenticode) is an early-Phase-1 deliverable with issuance at the
-Phase 2 gate (see [Signing and notarization](signing-notarization.md)) — so the
-published SHA-256 checksum sidecar only detects accidental corruption or an
-archive/sidecar mismatch; it does **not** authenticate the artifact against a
-trusted root (a compromised release can replace both), and unsigned installs
-remain a known risk recorded in the [Security threat model](security-threat-model.md).
-macOS Gatekeeper and Windows SmartScreen warnings on browser downloads are
-expected first-slice friction. Signed, notarized installers are a Phase 2 gate
-item ("supported installers verify signatures and reject tampering").
+does not sign today, and code-signing is deferred to a **post-deploy signing
+gate** (see [Code-signing deferral decision](signing-deferral-decision.md) and
+[Signing and notarization](signing-notarization.md)); Phases 1–5 build, deploy,
+and test with the unsigned companion. The published SHA-256 checksum sidecar
+only detects accidental corruption or an archive/sidecar mismatch; it does
+**not** authenticate the artifact against a trusted root (a compromised release
+can replace both), and unsigned installs remain a known risk recorded in the
+[Security threat model](security-threat-model.md). macOS Gatekeeper and Windows
+SmartScreen warnings on browser downloads are expected friction. Signed,
+notarized installers become mandatory at the post-deploy signing gate
+("supported installers verify signatures and reject tampering").
 
 ## Assumptions, unresolved decisions, and high-risk unknowns
 
