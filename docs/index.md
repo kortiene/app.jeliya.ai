@@ -36,6 +36,7 @@ CI rules for every page in this wiki.
 - [Production provider selection decision](provider-selection-decision.md) - Decision record confirming the DNS, CDN, edge-token, relay, object-store, IaC, and native-signing provider set for app.jeliya.ai, with its reversibility position (Phase 0 deliverable, issue #27).
 - [Supported platform matrix decision](platform-matrix-decision.md) - Decision record fixing the first-slice supported desktop OS and browser matrix, its mobile position under amendment A4, the test-lane mapping, and the pairing-success denominator.
 - [Portable Iroh Rooms traits decision](iroh-rooms-portable-traits-decision.md) - Decision record choosing the audited short-lived patch path for the browser peer's portable store, blob, transport, clock, and task-scheduling traits, with its audit owner and recurring cost.
+- [Phase 0 go/no-go gate verdict](phase-0-gate-verdict.md) - Dated verdict against each of the six Phase 0 gate conditions for the v0.6.0 candidate (922f620 + a5d98b70), each with linked evidence (issue #31).
 
 ## Agents
 
