@@ -1789,18 +1789,15 @@ impl RoomSupervisor {
                 ));
             }
             let invitee_key =
-                find_invitee_for_id(&store, &room_id, invite_id)?
-                    .ok_or_else(|| {
-                        CoreError::invalid(format!(
-                            "no invite with id {} is recorded for room {room_id}",
-                            hex::encode(invite_id)
-                        ))
-                    })?;
+                find_invitee_for_id(&store, &room_id, invite_id)?.ok_or_else(|| {
+                    CoreError::invalid(format!(
+                        "no invite with id {} is recorded for room {room_id}",
+                        hex::encode(invite_id)
+                    ))
+                })?;
             if snapshot.status(&invitee_key) != Some(Status::Invited) {
-                return Err(CoreError::invalid(
-                    "this invite is no longer pending",
-                )
-                .with_hint("the invite was already redeemed or cancelled"));
+                return Err(CoreError::invalid("this invite is no longer pending")
+                    .with_hint("the invite was already redeemed or cancelled"));
             }
             let heads = Self::authorization_class_heads(&store, &room_id, &admin_identity)?;
             let wire = build_member_removed(
@@ -3286,10 +3283,7 @@ fn validate_client_msg_id(cmid: &str) -> CoreResult<()> {
             "client_msg_id must be at most {MAX_CLIENT_MSG_ID_BYTES} bytes"
         )));
     }
-    if !cmid
-        .bytes()
-        .all(|b| b.is_ascii_graphic() || b == b' ')
-    {
+    if !cmid.bytes().all(|b| b.is_ascii_graphic() || b == b' ') {
         return Err(CoreError::invalid(
             "client_msg_id must be printable ASCII (no control characters)",
         ));
@@ -3649,7 +3643,9 @@ mod tests {
         validate_room_name, Content, EventType, Ingest, RoomSupervisor,
     };
     use crate::error::ErrorKind;
-    use iroh_rooms::events::{validate_wire_bytes, EventId, RejectReason, ValidationContext, WireEvent};
+    use iroh_rooms::events::{
+        validate_wire_bytes, EventId, RejectReason, ValidationContext, WireEvent,
+    };
     use iroh_rooms::experimental::store::TrustRow;
     use iroh_rooms::identity::{DeviceBinding, SigningKey};
     use iroh_rooms::room::{RoomId, RoomInviteTicket};
@@ -5183,11 +5179,12 @@ mod tests {
             assert_eq!(again, first, "retry must return the original event id");
         }
         let timeline = sup.timeline(&room_id, None).await.unwrap();
-        let messages: Vec<_> = timeline
-            .iter()
-            .filter(|e| e["kind"] == "message")
-            .collect();
-        assert_eq!(messages.len(), 1, "10k retries must not produce a duplicate");
+        let messages: Vec<_> = timeline.iter().filter(|e| e["kind"] == "message").collect();
+        assert_eq!(
+            messages.len(),
+            1,
+            "10k retries must not produce a duplicate"
+        );
         assert_eq!(messages[0]["body"], json!("hello"));
 
         // A DISTINCT client_msg_id authors a distinct event (dedup is per id).
@@ -5198,10 +5195,7 @@ mod tests {
         assert_ne!(second, first);
         let timeline = sup.timeline(&room_id, None).await.unwrap();
         assert_eq!(
-            timeline
-                .iter()
-                .filter(|e| e["kind"] == "message")
-                .count(),
+            timeline.iter().filter(|e| e["kind"] == "message").count(),
             2
         );
 
@@ -5237,10 +5231,7 @@ mod tests {
         );
         let timeline = sup.timeline(&room_id, None).await.unwrap();
         assert_eq!(
-            timeline
-                .iter()
-                .filter(|e| e["kind"] == "message")
-                .count(),
+            timeline.iter().filter(|e| e["kind"] == "message").count(),
             1
         );
         sup.close_room(&room_id).await.unwrap();
@@ -5264,7 +5255,11 @@ mod tests {
                 .send_message(&room_id, "hi", Some(bad))
                 .await
                 .unwrap_err();
-            assert_eq!(err.kind, ErrorKind::InvalidParams, "bad client_msg_id {bad:?}");
+            assert_eq!(
+                err.kind,
+                ErrorKind::InvalidParams,
+                "bad client_msg_id {bad:?}"
+            );
         }
         sup.close_room(&room_id).await.unwrap();
     }
@@ -5322,11 +5317,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(1_200)).await;
 
         let err = joiner
-            .join_room(
-                &ticket,
-                Some("late"),
-                std::slice::from_ref(&owner_addr),
-            )
+            .join_room(&ticket, Some("late"), std::slice::from_ref(&owner_addr))
             .await
             .unwrap_err();
         assert_eq!(err.kind, ErrorKind::TicketExpired);
@@ -5351,7 +5342,10 @@ mod tests {
         wait_member_status(&sup, &room_id_str, &invitee_id, "invited").await;
 
         let invite_id_hex = hex::encode(ticket.invite_id);
-        let event_id = sup.cancel_invite(&room_id_str, &invite_id_hex).await.unwrap();
+        let event_id = sup
+            .cancel_invite(&room_id_str, &invite_id_hex)
+            .await
+            .unwrap();
         assert_eq!(event_id.len(), 64, "cancel returns a bare event id hex");
 
         // After cancellation the invitee is no longer pending: the signed
@@ -5420,11 +5414,8 @@ mod tests {
         // would, and fold-check it locally.
         let mut heads = sup.open_store().unwrap().heads(&room_id).unwrap();
         heads.truncate(super::MAX_PREV_EVENTS);
-        let binding = DeviceBinding::create(
-            &room_id,
-            &newcomer_identity,
-            newcomer_device.device_key(),
-        );
+        let binding =
+            DeviceBinding::create(&room_id, &newcomer_identity, newcomer_device.device_key());
         let wire = super::build_member_joined(
             &newcomer_identity,
             &newcomer_device,
@@ -5472,14 +5463,16 @@ mod tests {
 
     /// Page `timeline_after` from `from_cursor` until exhausted, concatenating
     /// each page's events. Mirrors what a reconnecting client does.
-    async fn page_from(sup: &RoomSupervisor, room_id: &str, from_cursor: &str, limit: u32) -> Vec<Value> {
+    async fn page_from(
+        sup: &RoomSupervisor,
+        room_id: &str,
+        from_cursor: &str,
+        limit: u32,
+    ) -> Vec<Value> {
         let mut out = Vec::new();
         let mut cursor = Some(from_cursor.to_string());
         while let Some(c) = cursor {
-            let (page, next) = sup
-                .timeline_after(room_id, &c, Some(limit))
-                .await
-                .unwrap();
+            let (page, next) = sup.timeline_after(room_id, &c, Some(limit)).await.unwrap();
             out.extend(page);
             cursor = next;
         }
@@ -5504,7 +5497,11 @@ mod tests {
         // the exact canonical order, and exhaust the log (no next cursor).
         let genesis = full[0]["event_id"].as_str().unwrap();
         let (delta, next) = sup.timeline_after(&room_id, genesis, None).await.unwrap();
-        assert_eq!(delta, full[1..], "delta must equal the full suffix in order");
+        assert_eq!(
+            delta,
+            full[1..],
+            "delta must equal the full suffix in order"
+        );
         assert!(next.is_none(), "an exhaustive read leaves no next cursor");
     }
 
@@ -5558,7 +5555,14 @@ mod tests {
                 ts += 1;
                 seed_status(&sup, &room_id_str, identity, device, "working", Some(i), ts);
                 ts += 1;
-                seed_message(&sup, &room_id_str, identity, device, &format!("agent-msg-{i}"), ts);
+                seed_message(
+                    &sup,
+                    &room_id_str,
+                    identity,
+                    device,
+                    &format!("agent-msg-{i}"),
+                    ts,
+                );
             }
         }
 
@@ -5571,13 +5575,7 @@ mod tests {
 
         // Page the whole settled log in-style; the concatenation must equal the
         // full suffix in canonical order — the Phase 1 D3 gate.
-        let paged = page_from(
-            &sup,
-            &room_id_str,
-            full[0]["event_id"].as_str().unwrap(),
-            7,
-        )
-        .await;
+        let paged = page_from(&sup, &room_id_str, full[0]["event_id"].as_str().unwrap(), 7).await;
         assert_eq!(paged, full[1..]);
     }
 
@@ -5605,7 +5603,10 @@ mod tests {
         sup.send_message(&room_id, "only", None).await.unwrap();
 
         let full = sup.timeline(&room_id, None).await.unwrap();
-        let last = full.last().unwrap()["event_id"].as_str().unwrap().to_owned();
+        let last = full.last().unwrap()["event_id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
         let (delta, next) = sup.timeline_after(&room_id, &last, None).await.unwrap();
         assert!(delta.is_empty(), "nothing sorts after the last event");
         assert!(next.is_none());
@@ -5654,7 +5655,10 @@ mod tests {
         assert_eq!(decisions.len(), 1);
         assert_eq!(decisions[0]["code"], "store_degraded");
         assert_eq!(decisions[0]["severity"], "critical");
-        assert_eq!(decisions[0]["event_ids"][0], json!(bare_event_hex(&dropped)));
+        assert_eq!(
+            decisions[0]["event_ids"][0],
+            json!(bare_event_hex(&dropped))
+        );
         // The decision is durable: a fresh supervisor over the same data dir
         // (simulating a daemon restart) still surfaces it.
         let sup2 = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
