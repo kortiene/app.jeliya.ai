@@ -13,9 +13,9 @@ audience: ["contributors", "maintainers", "release-engineers", "security-reviewe
 
 # Phase 0 go/no-go gate verdict
 
-**Verdict: GO — 2026-07-21.** All six Phase 0 go/no-go gate conditions
+**Verdict: GO — 2026-07-21.** Every Phase 0 go/no-go gate condition
 ([Production deployment architecture](production-deployment.md) Phase 0
-go/no-go gate) pass for the current candidate Jeliya
+go/no-go gate) passes for the current candidate Jeliya
 `922f620b30ee95c82426a7d4404b1f73a70c0958` + Iroh Rooms
 `a5d98b70d717f35d3ce60953a88e12e646f2e871`, each with recorded evidence.
 Phase 1 may begin. The six amendments in the
@@ -36,7 +36,11 @@ verification, or release status beyond what the linked evidence already carries.
 | Iroh Rooms pin | `a5d98b70d717f35d3ce60953a88e12e646f2e871` |
 | Verdict date (UTC) | 2026-07-21 |
 
-## The six gate conditions
+## The gate conditions
+
+The plan's Phase 0 go/no-go gate lists seven conditions. Each is evaluated below
+with a pass/fail verdict and linked evidence; the seventh (coordinated fleet
+upgrade) is evaluated as a gate condition, not demoted to a note.
 
 ### 1. No contradictory release claim remains — PASS
 
@@ -47,6 +51,7 @@ qualified; the release-evidence gate is READY; the retained
 checked:
 
 - [Verification evidence](verification-evidence.md) — `verification_status: "verified"`, `Release evidence gate | READY`.
+- [Security threat model](security-threat-model.md) — the current candidate row records network-qualified status; the verification-record threat no longer says the gate is BLOCKED.
 - [Capability status](capability-status.md), [Platform matrix](platform-matrix.md), [Release versus main](release-vs-main.md), [Known gaps and roadmap](known-gaps-roadmap.md), [Real-network NAT runbook](realnet-runbook.md) — each cites the current pair as qualified.
 
 No page asserts a contradictory "pending" or "does not transfer" claim about
@@ -100,14 +105,22 @@ credential from a relay-auth service after Ed25519 proof of possession and
 completed a bidirectional, end-to-end-encrypted round trip through a dedicated
 authenticated relay. Verdict PASS.
 
-## Mixed-version fleet boundary
+## 7. A coordinated fleet-upgrade plan exists before any hosted surface meets an already-published client — PASS
 
-The coordinated fleet-upgrade / mixed-version condition
-([issue #26](https://github.com/kortiene/app.jeliya.ai/issues/26), closed) is
-stated in the Phase 0 gate and in the published limitation docs: mixed
-`v0.5.0`/candidate rooms cannot complete joins in either direction, so a room's
-members — especially its admin — must move together. This is a stated launch
-constraint, not a Phase 0 gate blocker.
+Mixed `v0.5.0`/candidate rooms cannot complete joins in either direction, so a
+room's members — especially its admin — must move together. The published
+`v0.5.0` set is five daemon archives with no auto-update channel, so the upgrade
+message reaches an already-installed client only through the next release's
+notes; inside the product, the join failure itself is the only signal. This
+boundary and the coordinated-upgrade requirement are stated in the Phase 0 gate
+itself ([Production deployment architecture](production-deployment.md) Phase 0
+gate) and in [Known gaps and roadmap](known-gaps-roadmap.md), discharging
+[issue #26](https://github.com/kortiene/app.jeliya.ai/issues/26). The
+substantive upgrade mechanics (a stated auto-update channel, an in-browser
+upgrade prompt, a grace window, and version-skew measurement) are the
+forward-looking content of amendment A3, which blocks the Phase 2 gate — they
+are not required to exist at the Phase 0 gate, only before a hosted surface
+meets an already-published client.
 
 ## Phase 1
 
