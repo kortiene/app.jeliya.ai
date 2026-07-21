@@ -28,11 +28,16 @@ status](capability-status.md) — remain the source of truth for what exists,
 and their implementation, verification, and release columns are not advanced by
 this record.
 
-This record discharges the Phase 0 deliverable "confirm DNS, CDN, relay, and
-signing ownership" ([Production deployment architecture](production-deployment.md),
-Phase 0 deliverable) by giving each surface a named provider and a named owning
-account holder, so the deliverable has a subject. It does not authorize Phase 1
-implementation.
+This record gives the Phase 0 deliverable "confirm DNS, CDN, relay, and signing
+ownership" ([Production deployment architecture](production-deployment.md),
+Phase 0 deliverable) its subject — a named provider and a named owning account
+holder for each surface. It does **not** close that ownership deliverable:
+closure lives in the [Production ownership record](production-ownership.md),
+which remains a `proposal` (issue [#24](https://github.com/kortiene/app.jeliya.ai/issues/24))
+until its controlling-identity, deputy, fallback-provider, and account-identifier
+TODOs are filled and the maintainer signs it `canonical`. This record settles the
+provider-selection decision (issue [#27](https://github.com/kortiene/app.jeliya.ai/issues/27))
+only; it does not authorize Phase 1 implementation.
 
 ## Decision
 
@@ -78,9 +83,12 @@ architecture](production-deployment.md) lines 574-577 state. A provider
 migration would require, per surface:
 
 - **DNS** — re-delegation of the `jeliya.ai` zone to a new authoritative
-  provider, re-issued CAA records, and re-issued TLS certificates. The OpenTofu
-  DNS module makes the record set portable; the registrar account and DNSSEC
-  chain are the slow part.
+  provider, re-issued CAA records, and re-issued TLS certificates. The planned
+  OpenTofu DNS module under `infra/` ([Production deployment
+  architecture](production-deployment.md) line 572) will make the record set
+  portable once it exists; no `infra/` tree is present in the repository today,
+  so record-set portability is future work, not a current capability. The
+  registrar account and DNSSEC chain are the slow part regardless.
 - **Static CDN / host** — republishing the already-built immutable artifact to a
   new static host and repointing the DNS record. The build is
   provider-independent because the CDN receives an artifact, not source.
@@ -111,30 +119,46 @@ of the fallback decision.
 
 ## Relay credential model
 
-The selected relay service supports the required endpoint-bound short-lived
-credentials. The Phase 0 relay-connect spike ([Phase 0 relay-connect spike
+The endpoint-bound short-lived credential **pattern** is proven at the transport
+plane. Whether the **managed** Iroh relay service supports externally-issued,
+endpoint-bound admission tokens at production scale is **unverified** and is
+recorded as such here, pending vendor/config confirmation. The Phase 0
+relay-connect spike ([Phase 0 relay-connect spike
 result](evidence/phase-0-relay-spike.md), issue
 [#23](https://github.com/kortiene/app.jeliya.ai/issues/23)) recorded PASS on
 Chromium, Firefox, and WebKit: a browser obtains a short-lived (60 s),
 endpoint-bound credential from a relay-auth HTTP service after Ed25519 proof of
 possession, presents it as the relay admission token, and establishes an
-end-to-end-encrypted iroh connection through a dedicated relay. That discharges
-the Phase 0 gate item "a browser reaches a native test endpoint through an
-authenticated relay" and answers the planning assumption "Dedicated relay
-service supports the required endpoint-bound short-lived credentials"
+end-to-end-encrypted iroh connection through a dedicated relay. That run used a
+dedicated **local** `iroh-relay 1.0.1` server with a custom `AccessControl`; it
+proves the credential pattern and the browser-to-native transport, not that a
+managed Iroh relay can be configured to honour externally-issued tokens. It
+discharges the Phase 0 gate item "a browser reaches a native test endpoint
+through an authenticated relay" and answers the planning assumption "Dedicated
+relay service supports the required endpoint-bound short-lived credentials"
 ([Production deployment architecture](production-deployment.md), planning
-assumptions) at the transport plane.
+assumptions) at the transport plane only. If vendor/config confirmation for the
+managed Iroh relays does not satisfy the threat model, the equivalent
+self-hosted design — a self-hosted iroh-relay with HTTP-callout admission (see
+Reversibility, and [Security threat model](security-threat-model.md) TB2
+residual) — is the recorded fallback path, selected instead.
 
-Two properties of the credential model are confirmed by this record against the
-relay-design section ([Production deployment architecture](production-deployment.md)
-lines 547-552):
+Two properties of the credential model are **binding design requirements** of
+this record, restated against the relay-design section ([Production deployment
+architecture](production-deployment.md) lines 547-552). They are requirements,
+not verified production properties:
 
-- The project API secret never enters static assets. The spike's static-asset
-  secret scan found 12 candidate key-shaped strings across the served
-  HTML/JS/wasm and none matched the relay-auth signing key. The production
-  design keeps the project secret server-side in the `relay-auth.jeliya.ai`
-  Worker and mints per-peer endpoint-bound tokens.
-- Native companions use the same short-lived credential policy rather than
+- The project API secret must never enter static assets. The spike's
+  static-asset secret scan (12 candidate key-shaped strings across the served
+  HTML/JS/wasm, none matching the spike's relay-auth signing key) confirms only
+  that the **spike's** signing material was absent from the spike's served
+  assets; the spike had no managed-relay project API secret at all, so that scan
+  does not certify the production Worker/Pages secret-bundling posture. The
+  production design keeps the project secret server-side in the
+  `relay-auth.jeliya.ai` Worker and mints per-peer endpoint-bound tokens; a
+  secret-specific gate on the real Worker/Pages build must close this before
+  launch and is recorded as open.
+- Native companions must use the same short-lived credential policy rather than
   embedding a global project secret.
 
 What is **not** settled by this record, and is explicitly out of scope:
@@ -267,9 +291,9 @@ This record maps to the acceptance criteria of
   endpoint-bound credential after proof of possession, citing the Phase 0 gate
   result — Relay credential model section, citing [Phase 0 relay-connect spike
   result](evidence/phase-0-relay-spike.md).
-- States that the project API secret never enters static assets and that native
-  companions use the same short-lived credential policy — Relay credential
-  model section.
+- States the project API secret and native-companion credential rules as binding
+  design requirements (the spike scan does not certify the production
+  secret-bundling posture) — Relay credential model section.
 - Covers two dedicated managed relays (NA + EU) and preserves the self-hosted
   path through IaC — Relay topology section.
 - Treats source IPs, routing, timing, and traffic volumes as sensitive metadata
