@@ -47,9 +47,9 @@ predates both fixes.
 The retained signed direct and forced-relay runs remain valid evidence for
 `55024a4...` + `71fbb500...`: they covered three peers across two BGP origin
 ASNs, passed every recorded assertion, and set `certifiable: true`. They are
-historical for the current source candidate. Fresh manifests must bind
-`922f620...` and `a5d98b70...` before the release
-evidence gate can return to `READY`.
+historical for the current source candidate. Fresh signed direct (`098c4979`)
+and forced-relay (`8bda01e6`) manifests now bind `922f620...` + `a5d98b70...`,
+and the release evidence gate is `READY` for that pair.
 
 The source candidate was then recorded as `4261470...` while the repin was in
 review. `main` enforces linear history, so the merge rebased that work and
@@ -81,11 +81,12 @@ push-triggered run `29713108134` and on `workflow_dispatch` run `29713781499`.
 Both executed every job — `docs-ui`, `ui-e2e`, `rust-runtime`, `msrv`,
 `windows-installer`, and `dependency-security` — and both succeeded on their
 first attempt, so no job was rerun. `workflow_dispatch` publishes nothing.
-These runs qualify the CI matrix only; signed direct and forced-relay network
-evidence at `922f620...` + `a5d98b70...` still does not exist.
+These runs qualify the CI matrix only; the signed direct (`098c4979`) and
+forced-relay (`8bda01e6`) network evidence at `922f620...` + `a5d98b70...` is
+recorded separately below.
 
-The evidence gate remains `BLOCKED`: neither the prior signed manifests nor
-the local dry runs can qualify this new public commit.
+The evidence gate is `READY` for `922f620...` + `a5d98b70...`: both certifying
+manifests bind that exact pair and their signatures verify.
 
 The `v0.5.0`-certified pin remains `d0ceb0b320f1ff3a576b63d8b24aa1bf76a2d3bb`.
 That revision is still publicly fetchable by commit SHA, but it is no longer
@@ -109,12 +110,12 @@ manifests are the certifying set.
 | Accepted-room provenance | create/join failure injection proves provenance is accepted before irreversible event publication; 24 concurrent mutations retain every room; direct reads reuse the authorized snapshot cache; Unix mode is pinned to `0600`; exact `atomicwrites 0.4.4` uses synchronized Unix directory replacement and Windows write-through replacement | local PASS; Windows semantics source-reviewed but not behaviorally executed on `windows-latest` |
 | Pre-identity protocol contract | `room.list` returns the successful empty onboarding result `{ rooms: [] }` consistently across the core engine, the TypeScript mock, and the golden-corpus replay against a real daemon | local PASS |
 | Upstream synchronization isolation | malicious `WantEvents`, foreign-parent, and administrative-tip checks pass at `a5d98b70d717f35d3ce60953a88e12e646f2e871`, which carries forward the isolation remediation first published at `d0ceb0b320f1ff3a576b63d8b24aa1bf76a2d3bb` | local exact-revision PASS. NOT network-certified: the retained manifests set `synchronization_isolation_claimed: false` and do not exercise these internals |
-| Unproven provisional-peer fanout and teardown | live-fanout denial plus the superseded-link and deauthorization-state generation regressions pass at `a5d98b70...`; Jeliya's 67-assertion loopback suite covers capability-proven join integration | local exact-revision PASS; covered by the current-pin direct and relay runs |
+| Unproven provisional-peer fanout and teardown | live-fanout denial plus the superseded-link and deauthorization-state generation regressions pass at `a5d98b70...`; Jeliya's 67-assertion loopback suite covers capability-proven join integration | local exact-revision PASS (these upstream-internal regressions are not exercised by the network runs) |
 | Store insert recovery and degradation | five deterministic upstream tests cover retry recovery, local hole healing under descendants, exhausted-budget durable critical `store_degraded`, queue overflow, and exactly-once peer re-serve | local exact-revision PASS at `a5d98b70...`; disk failure remains possible and must surface operationally |
 | Agent secret location | platform data directory outside the checkout, deny-all state-directory Git guard, repository ignore rules, and commit-prevention validation | local PASS |
 | Rust dependency audit | zero vulnerability advisories; three unmaintained-crate warnings and one yanked-version warning remain in the register below | PASS for vulnerability threshold |
 | npm dependency audit | zero vulnerabilities | PASS |
-| Complete CI definition | Rust, MSRV, TypeScript, docs, smoke, sidecar, agent, fleet, protocol, Windows installer, and dependency gates are configured with required-tool failures; manual dispatch is non-publishing | every job configured at that revision, including Windows installer integrity, passed on public `main` run `29688515781` at `a24f223...`; current-candidate rerun pending |
+| Complete CI definition | Rust, MSRV, TypeScript, docs, smoke, sidecar, agent, fleet, protocol, Windows installer, and dependency gates are configured with required-tool failures; manual dispatch is non-publishing | every job configured at that revision, including Windows installer integrity, passed on public `main` run `29688515781` at `a24f223...`; the daemon-only six-job matrix passed twice at `922f620...` (runs `29713108134` and `29713781499`) |
 | Repeatability | two complete hosted CI executions from clean environments | PASS at `922f620…`: runs `29713108134` (push) and `29713781499` (`workflow_dispatch`), every job green on first attempt with no rerun |
 | Direct different-network P2P | schema 2 run `098c4979` at `922f620…` + `a5d98b70…`: three peers, three distinct observed egresses, two ASNs (AS11426 + AS24940), stable direct paths on roles A/B/C, all assertions pass (operator linux arm64; remotes `demo1`/`demo2`) | certifying PASS for `922f620…` + `a5d98b70…` |
 | Deliberately forced relay | schema 2 run `8bda01e6` at `922f620…` + `a5d98b70…`: the relay-only source build self-attests on all three hosts and proves relay paths on roles A/B/C (operator linux arm64; remotes `demo1`/`demo2`) | certifying PASS for `922f620…` + `a5d98b70…` |
@@ -207,11 +208,13 @@ performed at the current pin (`922f620...` + `a5d98b70...`): the direct run is
 ## Certifying network evidence
 
 The two certifying runs now bind the same current revision pair. Both were
-produced with `--source-commit 922f620…` from harness commit `4ec87e7…` (main)
-carrying the operator-platform-aware Zig support, so each manifest records
-`source.harness_commit` alongside `source.commit = 922f620…`. Roles B and C ran
-on `root@demo1` and `root@demo2`, both Ubuntu x86_64; SSH connected as root,
-but both remote daemons executed through `setpriv` as UID/GID `65534`.
+produced with `--source-commit 922f620…` from the operator-platform-aware Zig
+harness on `main`; the direct run records `source.harness_commit = eeb1eff…`
+and the forced-relay run records `source.harness_commit = 4ec87e7…` (main moved
+forward through the direct-evidence merge between the two runs). Each manifest
+binds `source.commit = 922f620…`. Roles B and C ran on `root@demo1` and
+`root@demo2`, both Ubuntu x86_64; SSH connected as root, but both remote daemons
+executed through `setpriv` as UID/GID `65534`.
 
 | Path | Run and UTC window | Result | Manifest | Signature |
 |---|---|---|---|---|
@@ -234,7 +237,8 @@ Jeliya commit and Iroh Rooms revision, sets `certifiable: true` and
 `source.releaseable: true`, and carries a detached Ed25519 signature (`.sig`)
 that verifies against the pinned release-evidence public SPKI. The direct
 manifest records the official Zig 0.15.2 `aarch64-linux` archive (the operator
-ran on linux arm64); the relay manifest records the `x86_64-macos` archive.
+ran on linux arm64); both the direct and relay manifests record the
+`aarch64-linux` archive (the operator ran on linux arm64 for both runs).
 The forced-relay run is the reviewed safety boundary exercised end to end: the
 harness required the compile-time seam, the binary attested itself as a
 relay-only build, and the path assertions held over relay.
@@ -340,8 +344,8 @@ older revisions and remains historical. See
 
 ## Exact release blockers
 
-The evidence gate is **BLOCKED** for the current `v0.6.0` source candidate.
-Completed work:
+The evidence gate is **READY** for the current `v0.6.0` source candidate
+(`922f620...` + `a5d98b70...`). Completed work:
 
 1. upstream fixes for `kortiene/iroh-room#121`, `kortiene/iroh-room#126`, and
    `kortiene/iroh-room#119` are public
@@ -349,23 +353,24 @@ Completed work:
    `a5d98b70d717f35d3ce60953a88e12e646f2e871`;
 2. public Jeliya source candidate
    `922f620b30ee95c82426a7d4404b1f73a70c0958` resolves that exact revision in
-   `Cargo.toml` and `Cargo.lock`; and
+   `Cargo.toml` and `Cargo.lock`;
 3. the Jeliya workspace suite and the 67-assertion loopback E2E suite pass
    locally at source candidate
    `922f620b30ee95c82426a7d4404b1f73a70c0958`, and the targeted fanout,
    isolation, and store-degradation regressions plus the full upstream core/net
    suite pass at the unchanged pin
-   `a5d98b70d717f35d3ce60953a88e12e646f2e871` in a detached upstream checkout.
+   `a5d98b70d717f35d3ce60953a88e12e646f2e871` in a detached upstream checkout;
+4. signed schema 2 direct (`098c4979`) and forced-relay (`8bda01e6`) runs from
+   the clean public commit are retained, sanitized, and bound to
+   `a5d98b70...`, and their detached Ed25519 signatures verify against the
+   pinned public SPKI; and
+5. the evidence signature, source ancestry, and docs-only-after-qualification
+   checks pass, and the daemon-only six-job CI matrix passed twice at
+   `922f620...`.
 
-Remaining work before `READY`:
-
-1. run direct and forced-relay qualification from that clean public commit,
-   retaining new sanitized manifests bound to `a5d98b70...`;
-2. sign the exact manifest bytes with the approved out-of-band Ed25519 key;
-3. pass the evidence signature, source ancestry, and docs-only-after-
-   qualification checks; and
-4. complete the hosted double CI run and remaining release gates under explicit
-   release authority.
+Remaining work is release promotion under explicit release authority (not a
+Phase 0 evidence-gate condition): cut and publish the `v0.6.0` artifacts from
+this qualified candidate.
 
 `v0.5.0` remains released and certified at its own revision pair. The retained
 `v0.6.0` manifests remain valid for the older `55024a4...` + `71fbb500...`

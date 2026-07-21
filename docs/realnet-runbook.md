@@ -20,10 +20,9 @@ a diagnostic and historical reference; it cannot qualify a release.
 
 ## Current evidence status
 
-The certifying `v0.6.0` direct run binds the current Jeliya candidate
-`922f620b30ee95c82426a7d4404b1f73a70c0958` and Iroh Rooms pin `a5d98b70…`; the
-forced-relay run still binds the prior Jeliya `55024a46…` + Iroh Rooms `71fbb500…`
-snapshot (tag `v0.1.0-rc.3`). Both are signed and set `certifiable: true`:
+The certifying `v0.6.0` direct and forced-relay runs both bind the current
+Jeliya candidate `922f620b30ee95c82426a7d4404b1f73a70c0958` and Iroh Rooms pin
+`a5d98b70…`. Both are signed and set `certifiable: true`:
 
 | Path | Run | Binding | Evidence status |
 |---|---|---|---|

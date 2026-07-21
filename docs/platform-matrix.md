@@ -16,9 +16,10 @@ audience: ["contributors", "maintainers", "operators", "release-engineers"]
 The latest public release is `v0.5.0` (2026-07-14, daemon-only prerelease
 with certified network evidence). The current `v0.6.0` source candidate repins
 `iroh-rooms` to untagged `a5d98b70...`; local exact-revision and loopback
-qualification passes, but signed direct and relay reruns are pending. The
-retained 2026-07-16 runs certify only the prior `55024a4...` + `71fbb500...`
-snapshot. A source build or passing test is not a release.
+qualification passes, and signed direct (`098c4979`) and relay (`8bda01e6`)
+runs certify the current `922f620...` + `a5d98b70...` pair from a linux arm64
+operator. The retained 2026-07-16 runs certify only the prior `55024a4...` +
+`71fbb500...` snapshot. A source build or passing test is not a release.
 
 ## Daemon and embedded web UI
 
@@ -27,7 +28,7 @@ snapshot. A source build or passing test is not a release.
 | macOS arm64 (`aarch64-apple-darwin`) | implemented | archive built and verified by the release workflow; no platform-specific network run | `v0.5.0` archive and sidecar | released; platform network run still absent |
 | macOS x86_64 (`x86_64-apple-darwin`) | implemented | certifying signed schema 2 direct and relay runs pass (operator role); installer behavior passes | `v0.5.0` archive and sidecar | certified for `v0.5.0` and the prior `v0.6.0` snapshot; current candidate pending |
 | Linux arm64 musl (`aarch64-unknown-linux-musl`) | implemented | archive built and verified by the release workflow; no platform-specific network run | `v0.5.0` archive and sidecar | released; platform network run still absent |
-| Linux x86_64 musl (`x86_64-unknown-linux-musl`) | implemented | certifying signed schema 2 direct and relay runs pass on Ubuntu x86_64 under UID `65534`; installer behavior passes | `v0.5.0` archive and sidecar | certified for `v0.5.0` and the prior `v0.6.0` snapshot; current candidate pending |
+| Linux x86_64 musl (`x86_64-unknown-linux-musl`) | implemented | certifying signed schema 2 direct and relay runs pass on Ubuntu x86_64 under UID `65534`; installer behavior passes | `v0.5.0` archive and sidecar | certified for `v0.5.0`, the prior `v0.6.0` snapshot, and the current candidate (remote role in runs `098c4979`/`8bda01e6`) |
 | Windows x86_64 MSVC (`x86_64-pc-windows-msvc`) | implemented | hosted behavioral installer/checksum/tamper, simulated reparse, and native daemon smoke jobs pass on `main` | `v0.5.0` archive and sidecar | released; no platform network run |
 
 The certifying [direct](evidence/v0.6.0/direct.json) (run `098c4979`) and
@@ -65,7 +66,7 @@ implement, verify, or publish.
 
 | Runtime | Local protocol | Cross-network direct | Forced relay | Reconnect/resync |
 |---|---|---|---|---|
-| `jeliyad` on macOS x86_64 and Linux x86_64 | implemented | signed direct pass at prior `55024a4…` + `71fbb500…` and released `c5f740e…` + `d0ceb0b…`; current candidate pending | signed relay pass with self-attestation at those same prior pairs; current candidate pending | local current-pin loopback passes; signed current-pin reconnect/resync pending |
+| `jeliyad` on macOS x86_64 and Linux x86_64 | implemented | signed direct pass at the current `922f620…` + `a5d98b70…` (Linux, run `098c4979`) and at prior `55024a4…` + `71fbb500…` and released `c5f740e…` + `d0ceb0b…`; macOS-specific current-pin network run not yet done | signed relay pass with self-attestation at the current pair (Linux, run `8bda01e6`) and at the prior pairs; macOS-specific current-pin run not yet done | local current-pin loopback passes; signed current-pin reconnect/resync certified (Linux, runs `098c4979`/`8bda01e6`) |
 | Other daemon targets | implemented | no candidate evidence | no candidate evidence | no candidate evidence |
 
 The certifying runs qualify their recorded revision pairs exactly; they do not

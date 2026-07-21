@@ -18,7 +18,9 @@ This page separates implementation, verification, and public availability.
 certifying direct and forced-relay evidence. The current `v0.6.0` source
 candidate repins `iroh-rooms` to untagged upstream revision `a5d98b70...`, the
 first `main` merge carrying the provisional-peer and store-degradation fixes.
-It is locally qualified but not network-qualified or published. Signed runs at
+It is locally qualified and network-qualified at `922f620…` + `a5d98b70…`
+(signed direct `098c4979` and forced-relay `8bda01e6` runs), but not yet
+published. Signed runs at
 the earlier `55024a4...` + `71fbb500...` snapshot remain valid for that exact
 pair and do not transfer to the current dependency.
 
@@ -49,7 +51,7 @@ especially its admin, must move together.
 | Capability | Implementation | Verification | Public release | Honest current claim |
 |---|---|---|---|---|
 | `jeliyad` with embedded React UI | implemented | certified for `v0.5.0` | released in `v0.5.0` (prerelease) | The complete five-target daemon+embedded-UI archive set with `.sha256` sidecars is published. Signed schema 2 direct and forced-relay runs certified the released revision pair. |
-| Identity, room create/join/open, membership, and messages | implemented | certified direct and relay pass for `v0.5.0`; current pin passes local integration | released in `v0.5.0` | Known `v0.5.0` limitation: an invite minted after non-admin chat cannot complete `room.join`. The current candidate fixes this and passes all 67 loopback assertions; fresh current-pin network runs remain required. |
+| Identity, room create/join/open, membership, and messages | implemented | certified direct and relay pass for `v0.5.0` and for the current `922f620…` + `a5d98b70…` candidate; current pin passes local integration | released in `v0.5.0` | Known `v0.5.0` limitation: an invite minted after non-admin chat cannot complete `room.join`. The current candidate fixes this and passes all 67 loopback assertions, and the current-pin direct and relay network runs certify it. |
 | Files and BLAKE3 fetch verification | implemented | certified direct and relay pass for `v0.5.0` | released in `v0.5.0` | Cross-network transfer, byte equality, and hash verification passed in both certifying runs. |
 | Pipes | implemented | certified direct and relay pass for `v0.5.0` | released in `v0.5.0` | Authorized transfer, closure, and zero target bytes from the unauthorized third peer passed in both certifying runs. |
 | Direct cross-network P2P | implemented | certified for `v0.5.0`, the prior `v0.6.0` snapshot, and the current candidate | released in `v0.5.0` | [Signed schema 2 direct run `098c4979`](evidence/v0.6.0/direct.json) certifies `922f620…` + `a5d98b70…` (operator linux arm64 over `AS11426`; remotes `demo1`/`demo2` over `AS24940`). The superseded run `1ca39cfa` certified only `55024a4…` + `71fbb500…`. |
