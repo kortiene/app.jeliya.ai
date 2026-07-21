@@ -747,22 +747,50 @@ export function commitPublishedAtOrigin(origin, commit, context = null) {
   if (!isPublicGitSource(origin) || !/^[0-9a-f]{40}$/.test(commit)) return false;
   const ownedContext = context ? null : gitExecutionContext();
   const gitContext = context ?? ownedContext;
+  const run = (args, timeout) => spawnSync(gitContext.path, args, {
+    cwd: gitContext.cwd,
+    encoding: "utf8",
+    env: gitContext.env,
+    timeout,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
   try {
-    const result = spawnSync(
-      gitContext.path,
-      ["ls-remote", "--refs", publicGitReadUrl(origin)],
-      {
-        cwd: gitContext.cwd,
-        encoding: "utf8",
-        env: gitContext.env,
-        timeout: 30_000,
-        stdio: ["ignore", "pipe", "ignore"],
-      },
-    );
-    if (result.status !== 0) return false;
-    return String(result.stdout)
-      .split(/\r?\n/)
-      .some((line) => line.startsWith(`${commit}\t`));
+    const readUrl = publicGitReadUrl(origin);
+    // Fast path: the commit is exactly a ref tip at origin.
+    const ls = run(["ls-remote", "--refs", readUrl], 30_000);
+    if (ls.status === 0
+        && String(ls.stdout).split(/\r?\n/).some((line) => line.startsWith(`${commit}\t`))) {
+      return true;
+    }
+    // Reachability path: the commit may be published as an ancestor of the
+    // default branch tip rather than a tip itself — a frozen candidate behind
+    // the current branch tip, or an untagged upstream dependency revision.
+    // Fetch the default branch history into the inspection repo and check
+    // ancestry locally. A shallow fetch is not enough (the ancestor object
+    // would not be present), so this fetches the full default-branch history.
+    const head = run(["ls-remote", "--symref", readUrl, "HEAD"], 30_000);
+    const match = head.status === 0
+      ? String(head.stdout).match(/ref:\s+(refs\/heads\/\S+)/)
+      : null;
+    if (!match) return false;
+    spawnSync(gitContext.path, ["init", "-q"], {
+      cwd: gitContext.cwd,
+      env: gitContext.env,
+      stdio: "ignore",
+    });
+    const fetch = spawnSync(gitContext.path, ["fetch", "--quiet", "--no-tags", readUrl, match[1]], {
+      cwd: gitContext.cwd,
+      env: gitContext.env,
+      timeout: 120_000,
+      stdio: "ignore",
+    });
+    if (fetch.status !== 0) return false;
+    const ancestor = spawnSync(gitContext.path, ["merge-base", "--is-ancestor", commit, "FETCH_HEAD"], {
+      cwd: gitContext.cwd,
+      env: gitContext.env,
+      stdio: "ignore",
+    });
+    return ancestor.status === 0;
   } finally {
     ownedContext?.cleanup();
   }
