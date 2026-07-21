@@ -65,11 +65,13 @@ plan's own security posture. Unserviced Windows 10 installs are outside the
 commitment, and the download-and-install page says so.
 
 The same set is the input to signing procurement in
-[Signing and notarization](signing-notarization.md) and to the Phase 2
-deliverable "signed macOS and Windows packages and a verified Linux package":
-Apple Developer enrollment covers the two macOS entries, Authenticode
-issuance covers the Windows entry, and the two Linux entries need
-checksum-and-provenance publication rather than a platform signing service.
+[Signing and notarization](signing-notarization.md) and to the post-deploy
+signing gate deliverable "signed macOS and Windows packages and a verified
+Linux package" (signing was deferred out of the development path by the
+[Code-signing deferral decision](signing-deferral-decision.md)): Apple
+Developer enrollment covers the two macOS entries, Authenticode issuance covers
+the Windows entry, and the two Linux entries need checksum-and-provenance
+publication rather than a platform signing service.
 
 A Linux system without a Secret Service implementation falls back to the
 plan's explicit encrypted-file keystore, and setup copy says so; it is a

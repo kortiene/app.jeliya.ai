@@ -939,11 +939,7 @@ Deliver:
 - companion pairing/control protocol;
 - protocol version and capability negotiation;
 - surface upstream's durable critical `store_degraded` decision and define the
-  operator response to exhausted store retries or queue overflow;
-- submit Apple Developer enrollment and start Windows Authenticode procurement
-  (start the Phase 2 signing clock; enrollment submission was reclassified
-  2026-07-21 out of the Phase 0 exit path — see
-  [Signing and notarization](signing-notarization.md)).
+  operator response to exhausted store retries or queue overflow.
 
 Go/no-go gate:
 
@@ -953,10 +949,7 @@ Go/no-go gate:
 - cursor resync matches full-log materialization;
 - expired and cancelled tickets fail on every transport;
 - replay, wrong-SAS, expired-key, and revoked-key pairing tests fail closed;
-- independent security review approves the wire formats and key lifecycle;
-- Apple Developer enrollment submitted and the Azure Artifact Signing account
-  created (eligibility confirmed), so Phase 2 signing does not wait on
-  procurement calendar time.
+- independent security review approves the wire formats and key lifecycle.
 
 ### Phase 2: companion-backed vertical slice, 5 to 7 weeks (pre-amendment estimate)
 
@@ -964,7 +957,9 @@ Deliver:
 
 - `jeliya-companion` and PWA companion transport;
 - scoped chat-only browser controller;
-- signed macOS and Windows packages and a verified Linux package;
+- macOS, Windows, and Linux packages (unsigned in the development path; signing
+  is deferred to the post-deploy signing gate — see
+  [Code-signing deferral decision](signing-deferral-decision.md));
 - recovery and re-pair user interfaces.
 
 Go/no-go gate:
@@ -975,8 +970,7 @@ Go/no-go gate:
   chat, reconnect, and resynchronize;
 - direct and deliberately forced-relay runs pass;
 - a malicious controller cannot invoke files, pipes, agents, or identity reset;
-- a 48-hour soak loses no committed event;
-- supported installers verify signatures and reject tampering.
+- a 48-hour soak loses no committed event.
 
 ### Phase 3: production web and relay operations, 2 to 3 weeks (pre-amendment estimate)
 
@@ -1047,6 +1041,26 @@ Go/no-go gate:
 - no blind-backup privacy claim is made before encrypted-envelope and key-epoch
   interoperability tests pass.
 
+### Post-deploy signing gate (after Phase 5)
+
+Once the full system is deployed and tested end-to-end, the deferred
+code-signing hardening runs (see
+[Code-signing deferral decision](signing-deferral-decision.md)). Phases 1–5
+build, deploy, and test with **unsigned** companion artifacts; this gate is the
+trust boundary at which signed, notarized installers become mandatory.
+
+Deliver:
+
+- Apple Developer ID / notarization and Windows Authenticode issuance
+  ([#25](https://github.com/kortiene/app.jeliya.ai/issues/25), moved to the
+  Release hardening (signing) milestone), per
+  [Signing and notarization](signing-notarization.md);
+- signed, notarized macOS and Windows packages and a verified Linux package.
+
+Go/no-go gate:
+
+- supported installers verify signatures and reject tampering.
+
 ## Smallest production-worthy vertical slice
 
 The first release at `https://app.jeliya.ai` includes:
@@ -1086,16 +1100,17 @@ by downloading its native archive from the GitHub release published in this
 repository; the first slice ships no auto-update channel (companion auto-update,
 version-skew measurement, and an in-browser upgrade prompt are amendment A3,
 Phase 2). The first-slice archive is **unsigned** — `.github/workflows/release.yml`
-does not sign today, and signing procurement (Apple Developer ID / notarization
-and Windows Authenticode) is an early-Phase-1 deliverable with issuance at the
-Phase 2 gate (see [Signing and notarization](signing-notarization.md)) — so the
-published SHA-256 checksum sidecar only detects accidental corruption or an
-archive/sidecar mismatch; it does **not** authenticate the artifact against a
-trusted root (a compromised release can replace both), and unsigned installs
-remain a known risk recorded in the [Security threat model](security-threat-model.md).
-macOS Gatekeeper and Windows SmartScreen warnings on browser downloads are
-expected first-slice friction. Signed, notarized installers are a Phase 2 gate
-item ("supported installers verify signatures and reject tampering").
+does not sign today, and code-signing is deferred to a **post-deploy signing
+gate** (see [Code-signing deferral decision](signing-deferral-decision.md) and
+[Signing and notarization](signing-notarization.md)); Phases 1–5 build, deploy,
+and test with the unsigned companion. The published SHA-256 checksum sidecar
+only detects accidental corruption or an archive/sidecar mismatch; it does
+**not** authenticate the artifact against a trusted root (a compromised release
+can replace both), and unsigned installs remain a known risk recorded in the
+[Security threat model](security-threat-model.md). macOS Gatekeeper and Windows
+SmartScreen warnings on browser downloads are expected friction. Signed,
+notarized installers become mandatory at the post-deploy signing gate
+("supported installers verify signatures and reject tampering").
 
 ## Assumptions, unresolved decisions, and high-risk unknowns
 
