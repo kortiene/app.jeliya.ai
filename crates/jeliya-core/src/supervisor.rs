@@ -48,9 +48,9 @@ use iroh_rooms::experimental::sync::{SyncConfig, SyncEngine};
 use iroh_rooms::files::build_file_shared;
 use iroh_rooms::identity::{DeviceBinding, DeviceKey, IdentityKey};
 use iroh_rooms::room::{
-    build_member_invited, build_member_joined, build_member_left, build_room_created,
-    derive_room_id, Ingest, MembershipSnapshot, Role, RoomId, RoomInviteTicket, RoomMembership,
-    Status,
+    build_member_invited, build_member_joined, build_member_left, build_member_removed,
+    build_room_created, derive_room_id, Ingest, MembershipSnapshot, Role, RoomId, RoomInviteTicket,
+    RoomMembership, Status,
 };
 
 use crate::error::{CoreError, CoreResult, ErrorKind};
@@ -83,6 +83,12 @@ const FLUSH_GRACE: Duration = Duration::from_millis(500);
 const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 /// How long `pipe.connect` waits for the `pipe.opened` to sync.
 const PIPE_SYNC_WAIT: Duration = Duration::from_secs(10);
+/// Default invite expiry when `invite.create` omits one (Phase 1 D4). A
+/// first slice cannot distinguish live pairing from asynchronous invites, so
+/// the default is the asynchronous ceiling from the production deployment
+/// architecture; live-pairing callers pass `"30m"` explicitly. Previously an
+/// omitted expiry meant "never time-boxed", which left invites open forever.
+const DEFAULT_INVITE_EXPIRY: &str = "24h";
 /// Backoff between attempts to reclaim an owned `Node` for shutdown while an
 /// in-flight network op still borrows the session (see `reclaim_session`).
 const RECLAIM_POLL: Duration = Duration::from_millis(50);
@@ -172,6 +178,18 @@ pub struct RoomSupervisor {
     /// maintains the same fold incrementally (`Node::snapshot`), so the cache
     /// can never go stale against a growing open room.
     snapshot_cache: StdMutex<HashMap<RoomId, (u64, MembershipSnapshot)>>,
+    /// Per-room serialization locks for `message.send` idempotency (Phase 1 D2).
+    /// Only sends that carry a `client_msg_id` acquire one, and only for the
+    /// brief check-author-record critical section, so a lost-response retry
+    /// against this daemon can never race a concurrent retry into authoring two
+    /// events. Lives on the supervisor (not the session) because the durable
+    /// index is per data dir, not per open session.
+    idempotency_locks: StdMutex<HashMap<RoomId, Arc<TokioMutex<()>>>>,
+    /// In-memory mirror of the durable `client_msg_id` index in `state.json`,
+    /// keyed by `(room_id, client_msg_id)` → bare event id hex. Hydrated lazily
+    /// from disk on first miss after a restart, so the message hot path is O(1)
+    /// and the 10k-retry gate scenario does not re-read `state.json` per call.
+    idempotency: StdMutex<HashMap<(RoomId, String), String>>,
     #[cfg(test)]
     fold_invocations: AtomicUsize,
 }
@@ -197,6 +215,8 @@ impl RoomSupervisor {
             sessions: StdMutex::new(HashMap::new()),
             structural: TokioMutex::new(()),
             snapshot_cache: StdMutex::new(HashMap::new()),
+            idempotency_locks: StdMutex::new(HashMap::new()),
+            idempotency: StdMutex::new(HashMap::new()),
             #[cfg(test)]
             fold_invocations: AtomicUsize::new(0),
         })
@@ -1252,6 +1272,111 @@ impl RoomSupervisor {
             .collect())
     }
 
+    /// `room.timeline` with an `after_event_id` cursor (Phase 1 D3): returns the
+    /// events that sort strictly after the cursor in canonical
+    /// `(lamport, event_id)` order, ascending, plus a `next_cursor` (the last
+    /// returned event's id, or `None` when the page was not full / no more
+    /// remain) so a reconnecting client pages through only the delta after a
+    /// push gap instead of re-fetching the whole log.
+    ///
+    /// The cursor is a position in the canonical order the full timeline uses,
+    /// so paging through a settled log from any starting event reproduces the
+    /// exact suffix `timeline()` would materialize — the Phase 1 D3 gate. The
+    /// client only ever sees materialized events, so the cursor position is
+    /// defined over the materialized set (e.g. non-displayed `member.removed`
+    /// does not shift indices).
+    ///
+    /// **Honest boundary.** This is a position-in-canonical-order cursor, not a
+    /// monotonic receive sequence: it returns every event the store holds that
+    /// sorts after the cursor *at query time*. An event that arrives later AND
+    /// sorts *before* the cursor (concurrent work authored against an old
+    /// frontier, with a low lamport) is not in the suffix. A reconnecting
+    /// client that needs a guaranteed-complete catch-up reconciles by
+    /// `event_id` (the same full-tail + seen-set approach the daemon's own push
+    /// reconcile in `poll_new_events` uses); this cursor is the common-case
+    /// bandwidth optimization. The store has no cursor-native query upstream,
+    /// so each call scans the settled tail — fine for the first slice's room
+    /// sizes, O(page) only after an upstream change.
+    pub async fn timeline_after(
+        &self,
+        room_id_str: &str,
+        after_event_id: &str,
+        limit: Option<u32>,
+    ) -> CoreResult<(Vec<Value>, Option<String>)> {
+        let room_id = parse_room_id(room_id_str)?;
+        let snapshot = self.readable_snapshot(&room_id).await?;
+        let store = self.open_store()?;
+        // Canonical ascending (lamport, event_id) over causally-complete events
+        // — the same order `room_tail` returns; u32::MAX is the established
+        // "whole settled tail" fetch (see `poll_new_events`).
+        let rows = store
+            .room_tail(&room_id, u32::MAX)
+            .map_err(|e| internal("could not read the timeline", e))?;
+        let materialized: Vec<Value> = rows
+            .iter()
+            .filter_map(|se| materializer::materialize(se, &snapshot))
+            .collect();
+
+        // Resolve the cursor position over the materialized set. An unknown
+        // cursor means the client's view diverged from this log — fail closed
+        // and direct the client to re-sync from the beginning.
+        let cursor_bare = after_event_id.trim();
+        let idx = materialized
+            .iter()
+            .position(|e| e["event_id"].as_str() == Some(cursor_bare))
+            .ok_or_else(|| {
+                CoreError::invalid(format!(
+                    "after_event_id {cursor_bare:?} is not in the timeline for room {room_id}"
+                ))
+                .with_hint("re-sync the room timeline from the beginning (omit after_event_id)")
+            })?;
+
+        let cap = limit.unwrap_or(200).max(1) as usize;
+        let rest_start = idx + 1;
+        let page: Vec<Value> = materialized[rest_start..]
+            .iter()
+            .take(cap)
+            .cloned()
+            .collect();
+        let more_remain = rest_start + page.len() < materialized.len();
+        let next_cursor = if more_remain {
+            page.last()
+                .and_then(|e| e["event_id"].as_str())
+                .map(str::to_owned)
+        } else {
+            None
+        };
+        Ok((page, next_cursor))
+    }
+
+    /// `room.health` (Phase 1 D7): the persisted trust decisions for a room —
+    /// the operator surface for upstream's durable CRITICAL `store_degraded`
+    /// decision (issue #119: an accepted event could not be persisted after the
+    /// store-retry budget exhausted) and admin-fork `equivocation`. Decisions
+    /// are append-only and survive a daemon restart, so this reads the store
+    /// directly (no live node needed). The operator response is in
+    /// `docs/runbooks/store-degraded.md`.
+    pub fn room_health(&self, room_id_str: &str) -> CoreResult<Vec<Value>> {
+        let room_id = parse_room_id(room_id_str)?;
+        let store = self.open_store()?;
+        let rows = store
+            .load_trust_decisions(&room_id)
+            .map_err(|e| internal("could not read trust decisions", e))?;
+        Ok(rows
+            .into_iter()
+            .map(|r| {
+                json!({
+                    "seq": r.seq,
+                    "code": r.code,
+                    "severity": r.severity,
+                    "admin_seq": r.admin_seq,
+                    "event_ids": r.event_ids.iter().map(bare_event_hex).collect::<Vec<_>>(),
+                    "created_at": r.created_at,
+                })
+            })
+            .collect())
+    }
+
     /// `room.members`: the folded roster with the display-status refinement
     /// (`active|invited|removed|left`, mirroring the CLI's D5 projection).
     pub async fn members(&self, room_id_str: &str) -> CoreResult<Vec<Value>> {
@@ -1307,9 +1432,12 @@ impl RoomSupervisor {
         getrandom::fill(secret_bytes.as_mut_slice())
             .map_err(|e| internal("OS CSPRNG unavailable", e))?;
         let cap_hash = capability_hash(&room_id, &invite_id, &secret_bytes);
-        let expires_at = expiry
-            .map(|spec| parse_expiry(spec, created_at))
-            .transpose()?;
+        // Phase 1 D4: a missing expiry defaults to a bounded window rather than
+        // the previous "never time-boxed". The fold enforces the signed
+        // `expires_at` log-only (against the join's signed `created_at`), so
+        // every peer reaches the same expiry verdict without a shared clock.
+        let expiry_spec = expiry.unwrap_or(DEFAULT_INVITE_EXPIRY);
+        let expires_at = Some(parse_expiry(expiry_spec, created_at)?);
 
         let is_open = self.is_open(&room_id);
         // The whole store-backed authoring path lives in one sync scope so no
@@ -1632,13 +1760,135 @@ impl RoomSupervisor {
         Ok(room_id)
     }
 
+    /// `invite.cancel` (owner only): author a `member.removed` against the
+    /// invited identity so the invite is consumed. Any later `room.join` with
+    /// that ticket is rejected by the membership fold's `departure_consumes`
+    /// rule with `expired_invite` (mapped to `ticket_expired`) — enforced on
+    /// every peer once the signed event syncs, including the joining peer's
+    /// local fold-check (Phase 1 deliverable D4). Closing the invite is a
+    /// signed-log event, so like all membership state it takes effect once the
+    /// cancellation reaches a peer, not at the instant it is authored.
+    pub async fn cancel_invite(
+        &self,
+        room_id_str: &str,
+        invite_id_str: &str,
+    ) -> CoreResult<String> {
+        let room_id = parse_room_id(room_id_str)?;
+        let invite_id = parse_pipe_id(invite_id_str)?;
+        let secret = self.secrets()?;
+        let admin_identity = secret.identity.identity_key();
+        let is_open = self.is_open(&room_id);
+
+        let (wire, event_id) = {
+            let mut store = self.open_store()?;
+            let (_, snapshot) = self.fold(&store, &room_id)?;
+            if snapshot.admin() != Some(&admin_identity) {
+                return Err(CoreError::new(
+                    ErrorKind::NotAMember,
+                    format!("only the room owner can cancel invites for {room_id}"),
+                ));
+            }
+            let invitee_key =
+                find_invitee_for_id(&store, &room_id, invite_id)?
+                    .ok_or_else(|| {
+                        CoreError::invalid(format!(
+                            "no invite with id {} is recorded for room {room_id}",
+                            hex::encode(invite_id)
+                        ))
+                    })?;
+            if snapshot.status(&invitee_key) != Some(Status::Invited) {
+                return Err(CoreError::invalid(
+                    "this invite is no longer pending",
+                )
+                .with_hint("the invite was already redeemed or cancelled"));
+            }
+            let heads = Self::authorization_class_heads(&store, &room_id, &admin_identity)?;
+            let wire = build_member_removed(
+                &secret.identity,
+                &secret.device,
+                &room_id,
+                &invitee_key,
+                Some("invite_cancelled"),
+                None,
+                &heads,
+                now_ms(),
+            );
+            let validated =
+                validate_wire_bytes(&wire.to_bytes(), &ValidationContext::for_room(room_id))
+                    .map_err(|reason| {
+                        CoreError::internal(format!(
+                            "freshly built member.removed (invite cancel) failed validation ({})",
+                            reason.code()
+                        ))
+                    })?;
+            let event_id = validated.event_id;
+            {
+                let (mut membership, _) = self.fold(&store, &room_id)?;
+                match membership.ingest(validated.clone()) {
+                    Ingest::Accepted { .. } => {}
+                    Ingest::Rejected { reason, .. } => {
+                        return Err(CoreError::internal(format!(
+                            "freshly built member.removed (invite cancel) was rejected by the fold ({})",
+                            reason.code()
+                        )))
+                    }
+                    Ingest::Buffered { .. } => return Err(CoreError::internal(
+                        "freshly built member.removed (invite cancel) is causally incomplete",
+                    )),
+                }
+            }
+            if !is_open {
+                store
+                    .insert(&validated)
+                    .map_err(|e| internal("could not persist the invite cancel", e))?;
+            }
+            (wire, event_id)
+        };
+
+        if let Some(session) = self.session_opt(&room_id) {
+            session
+                .node
+                .publish(wire.to_bytes())
+                .await
+                .map_err(|e| internal("could not publish the invite cancel", e))?;
+            // Recompute the live snapshot and close the join-bootstrap window
+            // once no pending invites remain (mirrors create_invite's window
+            // management, now also on cancellation).
+            let snapshot = session
+                .node
+                .snapshot()
+                .await
+                .map_err(|e| internal("could not read the membership snapshot", e))?;
+            if !any_pending_invite(&snapshot) {
+                session.accept_joins.store(false, Ordering::Relaxed);
+            }
+        }
+
+        Ok(bare_event_hex(&event_id))
+    }
+
     // ------------------------------------------------------------------
     // Messages & agent status
     // ------------------------------------------------------------------
 
     /// `message.send` (requires the room to be open — the daemon's live node
     /// persists and fans the frame out).
-    pub async fn send_message(&self, room_id_str: &str, body: &str) -> CoreResult<String> {
+    ///
+    /// When `client_msg_id` is `Some`, the send is idempotent on this daemon:
+    /// a prior send with the same id returns its originally authored event id
+    /// instead of authoring a duplicate (Phase 1 deliverable D2 — closes the
+    /// lost-response-retry gap from `docs/PROTOCOL.md`). The id is NOT echoed
+    /// into the signed event (the upstream `message.text` content has no such
+    /// field), so this is daemon-local exactly-once: it covers retries against
+    /// this daemon (the gate scenario) and survives its restart, but cross-peer
+    /// exactly-once still needs an upstream content field. Sends without a
+    /// `client_msg_id` are unchanged.
+    pub async fn send_message(
+        &self,
+        room_id_str: &str,
+        body: &str,
+        client_msg_id: Option<&str>,
+    ) -> CoreResult<String> {
         if body.is_empty() {
             return Err(CoreError::invalid("message body must not be empty"));
         }
@@ -1648,7 +1898,52 @@ impl RoomSupervisor {
             )));
         }
         let room_id = parse_room_id(room_id_str)?;
-        let session = self.session(&room_id)?;
+
+        if let Some(cmid) = client_msg_id {
+            validate_client_msg_id(cmid)?;
+            // Serialize same-room idempotent sends so two retries for the same
+            // id cannot both pass the lookup and author twice. The lock is
+            // await-safe and per-room, so it never blocks other rooms or the
+            // push loop.
+            let lock = self.idempotency_lock_for(&room_id);
+            let _guard = lock.lock().await;
+            // Fast path: in-memory mirror of the durable index.
+            if let Some(existing) = self
+                .idempotency
+                .lock()
+                .expect("idempotency mutex poisoned")
+                .get(&(room_id, cmid.to_owned()))
+                .cloned()
+            {
+                return Ok(existing);
+            }
+            let room_key = room_id.to_string();
+            // Restart survival: hydrate from the durable index if a prior
+            // session (or a concurrent code path) already recorded it.
+            if let Some(existing) = localstate::message_event_id(&self.data_dir, &room_key, cmid) {
+                self.idempotency
+                    .lock()
+                    .expect("idempotency mutex poisoned")
+                    .insert((room_id, cmid.to_owned()), existing.clone());
+                return Ok(existing);
+            }
+            let event_id = self.send_message_inner(&room_id, body).await?;
+            // Record durably first (survives restart), then mirror in memory.
+            localstate::remember_message(&self.data_dir, &room_key, cmid, &event_id)?;
+            self.idempotency
+                .lock()
+                .expect("idempotency mutex poisoned")
+                .insert((room_id, cmid.to_owned()), event_id.clone());
+            return Ok(event_id);
+        }
+
+        self.send_message_inner(&room_id, body).await
+    }
+
+    /// Author + publish a `message.text` — the shared inner path for both the
+    /// idempotent and the plain send.
+    async fn send_message_inner(&self, room_id: &RoomId, body: &str) -> CoreResult<String> {
+        let session = self.session(room_id)?;
         let secret = self.secrets()?;
         let sender_id = secret.identity.identity_key();
         let snapshot = session
@@ -1666,7 +1961,7 @@ impl RoomSupervisor {
         let wire = build_message_text(
             &secret.identity,
             &secret.device,
-            &room_id,
+            room_id,
             body,
             None,
             None,
@@ -1674,8 +1969,20 @@ impl RoomSupervisor {
             &heads,
             now_ms(),
         );
-        let event_id = Self::publish_authored(&session.node, &room_id, &wire).await?;
+        let event_id = Self::publish_authored(&session.node, room_id, &wire).await?;
         Ok(bare_event_hex(&event_id))
+    }
+
+    /// Get-or-create the per-room idempotency lock.
+    fn idempotency_lock_for(&self, room_id: &RoomId) -> Arc<TokioMutex<()>> {
+        let mut locks = self
+            .idempotency_locks
+            .lock()
+            .expect("idempotency_locks mutex poisoned");
+        locks
+            .entry(*room_id)
+            .or_insert_with(|| Arc::new(TokioMutex::new(())))
+            .clone()
     }
 
     /// `status.post`: author + publish a signed `agent.status` (any active
@@ -2964,6 +3271,32 @@ fn parse_pipe_id(s: &str) -> CoreResult<[u8; SHORT_ID_LEN]> {
         .map_err(|_| CoreError::invalid(format!("invalid pipe_id {s:?} (expected 32 hex chars)")))
 }
 
+/// Validate a client-supplied `client_msg_id` for `message.send` idempotency
+/// (Phase 1 D2). Bounded length and printable-ASCII-ish so it cannot carry
+/// control chars or be used as an unbounded storage vector; the caller chooses
+/// the exact token (a UUID, a content hash, …) as long as it is unique per
+/// intent.
+fn validate_client_msg_id(cmid: &str) -> CoreResult<()> {
+    const MAX_CLIENT_MSG_ID_BYTES: usize = 128;
+    if cmid.is_empty() {
+        return Err(CoreError::invalid("client_msg_id must not be empty"));
+    }
+    if cmid.len() > MAX_CLIENT_MSG_ID_BYTES {
+        return Err(CoreError::invalid(format!(
+            "client_msg_id must be at most {MAX_CLIENT_MSG_ID_BYTES} bytes"
+        )));
+    }
+    if !cmid
+        .bytes()
+        .all(|b| b.is_ascii_graphic() || b == b' ')
+    {
+        return Err(CoreError::invalid(
+            "client_msg_id must be printable ASCII (no control characters)",
+        ));
+    }
+    Ok(())
+}
+
 /// Convert a core `DeviceKey` (`device_id`) into an iroh `EndpointId` — the
 /// same raw 32 bytes (the CLI's `endpoint_id_of`).
 fn endpoint_id_of(dev: DeviceKey) -> CoreResult<EndpointId> {
@@ -3067,6 +3400,31 @@ fn departure_sets(
         }
     }
     Ok((removed_ids, left_ids))
+}
+
+/// Resolve the invitee identity for an invite by its 16-byte `invite_id`, by
+/// scanning the room's `member.invited` events. Returns `None` if no invite with
+/// that id is recorded. Used by `invite.cancel` (Phase 1 D4) to find the
+/// subject of the `member.removed` it authors.
+fn find_invitee_for_id(
+    store: &EventStore,
+    room_id: &RoomId,
+    invite_id: [u8; SHORT_ID_LEN],
+) -> CoreResult<Option<IdentityKey>> {
+    for se in store
+        .by_type(room_id, EventType::MemberInvited)
+        .map_err(|e| internal("could not read member.invited events", e))?
+    {
+        let Ok(ev) = SignedEvent::decode(&se.wire.signed) else {
+            continue;
+        };
+        if let Content::MemberInvited(c) = ev.content {
+            if c.invite_id == invite_id {
+                return Ok(Some(c.invitee_key));
+            }
+        }
+    }
+    Ok(None)
 }
 
 /// `active | invited | removed | left` (the CLI's D5 display refinement: an
@@ -3287,14 +3645,15 @@ mod tests {
     use std::sync::Arc;
 
     use super::{
-        parse_expiry, parse_file_id, parse_pipe_id, sanitize_name, validate_room_name, Content,
-        EventType, RoomSupervisor,
+        bare_event_hex, parse_expiry, parse_file_id, parse_pipe_id, sanitize_name,
+        validate_room_name, Content, EventType, Ingest, RoomSupervisor,
     };
     use crate::error::ErrorKind;
-    use iroh_rooms::events::{validate_wire_bytes, ValidationContext, WireEvent};
+    use iroh_rooms::events::{validate_wire_bytes, EventId, RejectReason, ValidationContext, WireEvent};
+    use iroh_rooms::experimental::store::TrustRow;
     use iroh_rooms::identity::{DeviceBinding, SigningKey};
     use iroh_rooms::room::{RoomId, RoomInviteTicket};
-    use serde_json::json;
+    use serde_json::{json, Value};
     use tempfile::tempdir;
 
     /// Persist an event authored elsewhere directly into the supervisor's
@@ -3851,7 +4210,7 @@ mod tests {
         wait_member_status(&owner, &room_id, &agent_profile.identity_id, "active").await;
 
         agent
-            .send_message(&room_id, "agent says hello")
+            .send_message(&room_id, "agent says hello", None)
             .await
             .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -4396,7 +4755,7 @@ mod tests {
         crate::identity::create(dir.path()).unwrap();
         let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
         let room_id = sup.create_room("Room").unwrap();
-        let err = sup.send_message(&room_id, "hi").await.unwrap_err();
+        let err = sup.send_message(&room_id, "hi", None).await.unwrap_err();
         assert_eq!(err.kind, ErrorKind::RoomNotOpen);
     }
 
@@ -4412,7 +4771,10 @@ mod tests {
         assert!(opened["endpoint"]["endpoint_id"].is_string());
         assert_eq!(opened["timeline"][0]["kind"], "room_created");
 
-        let event_id = sup.send_message(&room_id, "hello jeliya").await.unwrap();
+        let event_id = sup
+            .send_message(&room_id, "hello jeliya", None)
+            .await
+            .unwrap();
         assert_eq!(event_id.len(), 64);
 
         // The freshly published message is pushed exactly once...
@@ -4792,5 +5154,512 @@ mod tests {
         assert_eq!(err.kind, ErrorKind::InvalidParams);
 
         sup.close_room(&room_id).await.unwrap();
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 1 D2 — message.send idempotency (client_msg_id)
+    // ------------------------------------------------------------------
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn message_send_with_client_msg_id_dedupes_10k_lost_response_retries() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("Idempotent").unwrap();
+        sup.open_room(&room_id, &[]).await.unwrap();
+
+        let first = sup
+            .send_message(&room_id, "hello", Some("msg-1"))
+            .await
+            .unwrap();
+        // The Phase 1 D2 gate: 10,000 lost-response retries with the SAME
+        // client_msg_id must each return the originally authored event id and
+        // author NO second event.
+        for _ in 0..10_000 {
+            let again = sup
+                .send_message(&room_id, "hello", Some("msg-1"))
+                .await
+                .unwrap();
+            assert_eq!(again, first, "retry must return the original event id");
+        }
+        let timeline = sup.timeline(&room_id, None).await.unwrap();
+        let messages: Vec<_> = timeline
+            .iter()
+            .filter(|e| e["kind"] == "message")
+            .collect();
+        assert_eq!(messages.len(), 1, "10k retries must not produce a duplicate");
+        assert_eq!(messages[0]["body"], json!("hello"));
+
+        // A DISTINCT client_msg_id authors a distinct event (dedup is per id).
+        let second = sup
+            .send_message(&room_id, "world", Some("msg-2"))
+            .await
+            .unwrap();
+        assert_ne!(second, first);
+        let timeline = sup.timeline(&room_id, None).await.unwrap();
+        assert_eq!(
+            timeline
+                .iter()
+                .filter(|e| e["kind"] == "message")
+                .count(),
+            2
+        );
+
+        sup.close_room(&room_id).await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn message_send_client_msg_id_survives_restart() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("Restart").unwrap();
+        sup.open_room(&room_id, &[]).await.unwrap();
+        let first = sup
+            .send_message(&room_id, "persist me", Some("msg-x"))
+            .await
+            .unwrap();
+        sup.close_room(&room_id).await.unwrap();
+        drop(sup);
+
+        // A fresh supervisor over the SAME data dir dedupes against the prior
+        // session's durable index — a retry across a daemon restart authors no
+        // duplicate (the in-memory cache is cold; the durable index is not).
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        sup.open_room(&room_id, &[]).await.unwrap();
+        let again = sup
+            .send_message(&room_id, "persist me", Some("msg-x"))
+            .await
+            .unwrap();
+        assert_eq!(
+            again, first,
+            "retry across restart must return the original event id"
+        );
+        let timeline = sup.timeline(&room_id, None).await.unwrap();
+        assert_eq!(
+            timeline
+                .iter()
+                .filter(|e| e["kind"] == "message")
+                .count(),
+            1
+        );
+        sup.close_room(&room_id).await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn message_send_rejects_a_bad_client_msg_id() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("BadCmid").unwrap();
+        sup.open_room(&room_id, &[]).await.unwrap();
+        let bads: [String; 4] = [
+            String::new(),
+            "a".repeat(129),
+            "has\nnewline".to_string(),
+            "has\ttab".to_string(),
+        ];
+        for bad in &bads {
+            let err = sup
+                .send_message(&room_id, "hi", Some(bad))
+                .await
+                .unwrap_err();
+            assert_eq!(err.kind, ErrorKind::InvalidParams, "bad client_msg_id {bad:?}");
+        }
+        sup.close_room(&room_id).await.unwrap();
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 1 D4 — invite default expiry + invite.cancel
+    // ------------------------------------------------------------------
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn invite_create_defaults_to_a_bounded_expiry() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("Default Expiry").unwrap();
+        let newcomer = SigningKey::generate();
+        let ticket_str = sup
+            .create_invite(
+                &room_id,
+                &newcomer.identity_key().to_string(),
+                "member",
+                None,
+            )
+            .await
+            .unwrap();
+        let ticket: RoomInviteTicket = ticket_str.parse().unwrap();
+        // An omitted expiry now defaults to a bounded window (previously None,
+        // i.e. never time-boxed).
+        assert!(
+            ticket.expires_at.is_some(),
+            "default invite expiry must be bounded"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn expired_invite_join_fails_with_ticket_expired() {
+        // Expiry is enforced deterministically via the ticket's signed
+        // `expires_at` (a local pre-check before any network IO), so this gate
+        // assertion needs only the joiner's local check — no race with sync.
+        let owner_dir = tempdir().unwrap();
+        crate::identity::create(owner_dir.path()).unwrap();
+        let owner = RoomSupervisor::new(owner_dir.path().to_path_buf(), true).unwrap();
+        let room_id = owner.create_room("Expiry").unwrap();
+        let opened = owner.open_room(&room_id, &[]).await.unwrap();
+        let owner_addr = opened["endpoint"]["addr"].as_str().unwrap().to_owned();
+
+        let joiner_dir = tempdir().unwrap();
+        let joiner_profile = crate::identity::create(joiner_dir.path()).unwrap();
+        let joiner = RoomSupervisor::new(joiner_dir.path().to_path_buf(), true).unwrap();
+
+        let ticket = owner
+            .create_invite(&room_id, &joiner_profile.identity_id, "member", Some("1s"))
+            .await
+            .unwrap();
+        // Let the 1-second invite lapse before redeeming.
+        tokio::time::sleep(std::time::Duration::from_millis(1_200)).await;
+
+        let err = joiner
+            .join_room(
+                &ticket,
+                Some("late"),
+                std::slice::from_ref(&owner_addr),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::TicketExpired);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn invite_cancel_authors_member_removed_and_marks_invitee_removed() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id_str = sup.create_room("Cancel").unwrap();
+        sup.open_room(&room_id_str, &[]).await.unwrap();
+
+        let newcomer = SigningKey::generate();
+        let newcomer_id = newcomer.identity_key().to_string();
+        let ticket_str = sup
+            .create_invite(&room_id_str, &newcomer_id, "member", None)
+            .await
+            .unwrap();
+        let ticket: RoomInviteTicket = ticket_str.parse().unwrap();
+        let invitee_id = newcomer_id.clone();
+        wait_member_status(&sup, &room_id_str, &invitee_id, "invited").await;
+
+        let invite_id_hex = hex::encode(ticket.invite_id);
+        let event_id = sup.cancel_invite(&room_id_str, &invite_id_hex).await.unwrap();
+        assert_eq!(event_id.len(), 64, "cancel returns a bare event id hex");
+
+        // After cancellation the invitee is no longer pending: the signed
+        // member.removed transitions them to "removed".
+        wait_member_status(&sup, &room_id_str, &invitee_id, "removed").await;
+
+        // A member.removed for the invitee is now in the room's log.
+        let room_id: RoomId = room_id_str.parse().unwrap();
+        let store = sup.open_store().unwrap();
+        let mut found = false;
+        for se in store.by_type(&room_id, EventType::MemberRemoved).unwrap() {
+            let Ok(ev) = iroh_rooms::events::SignedEvent::decode(&se.wire.signed) else {
+                continue;
+            };
+            if let Content::MemberRemoved(c) = ev.content {
+                if c.member_id == newcomer.identity_key() {
+                    found = true;
+                    break;
+                }
+            }
+        }
+        assert!(
+            found,
+            "invite.cancel must author a member.removed for the invitee"
+        );
+
+        sup.close_room(&room_id_str).await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cancelled_invite_cannot_be_redeemed_by_the_membership_fold() {
+        // Deterministic, no network: seed invite + cancel (member.removed),
+        // then assert the membership fold rejects a member.joined for the same
+        // invite with ExpiredInvite — the signed-log enforcement point that
+        // makes cancellation take effect on every peer once the member.removed
+        // syncs there. This is the "cancelled tickets fail" gate assertion at
+        // the fold level (the live join path's fold-check consults the same
+        // rule; see supervisor `bootstrap_and_join`).
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id_str = sup.create_room("Cancel Fold").unwrap();
+        let room_id: RoomId = room_id_str.parse().unwrap();
+
+        let newcomer_identity = SigningKey::generate();
+        let newcomer_device = SigningKey::generate();
+        // Mint the invite on a CLOSED room (create_invite persists directly).
+        let ticket_str = sup
+            .create_invite(
+                &room_id_str,
+                &newcomer_identity.identity_key().to_string(),
+                "member",
+                None,
+            )
+            .await
+            .unwrap();
+        let ticket: RoomInviteTicket = ticket_str.parse().unwrap();
+        // Cancel via the public RPC (authors + persists member.removed on the
+        // closed room).
+        let invite_id_hex = hex::encode(ticket.invite_id);
+        sup.cancel_invite(&room_id_str, &invite_id_hex)
+            .await
+            .unwrap();
+
+        // Attempt to redeem the now-cancelled invite the way a joining peer
+        // would, and fold-check it locally.
+        let mut heads = sup.open_store().unwrap().heads(&room_id).unwrap();
+        heads.truncate(super::MAX_PREV_EVENTS);
+        let binding = DeviceBinding::create(
+            &room_id,
+            &newcomer_identity,
+            newcomer_device.device_key(),
+        );
+        let wire = super::build_member_joined(
+            &newcomer_identity,
+            &newcomer_device,
+            &room_id,
+            &ticket.invite_id,
+            &ticket.capability_secret,
+            "member",
+            binding,
+            None,
+            &heads,
+            crate::now_ms(),
+        );
+        let validated =
+            validate_wire_bytes(&wire.to_bytes(), &ValidationContext::for_room(room_id)).unwrap();
+        let store = sup.open_store().unwrap();
+        let (mut membership, _) = sup.fold(&store, &room_id).unwrap();
+        match membership.ingest(validated) {
+            Ingest::Rejected { reason, .. } => {
+                assert_eq!(
+                    reason,
+                    RejectReason::ExpiredInvite,
+                    "a cancelled invite must be rejected as expired"
+                );
+            }
+            other => panic!("cancelled invite must reject the join; got {other:?}"),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn invite_cancel_unknown_invite_id_is_invalid_params() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("Cancel Unknown").unwrap();
+        let err = sup
+            .cancel_invite(&room_id, &hex::encode([0u8; 16]))
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::InvalidParams);
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 1 D3 — incremental timeline cursor (after_event_id)
+    // ------------------------------------------------------------------
+
+    /// Page `timeline_after` from `from_cursor` until exhausted, concatenating
+    /// each page's events. Mirrors what a reconnecting client does.
+    async fn page_from(sup: &RoomSupervisor, room_id: &str, from_cursor: &str, limit: u32) -> Vec<Value> {
+        let mut out = Vec::new();
+        let mut cursor = Some(from_cursor.to_string());
+        while let Some(c) = cursor {
+            let (page, next) = sup
+                .timeline_after(room_id, &c, Some(limit))
+                .await
+                .unwrap();
+            out.extend(page);
+            cursor = next;
+        }
+        out
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn timeline_after_returns_the_exact_suffix_matching_full_materialization() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("Cursor Suffix").unwrap();
+        sup.open_room(&room_id, &[]).await.unwrap();
+        for body in ["one", "two", "three", "four"] {
+            sup.send_message(&room_id, body, None).await.unwrap();
+        }
+
+        let full = sup.timeline(&room_id, None).await.unwrap();
+        assert!(full.len() >= 5); // room_created + 4 messages
+
+        // Cursor at the genesis: the delta must equal everything after it, in
+        // the exact canonical order, and exhaust the log (no next cursor).
+        let genesis = full[0]["event_id"].as_str().unwrap();
+        let (delta, next) = sup.timeline_after(&room_id, genesis, None).await.unwrap();
+        assert_eq!(delta, full[1..], "delta must equal the full suffix in order");
+        assert!(next.is_none(), "an exhaustive read leaves no next cursor");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn timeline_after_pages_through_matching_full_materialization() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("Cursor Page").unwrap();
+        sup.open_room(&room_id, &[]).await.unwrap();
+        for i in 0..12 {
+            sup.send_message(&room_id, &format!("m{i}"), None)
+                .await
+                .unwrap();
+        }
+
+        let full = sup.timeline(&room_id, None).await.unwrap();
+        // Page from the genesis in small pages; the concatenation must equal
+        // the full suffix, proving pagination never drops, reorders, or
+        // duplicates events at page boundaries.
+        let paged = page_from(&sup, &room_id, full[0]["event_id"].as_str().unwrap(), 5).await;
+        assert_eq!(paged, full[1..]);
+
+        // A mid-log cursor pages through the exact suffix too.
+        let mid = full[3]["event_id"].as_str().unwrap();
+        let paged_mid = page_from(&sup, &room_id, mid, 4).await;
+        assert_eq!(paged_mid, full[4..]);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn timeline_after_concurrent_interleaved_authoring_matches_full() {
+        // A richer log: three agent members, each interleaving status + message
+        // events, so the canonical (lamport, event_id) order carries varied
+        // senders and event ids (not a trivial append-only chain). The cursor
+        // must reproduce exactly the order the full materialization emits.
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id_str = sup.create_room("Cursor Interleave").unwrap();
+
+        let mut agents = Vec::new();
+        for _ in 0..3 {
+            let identity = SigningKey::generate();
+            let device = SigningKey::generate();
+            seed_agent_member(&sup, &room_id_str, &identity, &device).await;
+            agents.push((identity, device));
+        }
+        let mut ts = crate::now_ms();
+        for (identity, device) in &agents {
+            for i in 0..4 {
+                ts += 1;
+                seed_status(&sup, &room_id_str, identity, device, "working", Some(i), ts);
+                ts += 1;
+                seed_message(&sup, &room_id_str, identity, device, &format!("agent-msg-{i}"), ts);
+            }
+        }
+
+        let full = sup.timeline(&room_id_str, None).await.unwrap();
+        assert!(
+            full.len() > 20,
+            "interleaved log should be non-trivial; got {}",
+            full.len()
+        );
+
+        // Page the whole settled log in-style; the concatenation must equal the
+        // full suffix in canonical order — the Phase 1 D3 gate.
+        let paged = page_from(
+            &sup,
+            &room_id_str,
+            full[0]["event_id"].as_str().unwrap(),
+            7,
+        )
+        .await;
+        assert_eq!(paged, full[1..]);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn timeline_after_unknown_cursor_is_invalid_params() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("Cursor Unknown").unwrap();
+        sup.open_room(&room_id, &[]).await.unwrap();
+        let err = sup
+            .timeline_after(&room_id, &hex::encode([0u8; 32]), None)
+            .await
+            .unwrap_err();
+        assert_eq!(err.kind, ErrorKind::InvalidParams);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn timeline_after_at_the_last_event_returns_empty_with_no_cursor() {
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id = sup.create_room("Cursor Last").unwrap();
+        sup.open_room(&room_id, &[]).await.unwrap();
+        sup.send_message(&room_id, "only", None).await.unwrap();
+
+        let full = sup.timeline(&room_id, None).await.unwrap();
+        let last = full.last().unwrap()["event_id"].as_str().unwrap().to_owned();
+        let (delta, next) = sup.timeline_after(&room_id, &last, None).await.unwrap();
+        assert!(delta.is_empty(), "nothing sorts after the last event");
+        assert!(next.is_none());
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 1 D7 — room.health / store_degraded surfacing
+    // ------------------------------------------------------------------
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn room_health_surfaces_a_durable_store_degraded_decision() {
+        // The Phase 1 D7 surface: upstream's durable CRITICAL `store_degraded`
+        // decision (issue #119) is readable through `room.health`. A healthy
+        // room has no decisions; a seeded degradation is surfaced verbatim.
+        let dir = tempdir().unwrap();
+        crate::identity::create(dir.path()).unwrap();
+        let sup = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let room_id_str = sup.create_room("Health").unwrap();
+        let room_id: RoomId = room_id_str.parse().unwrap();
+
+        // A fresh, healthy room has no trust decisions.
+        assert!(sup.room_health(&room_id_str).unwrap().is_empty());
+
+        // Seed a store_degraded the way the engine does on retry-budget
+        // exhaustion: append a durable CRITICAL decision for an event that
+        // could not be persisted.
+        let dropped = EventId::from_bytes([0xab; 32]);
+        {
+            let mut store = sup.open_store().unwrap();
+            store
+                .append_trust_decision(
+                    &room_id,
+                    &TrustRow {
+                        seq: 0, // assigned by the store
+                        code: "store_degraded".to_owned(),
+                        severity: "critical".to_owned(),
+                        admin_seq: None,
+                        event_ids: vec![dropped],
+                        created_at: crate::now_ms(),
+                    },
+                )
+                .unwrap();
+        }
+
+        let decisions = sup.room_health(&room_id_str).unwrap();
+        assert_eq!(decisions.len(), 1);
+        assert_eq!(decisions[0]["code"], "store_degraded");
+        assert_eq!(decisions[0]["severity"], "critical");
+        assert_eq!(decisions[0]["event_ids"][0], json!(bare_event_hex(&dropped)));
+        // The decision is durable: a fresh supervisor over the same data dir
+        // (simulating a daemon restart) still surfaces it.
+        let sup2 = RoomSupervisor::new(dir.path().to_path_buf(), true).unwrap();
+        let after_restart = sup2.room_health(&room_id_str).unwrap();
+        assert_eq!(after_restart.len(), 1);
+        assert_eq!(after_restart[0]["code"], "store_degraded");
     }
 }

@@ -1,0 +1,16 @@
+[package]
+name = "jeliya-control"
+version = "0.6.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The host-independent core of the companion control protocol: pairing transcript, SAS, the non-extractable bounded-lifetime control key, and the scope/replay/expiry/revocation gateway (Phase 1 D5, ADR #2)."
+
+[dependencies]
+# BLAKE3 is the project's hasher of choice (content ids, file verification);
+# used for the pairing SAS derivation. Already in the dependency tree
+# transitively (via iroh); pinned direct.
+blake3 = "1"
+
+[lints]
+workspace = true

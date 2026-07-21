@@ -332,6 +332,21 @@ major bump:
 | `daemon.status` | `{}` | `{ version, protocol, pid, port, data_dir, mode: "loopback"\|"real", identity: {identity_id, device_id} \| null, endpoint: {endpoint_id, addr, relay_url} \| null, rooms_open: [room_id] }` |
 | `daemon.shutdown` | `{}` | `{ shutting_down: true }` — replies, then runs the graceful teardown (see Process supervision) |
 | `identity.create` | `{}` | `{ identity_id, device_id }` — errors `identity_exists` if one exists |
+| `recovery.export` | `{}` | `{ bundle: <hex>, recovery_key: <phrase> }` — Phase 1 D1 (ADR #3): seals the local identity's seeds into a versioned AES-256-GCM bundle keyed by a fresh random 256-bit recovery key, returned as a grouped-hex phrase the user saves out of band (the daemon does NOT persist it). Errors: `identity_missing` (no identity to back up). The bundle transits this loopback channel (already trusted with the daemon token) |
+| `recovery.restore` | `{ bundle: <hex>, recovery_key: <phrase> }` | `{ identity_id, device_id }` — imports a bundle into a daemon with no identity (fresh install). Errors: `identity_exists` (refuses to clobber), `invalid_params` (bad hex, bad phrase, or the bundle is corrupt/tampered/sealed with a different key) |
+| `recovery.test_restore` | `{}` | `{}` — exports the identity and re-imports it into a throwaway sibling dir, asserting the restored identity matches; the ADR #3 "successful test restore completes setup" gate. Errors: `identity_missing`, or `internal` if the round-trip disagrees |
+
+**At-rest encryption (Phase 1 D1b, gate row #2).** When the daemon starts with
+`JELIYA_IDENTITY_PASSWORD` set, `identity.create` / `recovery.restore` seal
+`identity.secret` as a versioned AES-256-GCM envelope keyed by
+Argon2id(password, salt) — the on-disk seed bytes are no longer plaintext (the
+gate). `SecretKeys::load` auto-detects the format from the file's first byte,
+so an existing plaintext identity still loads after the password is introduced
+(with a logged warning; re-create or `recovery.restore` under the password to
+seal it). An encrypted file without the password, or a wrong password, fails
+closed with `invalid_params`. Without the env var the seeds are stored plaintext
+under owner-only `0600` (the dev/test default). OS-backed keystores (Keychain /
+DPAPI / Secret Service) are a future backend.
 
 `endpoint.addr` is a dialable `<endpoint_id>@<ip:port>` string when known
 (loopback mode always knows it), else `null`.
@@ -345,35 +360,67 @@ major bump:
 | `room.open` | `{ room_id, peers?: ["<endpoint_id>@<ip:port>"] }` | `{ endpoint: { endpoint_id, addr }, members, timeline }` — spawns the room's node session, starts pushes; `peers` are optional dial hints merged into the persisted hint set (same shape as `room.join`); `addr` is the dialable string an inviter shares with joiners. **`room.open` succeeds locally regardless of peer reachability** — unreachable hints surface as an empty/stale timeline that later syncs, *not* as an error (distinctive error: `not_a_member`; plus cross-cutting `room_unknown`) |
 | `room.close` | `{ room_id }` | `{}` — closes only this daemon's live session; membership remains active |
 | `room.leave` | `{ room_id }` | `{ event_id }` — authors `member.left` for this identity and closes the local session; owners are rejected until ownership transfer exists |
-| `room.timeline` | `{ room_id, limit? }` | `{ events: [TimelineEvent] }` (chronological) — see the resync note below |
+| `room.timeline` | `{ room_id, limit?, after_event_id? }` | `{ events: [TimelineEvent], next_cursor: <event_id\|null> }` (chronological) — omitted `after_event_id` ⇒ the newest `limit` events with `next_cursor: null`; present ⇒ the events strictly after that event in canonical `(lamport, event_id)` order, plus `next_cursor` for further paging. See the resync note below |
 | `room.members` | `{ room_id }` | `{ members: [{ identity_id, role, status }] }` |
-| `invite.create` | `{ room_id, identity_id, role: "member"\|"agent", expiry? }` | `{ ticket }` — `expiry` accepts a **duration string** (`"24h"`, `"90m"`, `"3600"`) **or a number of seconds**; omitted ⇒ single-use, not time-boxed. Minted on a **closed** room too. Errors: `not_a_member` (caller is not the room admin), `invalid_params` (self-invite, bad role, or non-64-hex invitee) |
-| `room.join` | `{ ticket, name?, peers?: ["<endpoint_id>@<ip:port>"] }` | `{ room_id }` — errors: `bad_ticket` (malformed or bound to a different identity), `ticket_expired`, `peer_unreachable` (no reachable discovery hint) |
+| `room.health` | `{ room_id }` | `{ decisions: [{ seq, code, severity, admin_seq?, event_ids, created_at }] }` — Phase 1 D7: the room's persisted trust decisions (append-only, survive restart). `code: "store_degraded"`, `severity: "critical"` is the operator signal that an accepted event could not be persisted (issue #119); `equivocation` is an admin fork. See the [store-degraded runbook](store-degraded-runbook.md). A healthy room returns `decisions: []` |
+| `invite.create` | `{ room_id, identity_id, role: "member"\|"agent", expiry? }` | `{ ticket }` — `expiry` accepts a **duration string** (`"24h"`, `"90m"`, `"3600"`) **or a number of seconds**; omitted ⇒ defaults to **24h** (Phase 1 D4; previously unbounded). Minted on a **closed** room too. Errors: `not_a_member` (caller is not the room admin), `invalid_params` (self-invite, bad role, or non-64-hex invitee) |
+| `invite.cancel` | `{ room_id, invite_id }` | `{ event_id }` — owner-only (Phase 1 D4). Authors a `member.removed` against the invited identity, consuming the invite so any later `room.join` is rejected. `invite_id` is the 32-hex id encoded in the ticket. Errors: `not_a_member` (caller is not the admin), `invalid_params` (no invite with this id, or it is no longer pending — already redeemed or cancelled) |
+| `room.join` | `{ ticket, name?, peers?: ["<endpoint_id>@<ip:port>"] }` | `{ room_id }` — errors: `bad_ticket` (malformed or bound to a different identity), `ticket_expired` (the invite lapsed **or was cancelled**), `peer_unreachable` (no reachable discovery hint) |
 
-**Timeline resync (normative + reserved).** Live `room.event` pushes are lossy
-and never re-sent (see *Pushes*), so a client **MUST** re-sync a room's timeline
-after any reconnect. Today `room.open` returns the full `timeline` and
-`room.timeline` takes only `limit`, so re-sync pulls the whole log. Reserved for
-a future minor (non-breaking): `room.timeline` MAY gain an `after_event_id`
-(or `since_ts`) cursor so a reconnecting client fetches only the delta after a
-push gap — the name is reserved now because it matters most on metered/flaky
-mobile links.
+**Invite expiry and cancellation (Phase 1 D4).** Expiry is enforced
+deterministically: the ticket carries a signed `expires_at`, and `room.join`
+checks it locally before any network IO. Cancellation is a signed-log event
+(`member.removed` against the invited identity), so — like all membership state —
+it takes effect on a peer once the event syncs there: that peer's membership fold
+then rejects a redeeming `member.joined` as `expired_invite` (`ticket_expired`).
+The owner also closes its join-bootstrap window immediately on cancel, so a
+fresh bootstrap for the cancelled invite cannot complete. A peer that redeems
+before the cancellation reaches it may still join; the signed cancellation
+prevents later redemptions, not an in-flight one that already committed.
+
+**Timeline resync and the `after_event_id` cursor (Phase 1 D3).** Live
+`room.event` pushes are lossy and never re-sent (see *Pushes*), so a client
+**MUST** re-sync a room's timeline after any reconnect. `room.timeline` now takes
+an optional `after_event_id`: a reconnecting client passes the newest event id it
+already has and receives only the events that sort after it in canonical
+`(lamport, event_id)` order, paging with the returned `next_cursor` until it is
+`null`. Paging through a settled log from any starting event reproduces the
+exact suffix the full materialization emits (the Phase 1 D3 gate), so a
+reconnect fetches the delta instead of the whole log.
+
+The cursor is a position in canonical order, **not** a monotonic receive
+sequence: it returns every event the store holds that sorts after the cursor *at
+query time*. An event that arrives later AND sorts *before* the cursor (work
+authored against an old frontier, with a low lamport) is not in the suffix. A
+client that needs a guaranteed-complete catch-up reconciles by `event_id` — the
+same full-tail plus seen-set approach the daemon's own push reconcile uses — and
+the `room.event` push delivers every newly-ingested event regardless of lamport.
+The cursor is the common-case bandwidth optimization, with the push channel as
+the completeness backstop. An unknown `after_event_id` returns `invalid_params`
+(re-sync from the beginning by omitting it).
 
 ### Messages & agent status
 
 | Method | Params | Result |
 |---|---|---|
-| `message.send` | `{ room_id, body }` | `{ event_id }` — `body` is 1..=**16384** UTF-8 bytes (16 KiB); see the idempotency note below |
+| `message.send` | `{ room_id, body, client_msg_id? }` | `{ event_id }` — `body` is 1..=**16384** UTF-8 bytes (16 KiB); the optional `client_msg_id` makes a send idempotent on this daemon (see the idempotency note below) |
 | `status.post` | `{ room_id, label, message?, progress?, artifacts? }` | `{ event_id }` — any active member may post (protocol rule); `progress` is `0..=100`, `artifacts` is at most **16** valid file ids |
 
-**`message.send` has no idempotency key (normative gap).** The params carry no
-client-supplied id, so if a send fails with `connection_lost` *after* the daemon
-already authored the event, a retry authors a **second** event with a new
-`event_id` — a duplicate. A client therefore accepts at-least-once delivery on
-retry, or surfaces the ambiguity to the user. Reserved for a future minor
-(non-breaking): an optional `client_msg_id` the daemon echoes into the event
-for exactly-once reconciliation — but that requires a field on the signed
-`iroh-rooms` content, so it is named here, not yet implemented.
+**`message.send` idempotency (daemon-local, Phase 1 D2).** An optional
+`client_msg_id` (printable ASCII, 1..=128 bytes, unique per intent) makes a send
+idempotent **on this daemon**: a send whose response was lost, retried with the
+same id, returns the originally authored `event_id` instead of authoring a
+duplicate. The index is durable (`state.json`), so it survives a daemon
+restart, and same-room retries are serialized so a concurrent burst for one id
+cannot author twice. The gate regression proves 10,000 lost-response retries
+produce exactly one event.
+
+This is **daemon-local** exactly-once: the `client_msg_id` is NOT echoed into
+the signed `message.text` event (the upstream content has no such field), so it
+does not dedup across peers or against a different daemon's data dir. Cross-peer
+exactly-once still needs a field on the signed `iroh-rooms` content; that
+remains a forward-compatible upstream change. A client that sends without a
+`client_msg_id` keeps the previous at-least-once behavior.
 
 ### Files
 
@@ -583,8 +630,9 @@ The reference UI renders your own message immediately with a client-local id
 (never sent on the wire) in phases `sending → syncing → failed`, then reconciles
 against the real event by `event_id` at the three points named under *Pushes*.
 On the ambiguous `connection_lost`-after-send case it shows a **Retry** that
-re-sends — accepting the duplicate risk from the `message.send` idempotency gap.
-A client MAY choose differently, but MUST reconcile echo↔response by `event_id`.
+re-sends with a **stable `client_msg_id`** so the daemon's idempotency index
+(Phase 1 D2) returns the original event instead of authoring a duplicate. A
+client MAY choose differently, but MUST reconcile echo↔response by `event_id`.
 
 ### Presentation-only, client-local
 

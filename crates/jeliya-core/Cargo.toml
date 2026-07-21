@@ -38,6 +38,14 @@ tracing = "0.1"
 # The exact version is security-sensitive: on Windows it commits with
 # MOVEFILE_WRITE_THROUGH; on Unix it fsyncs the containing directories.
 atomicwrites = "=0.4.4"
+# Phase 1 D1 recovery bundle (ADR #3): AES-256-GCM authenticated encryption of
+# the versioned recovery payload. Already in the dependency tree transitively
+# (via iroh); pinned direct so a security-sensitive crate does not lean on a
+# transitive path that could shift.
+aes-gcm = "0.10"
+# Phase 1 D1b at-rest encryption (gate row #2): Argon2id key derivation from a
+# user password that wraps the on-disk identity seeds. Memory-hard, versioned.
+argon2 = "0.5"
 
 [dev-dependencies]
 tempfile = "3"

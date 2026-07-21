@@ -246,7 +246,7 @@ export interface MethodMap {
   };
   'room.close': { params: { room_id: string }; result: Record<string, never> };
   'room.leave': { params: { room_id: string }; result: { event_id: string } };
-  'room.timeline': { params: { room_id: string; limit?: number }; result: { events: TimelineEvent[] } };
+  'room.timeline': { params: { room_id: string; limit?: number; after_event_id?: string }; result: { events: TimelineEvent[]; next_cursor: string | null } };
   'room.members': { params: { room_id: string }; result: { members: Member[] } };
   'invite.create': {
     /** `expiry` accepts a duration string like "24h" / "3600" or a bare number
@@ -255,7 +255,7 @@ export interface MethodMap {
     result: { ticket: string };
   };
   'room.join': { params: { ticket: string; name?: string; peers?: string[] }; result: { room_id: string } };
-  'message.send': { params: { room_id: string; body: string }; result: { event_id: string } };
+  'message.send': { params: { room_id: string; body: string; client_msg_id?: string }; result: { event_id: string } };
   'status.post': {
     params: { room_id: string; label: string; message?: string; progress?: number; artifacts?: string[] };
     result: { event_id: string };
