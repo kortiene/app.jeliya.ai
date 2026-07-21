@@ -37,6 +37,7 @@ CI rules for every page in this wiki.
 - [Supported platform matrix decision](platform-matrix-decision.md) - Decision record fixing the first-slice supported desktop OS and browser matrix, its mobile position under amendment A4, the test-lane mapping, and the pairing-success denominator.
 - [Portable Iroh Rooms traits decision](iroh-rooms-portable-traits-decision.md) - Decision record choosing the audited short-lived patch path for the browser peer's portable store, blob, transport, clock, and task-scheduling traits, with its audit owner and recurring cost.
 - [Phase 0 go/no-go gate verdict](phase-0-gate-verdict.md) - Dated verdict against each of the six Phase 0 gate conditions for the v0.6.0 candidate (922f620 + a5d98b70), each with linked evidence (issue #31).
+- [Code-signing deferral decision](signing-deferral-decision.md) - Decision record deferring code-signing (the signing gate and #25) until after the full system is deployed and tested, so signing never blocks development.
 
 ## Agents
 

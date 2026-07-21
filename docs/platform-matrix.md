@@ -24,10 +24,12 @@ operator. The retained 2026-07-16 runs certify only the prior `55024a4...` +
 In the initial deployment, users obtain the browser companion by downloading
 its native archive from the GitHub release published in this repository; the
 first slice ships no auto-update channel (amendment A3, Phase 2) and the
-archive is **unsigned** (enrollment submission is an early-Phase-1 deliverable;
-issuance is a Phase 2 gate item), with the published SHA-256 checksum sidecar
-detecting only accidental corruption or an archive/sidecar mismatch — not
-artifact authenticity. Signed installers are a Phase 2 gate item.
+archive is **unsigned** through build, deploy, and test — code-signing is
+deferred to a post-deploy signing gate per the
+[Code-signing deferral decision](signing-deferral-decision.md) (enrollment and
+issuance run in the Release hardening (signing) milestone, [#25](https://github.com/kortiene/app.jeliya.ai/issues/25)).
+The published SHA-256 checksum sidecar detects only accidental corruption or an
+archive/sidecar mismatch — not artifact authenticity.
 
 ## Daemon and embedded web UI
 

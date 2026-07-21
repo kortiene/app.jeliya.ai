@@ -124,12 +124,15 @@ notarized today, and nothing in `release.yml` signs today.
 | 2026-07-20 | Windows | Eligibility confirmed from the Artifact Signing FAQ; Artifact Signing route chosen and recorded; the paid Azure subscription and Artifact Signing account are not yet created |
 | 2026-07-20 | Apple | Individual-enrollment decision recorded; enrollment not yet submitted |
 
-Enrollment **submission** is an early-Phase-1 deliverable (start the Phase 2
-signing clock during Phase 1; it was reclassified 2026-07-21 out of the Phase 0
-exit path so the first slice can ship an unsigned companion without waiting on
-procurement). Phase 0 exits without it; completed issuance remains a Phase 2
-entry precondition for the gate item "supported installers verify signatures
-and reject tampering".
+Code-signing procurement is **deferred until after the full system is deployed
+and tested end-to-end** (decided 2026-07-21, per the
+[Code-signing deferral decision](signing-deferral-decision.md), which
+supersedes the earlier Phase 0 / Phase 1 timing). Phases 1–5 build, deploy, and
+test with unsigned companion artifacts; [#25](https://github.com/kortiene/app.jeliya.ai/issues/25)
+(enrollment + issuance) runs in the Release hardening (signing) milestone once
+the post-deploy signing gate nears. That post-deploy gate — "supported
+installers verify signatures and reject tampering" — is the trust boundary at
+which signed, notarized installers become mandatory.
 
 ## Goals
 

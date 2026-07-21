@@ -225,14 +225,14 @@ matrix twice on one immutable SHA.
 - The estimate of 11 to 17 engineering weeks to the first production slice
   predates this record and does not include the work A3, A5, and A6 add. It
   should be re-baselined at the Phase 0 gate rather than carried forward.
-- Signing has calendar lead time that is not engineering time. The Phase 2 gate
-  requires signed macOS and Windows packages, so issuance must complete before
-  that gate. Enrollment **submission** is an early-Phase-1 deliverable (start
-  the clock during Phase 1; it is no longer a Phase 0 exit requirement so the
-  first slice can ship an unsigned companion downloaded from the GitHub release
-  without waiting on procurement). See [Signing and notarization](signing-notarization.md).
-  (Reclassified 2026-07-21 from "start during Phase 0" to an early-Phase-1
-  deliverable; issuance-completed remains the Phase 2 entry precondition.)
+- Signing has calendar lead time that is not engineering time, and must not
+  block development. Code-signing (the signing gate and the
+  [#25](https://github.com/kortiene/app.jeliya.ai/issues/25) procurement) is
+  **deferred until after the full system is deployed and tested end-to-end**,
+  so Phases 1–5 build, deploy, and test with an unsigned companion; signing is
+  a final hardening step. See the
+  [Code-signing deferral decision](signing-deferral-decision.md). (Supersedes
+  the earlier "start during Phase 0 / Phase 1" framing.)
 - Browser-to-native Iroh connectivity through an authenticated relay is both a
   Phase 0 gate item and the top two entries in the proposal's highest-risk
   unknowns. Every later phase assumes it works. It should be spiked before
