@@ -20,15 +20,14 @@ a diagnostic and historical reference; it cannot qualify a release.
 
 ## Current evidence status
 
-The certifying `v0.6.0` direct run binds the current Jeliya candidate
-`922f620b30ee95c82426a7d4404b1f73a70c0958` and Iroh Rooms pin `a5d98b70…`; the
-forced-relay run still binds the prior Jeliya `55024a46…` + Iroh Rooms `71fbb500…`
-snapshot (tag `v0.1.0-rc.3`). Both are signed and set `certifiable: true`:
+The certifying `v0.6.0` direct and forced-relay runs both bind the current
+Jeliya candidate `922f620b30ee95c82426a7d4404b1f73a70c0958` and Iroh Rooms pin
+`a5d98b70…`. Both are signed and set `certifiable: true`:
 
 | Path | Run | Binding | Evidence status |
 |---|---|---|---|
 | direct | `098c4979` | `922f620…` + `a5d98b70…` | certifying PASS; [signed schema 2 manifest](evidence/v0.6.0/direct.json) (operator linux arm64; remotes `demo1`/`demo2`) |
-| forced relay | `cf28bc63` | `55024a4…` + `71fbb500…` (prior snapshot) | certifying PASS with a relay-only build self-attested on the operator host and both remote hosts; [signed schema 2 manifest](evidence/v0.6.0/relay.json) |
+| forced relay | `8bda01e6` | `922f620…` + `a5d98b70…` | certifying PASS with a relay-only build self-attested on the operator host and both remote hosts; [signed schema 2 manifest](evidence/v0.6.0/relay.json) (operator linux arm64; remotes `demo1`/`demo2`) |
 
 Neither run certifies room-scoped synchronization isolation: both manifests set
 `synchronization_isolation_claimed: false`, so `WantEvents`, foreign-parent, and
@@ -37,10 +36,9 @@ revision.
 
 The current source candidate is Jeliya `922f620...` with the deliberately
 untagged Iroh Rooms pin `a5d98b70...`. Its local exact-revision qualification
-passes, the direct half is now re-qualified at the current pin (run `098c4979`),
-and the forced-relay half still binds the prior snapshot. Run the forced-relay
-procedure below from the clean public candidate and replace/sign `relay.json`
-before marking the current release evidence gate ready.
+passes, and both the direct (`098c4979`) and forced-relay (`8bda01e6`) halves
+are now certified at the current pin. The release evidence gate is READY for
+`922f620…` + `a5d98b70…`.
 
 The superseded `v0.5.0` runs (direct `3b86ac67`,
 [manifest](evidence/v0.5.0/direct.json); forced relay `a3c76859`,
