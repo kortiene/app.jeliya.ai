@@ -124,9 +124,12 @@ notarized today, and nothing in `release.yml` signs today.
 | 2026-07-20 | Windows | Eligibility confirmed from the Artifact Signing FAQ; Artifact Signing route chosen and recorded; the paid Azure subscription and Artifact Signing account are not yet created |
 | 2026-07-20 | Apple | Individual-enrollment decision recorded; enrollment not yet submitted |
 
-Phase 0 exits with enrollment SUBMITTED and eligibility confirmed — not with
-issuance completed. Completed issuance is a Phase 2 entry precondition for
-the gate item "supported installers verify signatures and reject tampering".
+Enrollment **submission** is an early-Phase-1 deliverable (start the Phase 2
+signing clock during Phase 1; it was reclassified 2026-07-21 out of the Phase 0
+exit path so the first slice can ship an unsigned companion without waiting on
+procurement). Phase 0 exits without it; completed issuance remains a Phase 2
+entry precondition for the gate item "supported installers verify signatures
+and reject tampering".
 
 ## Goals
 
