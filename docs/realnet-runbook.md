@@ -20,15 +20,15 @@ a diagnostic and historical reference; it cannot qualify a release.
 
 ## Current evidence status
 
-The retained certifying `v0.6.0` runs bind published Jeliya commit
-`55024a46b3e112796ba2acf1dc408dab26dbba2e` and Iroh Rooms pin `71fbb500…`
-(tag `v0.1.0-rc.3`); both are signed and set `certifiable: true` for that exact
-prior snapshot:
+The certifying `v0.6.0` direct run binds the current Jeliya candidate
+`922f620b30ee95c82426a7d4404b1f73a70c0958` and Iroh Rooms pin `a5d98b70…`; the
+forced-relay run still binds the prior Jeliya `55024a46…` + Iroh Rooms `71fbb500…`
+snapshot (tag `v0.1.0-rc.3`). Both are signed and set `certifiable: true`:
 
-| Path | Run | Evidence status |
-|---|---|---|
-| direct | `1ca39cfa` | certifying PASS; [signed schema 2 manifest](evidence/v0.6.0/direct.json) |
-| forced relay | `cf28bc63` | certifying PASS with a relay-only build self-attested on the operator host and both remote hosts; [signed schema 2 manifest](evidence/v0.6.0/relay.json) |
+| Path | Run | Binding | Evidence status |
+|---|---|---|---|
+| direct | `098c4979` | `922f620…` + `a5d98b70…` | certifying PASS; [signed schema 2 manifest](evidence/v0.6.0/direct.json) (operator linux arm64; remotes `demo1`/`demo2`) |
+| forced relay | `cf28bc63` | `55024a4…` + `71fbb500…` (prior snapshot) | certifying PASS with a relay-only build self-attested on the operator host and both remote hosts; [signed schema 2 manifest](evidence/v0.6.0/relay.json) |
 
 Neither run certifies room-scoped synchronization isolation: both manifests set
 `synchronization_isolation_claimed: false`, so `WantEvents`, foreign-parent, and
@@ -37,9 +37,10 @@ revision.
 
 The current source candidate is Jeliya `922f620...` with the deliberately
 untagged Iroh Rooms pin `a5d98b70...`. Its local exact-revision qualification
-passes, but the retained manifests do not transfer. Run both procedures below
-from the clean public candidate and replace/sign the manifests together before
-marking the current release evidence gate ready.
+passes, the direct half is now re-qualified at the current pin (run `098c4979`),
+and the forced-relay half still binds the prior snapshot. Run the forced-relay
+procedure below from the clean public candidate and replace/sign `relay.json`
+before marking the current release evidence gate ready.
 
 The superseded `v0.5.0` runs (direct `3b86ac67`,
 [manifest](evidence/v0.5.0/direct.json); forced relay `a3c76859`,
@@ -115,8 +116,11 @@ rejected for this three-role topology. Do not override that result with
 
 ## Pinned toolchain and source prerequisites
 
-A release-qualifying schema 2 run is supported only from an x86_64 macOS
-operator. It requires all of the following before any remote mutation:
+A release-qualifying schema 2 run is supported from any operator platform that
+has an official Zig `0.15.2` archive: `x86_64-macos`, `aarch64-macos`,
+`x86_64-linux`, or `aarch64-linux` (the `098c4979` direct run used `aarch64-linux`
+from a linux arm64 operator). It requires all of the following before any remote
+mutation:
 
 - clean Jeliya commit reachable from its public repository origin;
 - exact public HTTPS Iroh Rooms Git source and immutable 40-hex revision in
@@ -124,9 +128,10 @@ operator. It requires all of the following before any remote mutation:
 - Node `22.22.3` and npm `10.9.8`;
 - Rust and Cargo `1.91.0` through rustup;
 - installed `x86_64-unknown-linux-musl` target for toolchain `1.91.0`;
-- the official Zig `0.15.2` x86_64-macos archive, independently obtained with
-  SHA-256
-  `375b6909fc1495d16fc2c7db9538f707456bfc3373b14ee83fdd3e22b3d43f7f`;
+- the official Zig `0.15.2` archive for the operator's own platform,
+  independently obtained with its reviewed SHA-256 (`375b6909…3f7f` for
+  `x86_64-macos`; `958ed7d1…667f` for `aarch64-linux`; see
+  `OFFICIAL_ZIG_0_15_2_ARCHIVES` in `scripts/realnet-evidence.mjs`);
 - `cargo-zigbuild 0.23.0`;
 - clean, locked UI dependency install from the committed package lock; and
 - approved Ed25519 evidence-key custody, with only the canonical public SPKI

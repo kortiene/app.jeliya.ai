@@ -23,7 +23,7 @@ as released.
 | Layer | Exact revision | Dependency state | Artifact/evidence state | Claim allowed |
 |---|---|---|---|---|
 | Latest public release | tag `v0.5.0` at `045d85cb1d066f16d564b6051363b9328063ee01` (prerelease) | pins published `iroh-rooms` `d0ceb0b…` (rc.2-era remediation) | five published daemon archives and five checksum sidecars; signed certifying direct (`3b86ac67`) and relay (`a3c76859`) manifests | behavior in those archives is released; known limitation: joins from invites minted after non-admin chat fail at this pin |
-| Current `v0.6.0` source candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` (public `main` at the time of this designation; `105744b…` plus merged pull requests #1 and #58) | pins untagged public Iroh Rooms `a5d98b70d717f35d3ce60953a88e12e646f2e871`, the first merge carrying `kortiene/iroh-room#121` and `kortiene/iroh-room#119` fixes plus the `kortiene/iroh-room#126` follow-ups | exact-revision upstream, workspace, and 67-assertion loopback suites pass locally at this revision; the daemon-only six-job matrix passed twice at this revision (runs `29713108134` and `29713781499`); fresh signed direct/relay evidence pending | locally qualified; not network-qualified or published |
+| Current `v0.6.0` source candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` (public `main` at the time of this designation; `105744b…` plus merged pull requests #1 and #58) | pins untagged public Iroh Rooms `a5d98b70d717f35d3ce60953a88e12e646f2e871`, the first merge carrying `kortiene/iroh-room#121` and `kortiene/iroh-room#119` fixes plus the `kortiene/iroh-room#126` follow-ups | exact-revision upstream, workspace, and 67-assertion loopback suites pass locally at this revision; the daemon-only six-job matrix passed twice at this revision (runs `29713108134` and `29713781499`); fresh signed direct evidence certified (run `098c4979`); relay evidence pending | direct half network-qualified; relay half and publication pending |
 | Prior `v0.6.0` network-qualified snapshot | `55024a46b3e112796ba2acf1dc408dab26dbba2e` | pins `v0.1.0-rc.3` at `71fbb5007bef4ce83631c94762ec68c2beef3d79` | signed certifying direct (`1ca39cfa`) and relay (`cf28bc63`) manifests bind this exact pair | evidence remains valid for the snapshot but does not transfer to the current candidate |
 | Superseded `v0.5.0` network-qualified commit | `c5f740e67d043a1153cf285691e3bc5b2b9a7203` | pins `d0ceb0b…` | both `v0.5.0` certifying schema 2 runs bind this commit | the certified evidence speaks for that revision pair only; it does not transfer to the rc.3 pin |
 | Audited baseline | `1285b42037a3713840955fa518f2b81b19f2929f` | pins vulnerable `iroh-rooms` `3cb9bfd…` | no artifact for this commit | baseline source behavior only |
@@ -31,12 +31,14 @@ as released.
 | Pre-certification network snapshot | `0f6769a68d783cf6a5feba0e2db6111a212affa1` on `hardening/v0.5.0-evidence-preview` | pinned then-unsafe `3cb9bfd…` | schema 2 direct 36/36 functional pass ([preview manifest](evidence/v0.5.0/preview-direct-schema2.json), unsigned); its relay-only build failed closed for lack of the seam | historical functional evidence only |
 | Historical local-remediation network snapshot | Jeliya `fe870c7c5b63f2bf52b031dd1bc8e27e83183be5` | local Git dependency `3702e8c…` | schema 1 direct and relay functional pass; manifests retained unsigned as `historical-schema1-{direct,relay}.json` | historical functional evidence only |
 
-The certifying [direct](evidence/v0.6.0/direct.json) and
-[relay](evidence/v0.6.0/relay.json) schema 2 manifests bind the
-network-qualified commit `55024a4…` and published pin `71fbb500…`, carry
-detached Ed25519 signatures, and set `certifiable: true` — they qualify that
-prior `v0.6.0` snapshot. They do not qualify the current `922f620…` +
-`a5d98b70…` source candidate. The `v0.5.0` manifests
+The certifying [direct](evidence/v0.6.0/direct.json) schema 2 manifest binds the
+current candidate `922f620…` + published pin `a5d98b70…` (run `098c4979`), and
+the retained [relay](evidence/v0.6.0/relay.json) schema 2 manifest binds the
+prior `55024a4…` + `71fbb500…` snapshot. Both carry detached Ed25519 signatures
+and set `certifiable: true`. The direct half qualifies the current source
+candidate; the forced-relay half still qualifies only the prior snapshot and
+must be re-run at `922f620…` + `a5d98b70…` before the release evidence gate
+passes. The `v0.5.0` manifests
 ([direct](evidence/v0.5.0/direct.json), [relay](evidence/v0.5.0/relay.json))
 bind `c5f740e…` + `d0ceb0b…` and authorized that prerelease; they do not
 transfer to another pin. Neither generation certifies room-scoped
