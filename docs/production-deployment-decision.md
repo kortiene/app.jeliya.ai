@@ -29,9 +29,13 @@ and it does not advance any implementation, verification, or release status.
 1. `app.jeliya.ai` serves an immutable static PWA. `jeliyad` is never exposed
    through a public listener or reverse proxy, and no public-listen flag,
    proxied `/ws`, or remotely reused daemon token is acceptable.
-2. The first production release pairs that PWA with a signed local companion
-   over a new mutually authenticated, end-to-end-encrypted Iroh control
-   protocol.
+2. The first production release pairs that PWA with a local companion over a
+   new mutually authenticated, end-to-end-encrypted Iroh control protocol. The
+   companion is **unsigned in the first slice**; signing (Apple Developer ID /
+   notarization and Windows Authenticode) is added at the Phase 2 gate, so the
+   initial deployment distributes the companion as a native archive from the
+   GitHub release with the SHA-256 checksum sidecar and accepted OS-trust
+   friction.
 3. A browser-resident Wasm room peer follows only after browser storage,
    signing, synchronization, and Iroh Rooms adapters pass independent gates.
 4. Dedicated relays route encrypted traffic and never join rooms.
@@ -48,13 +52,14 @@ runtime.
 
 ### The companion is not the deleted native client
 
-The companion is a headless, signed local process, not a graphical
-application. Removing the Flutter client (`app/`), the Dart client
-(`dart/jeliya_protocol`), and the mobile FFI shim (`crates/jeliya-ffi`) does
-not remove any component this decision depends on. `jeliyad` already has the
-companion's shape, and `.github/workflows/release.yml` already produces the
-five archives it needs. The remaining companion work is the control protocol,
-pairing, and signing — not a client rewrite.
+The companion is a headless local process, not a graphical application. It is
+**unsigned in the first slice** (signing is a Phase 2 gate item). Removing the
+Flutter client (`app/`), the Dart client (`dart/jeliya_protocol`), and the
+mobile FFI shim (`crates/jeliya-ffi`) does not remove any component this
+decision depends on. `jeliyad` already has the companion's shape, and
+`.github/workflows/release.yml` already produces the five archives it needs.
+The remaining companion work is the control protocol and pairing; signing is
+added at the Phase 2 gate — not a client rewrite.
 
 ## Evidence this decision rests on
 

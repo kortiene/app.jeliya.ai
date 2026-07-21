@@ -939,7 +939,11 @@ Deliver:
 - companion pairing/control protocol;
 - protocol version and capability negotiation;
 - surface upstream's durable critical `store_degraded` decision and define the
-  operator response to exhausted store retries or queue overflow.
+  operator response to exhausted store retries or queue overflow;
+- submit Apple Developer enrollment and start Windows Authenticode procurement
+  (start the Phase 2 signing clock; enrollment submission was reclassified
+  2026-07-21 out of the Phase 0 exit path — see
+  [Signing and notarization](signing-notarization.md)).
 
 Go/no-go gate:
 
@@ -949,7 +953,10 @@ Go/no-go gate:
 - cursor resync matches full-log materialization;
 - expired and cancelled tickets fail on every transport;
 - replay, wrong-SAS, expired-key, and revoked-key pairing tests fail closed;
-- independent security review approves the wire formats and key lifecycle.
+- independent security review approves the wire formats and key lifecycle;
+- Apple Developer enrollment submitted and the Azure Artifact Signing account
+  created (eligibility confirmed), so Phase 2 signing does not wait on
+  procurement calendar time.
 
 ### Phase 2: companion-backed vertical slice, 5 to 7 weeks (pre-amendment estimate)
 
@@ -1080,12 +1087,15 @@ repository; the first slice ships no auto-update channel (companion auto-update,
 version-skew measurement, and an in-browser upgrade prompt are amendment A3,
 Phase 2). The first-slice archive is **unsigned** — `.github/workflows/release.yml`
 does not sign today, and signing procurement (Apple Developer ID / notarization
-and Windows Authenticode) is deferred to Phase 1 enrollment and Phase 2 issuance
-(see [Signing and notarization](signing-notarization.md)) — so the published
-SHA-256 checksum sidecar is the download-integrity control, and macOS Gatekeeper
-and Windows SmartScreen warnings on browser downloads are expected first-slice
-friction. Signed, notarized installers are a Phase 2 gate item ("supported
-installers verify signatures and reject tampering").
+and Windows Authenticode) is an early-Phase-1 deliverable with issuance at the
+Phase 2 gate (see [Signing and notarization](signing-notarization.md)) — so the
+published SHA-256 checksum sidecar only detects accidental corruption or an
+archive/sidecar mismatch; it does **not** authenticate the artifact against a
+trusted root (a compromised release can replace both), and unsigned installs
+remain a known risk recorded in the [Security threat model](security-threat-model.md).
+macOS Gatekeeper and Windows SmartScreen warnings on browser downloads are
+expected first-slice friction. Signed, notarized installers are a Phase 2 gate
+item ("supported installers verify signatures and reject tampering").
 
 ## Assumptions, unresolved decisions, and high-risk unknowns
 

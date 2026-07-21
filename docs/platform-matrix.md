@@ -24,9 +24,10 @@ operator. The retained 2026-07-16 runs certify only the prior `55024a4...` +
 In the initial deployment, users obtain the browser companion by downloading
 its native archive from the GitHub release published in this repository; the
 first slice ships no auto-update channel (amendment A3, Phase 2) and the
-archive is **unsigned** (signing procurement is deferred to Phase 1 enrollment
-and Phase 2 issuance), with the published SHA-256 checksum sidecar as the
-download-integrity control. Signed installers are a Phase 2 gate item.
+archive is **unsigned** (enrollment submission is an early-Phase-1 deliverable;
+issuance is a Phase 2 gate item), with the published SHA-256 checksum sidecar
+detecting only accidental corruption or an archive/sidecar mismatch — not
+artifact authenticity. Signed installers are a Phase 2 gate item.
 
 ## Daemon and embedded web UI
 
