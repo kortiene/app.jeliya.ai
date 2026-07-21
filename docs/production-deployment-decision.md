@@ -220,10 +220,14 @@ matrix twice on one immutable SHA.
 - The estimate of 11 to 17 engineering weeks to the first production slice
   predates this record and does not include the work A3, A5, and A6 add. It
   should be re-baselined at the Phase 0 gate rather than carried forward.
-- Signing has calendar lead time that is not engineering time. Apple Developer
-  enrollment and Authenticode issuance should start during Phase 0, because the
-  Phase 2 gate requires signed macOS and Windows packages. See [Signing and
-  notarization](signing-notarization.md).
+- Signing has calendar lead time that is not engineering time. The Phase 2 gate
+  requires signed macOS and Windows packages, so issuance must complete before
+  that gate. Enrollment **submission** is an early-Phase-1 deliverable (start
+  the clock during Phase 1; it is no longer a Phase 0 exit requirement so the
+  first slice can ship an unsigned companion downloaded from the GitHub release
+  without waiting on procurement). See [Signing and notarization](signing-notarization.md).
+  (Reclassified 2026-07-21 from "start during Phase 0" to an early-Phase-1
+  deliverable; issuance-completed remains the Phase 2 entry precondition.)
 - Browser-to-native Iroh connectivity through an authenticated relay is both a
   Phase 0 gate item and the top two entries in the proposal's highest-risk
   unknowns. Every later phase assumes it works. It should be spiked before

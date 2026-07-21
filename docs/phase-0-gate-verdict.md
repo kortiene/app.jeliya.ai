@@ -150,10 +150,14 @@ none is mistaken for a Phase 0 condition:
 ## Out of scope
 
 - Apple Developer enrollment and Windows Authenticode procurement
-  ([issue #25](https://github.com/kortiene/app.jeliya.ai/issues/25)) are Phase 0
-  *deliverables* (calendar lead time for Phase 2 signing), not Phase 0 *gate
-  conditions*; their state is tracked on #25, not here. Phase 0 exit for #25
-  requires enrollment SUBMITTED, which is not yet recorded.
+  ([issue #25](https://github.com/kortiene/app.jeliya.ai/issues/25)) are
+  calendar-lead-time work for the Phase 2 signing gate, not Phase 0 *gate
+  conditions*. Enrollment **submission** was reclassified 2026-07-21 from a
+  Phase 0 exit requirement to an early-Phase-1 deliverable (see
+  [Production deployment decision](production-deployment-decision.md) and
+  [Signing and notarization](signing-notarization.md)), so Phase 0 exits
+  without it and the first slice ships an unsigned companion. Issuance
+  completed remains a Phase 2 entry precondition.
 - macOS-specific network certification at the current pin is not a Phase 0 gate
   condition; the current candidate is qualified via a linux/arm64 operator and
   `x86_64-unknown-linux-musl` remotes.

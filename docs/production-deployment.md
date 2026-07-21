@@ -1045,7 +1045,7 @@ Go/no-go gate:
 The first release at `https://app.jeliya.ai` includes:
 
 - an installable static PWA;
-- a signed local companion for the supported desktop platforms;
+- a local companion for the supported desktop platforms;
 - local identity creation with a tested recovery kit;
 - secure SAS-confirmed pairing with a scoped browser control key;
 - room create, list, and open;
@@ -1073,6 +1073,19 @@ It explicitly excludes:
 This slice preserves the native local-first signed-event core and creates a safe
 public entry point without treating the current browser or daemon boundaries as
 capabilities they do not provide.
+
+**Distribution.** In the initial deployment, users obtain the browser companion
+by downloading its native archive from the GitHub release published in this
+repository; the first slice ships no auto-update channel (companion auto-update,
+version-skew measurement, and an in-browser upgrade prompt are amendment A3,
+Phase 2). The first-slice archive is **unsigned** — `.github/workflows/release.yml`
+does not sign today, and signing procurement (Apple Developer ID / notarization
+and Windows Authenticode) is deferred to Phase 1 enrollment and Phase 2 issuance
+(see [Signing and notarization](signing-notarization.md)) — so the published
+SHA-256 checksum sidecar is the download-integrity control, and macOS Gatekeeper
+and Windows SmartScreen warnings on browser downloads are expected first-slice
+friction. Signed, notarized installers are a Phase 2 gate item ("supported
+installers verify signatures and reject tampering").
 
 ## Assumptions, unresolved decisions, and high-risk unknowns
 
