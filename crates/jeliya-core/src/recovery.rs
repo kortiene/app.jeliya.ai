@@ -198,14 +198,17 @@ pub fn open_bundle(bundle: &[u8], key: &RecoveryKey) -> CoreResult<(Profile, Sec
     }
     let nonce = Nonce::from_slice(&bundle[1..1 + NONCE_LEN]);
     let ciphertext = &bundle[1 + NONCE_LEN..];
-    let plaintext = key.cipher().decrypt(nonce, ciphertext).map_err(|_| {
+    let mut plaintext = key.cipher().decrypt(nonce, ciphertext).map_err(|_| {
         CoreError::invalid(
             "the recovery bundle is corrupt, tampered, or sealed with a different key",
         )
         .with_hint("check the recovery phrase, or obtain a fresh bundle")
     })?;
+    // The decrypted bytes hold both signing seeds as hex; zeroize them as soon
+    // as the payload is parsed (defense-in-depth alongside the SigningKey zeroize).
     let payload: PayloadV1 = serde_json::from_slice(&plaintext)
         .map_err(|_| CoreError::invalid("the recovery payload is malformed"))?;
+    plaintext.zeroize();
     if payload.version != PAYLOAD_VERSION {
         return Err(CoreError::invalid(format!(
             "unsupported recovery payload version {} (expected {PAYLOAD_VERSION})",

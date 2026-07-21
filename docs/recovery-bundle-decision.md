@@ -55,11 +55,17 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
    first byte is a format version; `import` rejects an unknown future version
    rather than guessing. AEAD gives integrity and authenticity, so a tampered,
    truncated, or rolled-back bundle fails import with a clear error.
-5. **The payload contains exactly:** the profile root seed, the room membership
-   index (the known-rooms set from `state.json`), the device-authorization state
-   (minimal in the first slice — the single device binding), and the relay
-   config. It explicitly excludes the full event log (that re-syncs from peers),
-   blobs (re-fetch), and any other peer's data.
+5. **The payload contains exactly:** the profile root seed, the device seed, and
+   the profile fields (name, public ids, creation time). The room membership
+   index (the known-rooms set from `state.json`), the device-authorization
+   state, and the relay config named in the
+   [architecture](production-deployment.md#recovery) are **Phase-2 slices**, not
+   in the first-slice payload: the first slice restores identity *authority*
+   (the unrecoverable root), and rooms re-derive from peers / invite tickets on
+   rejoin. The versioned payload + the `profile_version`/`version` fields mean
+   adding them later is a migration, not a breaking change. It explicitly
+   excludes the full event log (that re-syncs from peers), blobs (re-fetch), and
+   any other peer's data.
 6. **The user holds the recovery key (and phrase).** Custody is the user's
    responsibility; the UI truthfully states the identity is unrecoverable
    without it (mirroring the current honesty rule the UI already enforces).
