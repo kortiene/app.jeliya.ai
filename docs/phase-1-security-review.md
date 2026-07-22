@@ -73,9 +73,9 @@ convention, not as a binding contract:
 | F5 | High | "Production encryption" is opt-in, not enforced — **resolved (doc) 2026-07-22 (row #2 relabeled OPEN)** |
 | F6 | High | KDF versioning/attribution is inaccurate — **resolved 2026-07-22 (immutable per-version param-set + dispatch; OWASP attribution corrected; migration fixtures + latency test)** |
 | F7 | High | "Rotate by re-exporting" is false — old recovery material is irrevocable — **resolved (doc) 2026-07-22 (lifecycle text corrected)** |
-| F8 | High | Test evidence overclaims zeroization — **partially resolved (doc) 2026-07-22 (recast as audit + inventory; full audit is Step 6)** |
-| F9 | Blocker | Approval contract and normative inputs undefined; ADRs #2/#3 contradict the code — **ADR/code contradictions resolved 2026-07-21; approval contract still open** |
-| F10 | Medium | Evidence package lacks reproducible adversarial coverage |
+| F8 | High | Test evidence overclaims zeroization — **resolved (code+doc) 2026-07-22 (features enabled, KEK/phrase Zeroizing, audit complete; RSS evidence at Step 7)** |
+| F9 | Blocker | Approval contract and normative inputs undefined; ADRs #2/#3 contradict the code — **ADR/code contradictions resolved 2026-07-21; approval contract codified 2026-07-22** |
+| F10 | Medium | Evidence package lacks reproducible adversarial coverage — **resolved 2026-07-22 (evidence package built; gaps tracked for Step 7)** |
 
 ## The findings
 
@@ -366,13 +366,13 @@ and password handling) plus a **secret-data-flow inventory** that lists each
 secret, each buffer it touches, and how each is wiped. Drop the test-based
 claim until the audit closes.
 
-**Status.** Partially resolved (doc) 2026-07-22 — zeroize overclaim
-acknowledged and recast as a source/dependency audit + secret-data-flow
-inventory in the
-[scope doc](phase-1-security-review-scope.md#zeroization-recast-per-f8). The
-dependency feature audit (`aes-gcm`/`argon2` `zeroize` cargo features) and
-measured evidence (heap inspection or equivalent) are
-[Step 6](#remediation-path) work.
+**Status.** Resolved (code+doc) 2026-07-22 — zeroize overclaim acknowledged
+and recast as a source/dependency audit + secret-data-flow inventory in the
+[scope doc](phase-1-security-review-scope.md#zeroization-recast-per-f8).
+Step 6 fixes: `aes-gcm`/`argon2` `zeroize` cargo features **enabled**;
+`derive_kek` returns `Zeroizing<[u8; 32]>`; `from_phrase` wraps `stripped` in
+`Zeroizing<String>`. Measured evidence (RSS/heap inspection) remains for the
+Step 7 re-review.
 
 ### F9 — Blocker: approval contract and normative inputs undefined
 
@@ -448,7 +448,9 @@ conform to it. Neither ADR claims Phase-1 conformance where none exists.
 **Status.** ADR/code contradictions **resolved** (dispositions above). The
 approval-contract portion of F9 (independence, taxonomy, blocking threshold,
 risk-owner, required artifact, remediation ownership, re-review rules) is
-**open** and is closed by [Step 6](#remediation-path) + Step 7.
+**codified** in the
+[evidence package](phase-1-evidence-package.md#codified-approval-contract).
+Exercised by a real independent reviewer at Step 7.
 
 ### F10 — Medium: evidence package needs reproducible adversarial coverage
 
@@ -474,7 +476,12 @@ lifetime/clock-rollback, reinstall-after-revocation, control concurrency.
 Map every finding to the threat model. Label every "accepted" risk with an
 owner and an exit criterion.
 
-**Status.** Open. Tracked as [Step 6](#remediation-path).
+**Status.** Resolved 2026-07-22 — the evidence package is built in
+[Phase 1 evidence package and approval contract](phase-1-evidence-package.md):
+exact commands, expected results, CI artifact links, test-to-finding mapping,
+threat-model cross-reference, gap list, and accepted-risk register. Remaining
+gaps (fuzz/property tests, cross-platform permissions, RSS/heap verification)
+are noted and tracked for the Step 7 re-review.
 
 ## Remediation path
 
@@ -489,30 +496,27 @@ ones.
 | 3 | F1 | ✅ Review target pinned in the [scope doc](phase-1-security-review-scope.md#review-target-pin): source SHA `35b1c5e` + `Cargo.lock` hash + toolchain + ADR revisions + crypto dep versions + clean-worktree assertion + reopen rules. **Provisional** — Step 5 changes `identity.rs` and requires a re-pin before Step 7. |
 | 4 | F5, F7, F4, F8 | ✅ Doc overclaims fixed: row #2 relabeled OPEN (F5, opt-in not enforced); lifecycle corrected — re-export adds a backup, old material irrevocable (F7); daemon-auth/single-user boundary stated as honest boundary, `engine.rs` in pin (F4); zeroize recast as source/dep audit + secret-data-flow inventory (F8, full audit is Step 6). |
 | 5 | F6 | ✅ KDF params are now an immutable per-version param-set (`KdfParams` + `V1_KDF` + `kdf_params_for_version` dispatch); attribution corrected (OWASP minimum); migration fixtures + latency measurement added. `identity.rs` changed — pin needs re-record before Step 7. |
-| 6 | F10 | Build the evidence package (including the codified approval contract: independence, taxonomy, blocking threshold, risk-owner, required artifact, remediation ownership, re-review rules). |
+| 6 | F10 | ✅ Evidence package built ([new doc](phase-1-evidence-package.md)): exact commands, expected results, CI links, test-to-finding mapping, threat-model cross-reference, gap list, accepted-risk register. Approval contract codified (F9 remaining). Zeroize dependency features enabled + KEK/phrase Zeroizing fixes (F8 remaining). Pin re-recorded (Cargo.lock hash updated). |
 | 7 | all | Re-review against the pinned, settled target, by a reviewer who is not the implementer. |
 
 ## This session's scope
 
-This session has completed **Steps 0–5** of the remediation path:
+This session has completed **Steps 0–6** of the remediation path:
 
 - **Step 0** — findings recorded (this page).
-- **Step 1** — F9 ADR/code contradictions resolved; ADR #3 promoted to
-  `canonical` / `partial`; ADR #2 remains `proposal` with its scaffolding
-  relationship documented.
+- **Step 1** — F9 ADR/code contradictions resolved.
 - **Step 2** — row #7 re-scoped to the two D1 envelopes (F2); `jeliya-control`
   relabeled as scaffolding (F3); D5b/D6 gate defined.
-- **Step 3** — review target pinned (F1): source SHA, `Cargo.lock`, toolchain,
-  ADR revisions, crypto deps, reopen rules (provisional pending Steps 5–6).
-- **Step 4** — doc overclaims fixed: row #2 relabeled OPEN (F5); lifecycle
-  corrected (F7); daemon-auth boundary stated (F4); zeroize recast (F8).
-- **Step 5** — KDF params encoded as immutable per-version param-set with
-  version dispatch (F6); OWASP attribution corrected; migration fixtures +
-  latency measurement added. `identity.rs` changed — pin needs re-record.
+- **Step 3** — review target pinned (F1).
+- **Step 4** — doc overclaims fixed (F5/F7/F4/F8 doc).
+- **Step 5** — KDF params encoded as immutable per-version param-set (F6).
+- **Step 6** — evidence package + approval contract built (F10/F9 remaining);
+  zeroize dependency features enabled + code gaps fixed (F8 remaining); pin
+  re-recorded.
 
-**Steps 6–7** remain: evidence package + codified approval contract (F10), and
-re-review by a different reviewer (Step 7). The pin must be re-recorded before
-Step 7 to reflect the `identity.rs` change from Step 5.
+**Step 7** remains: re-review by a **different reviewer** against the final
+pin. The pin must be finalized (post-Step-6 merge SHA) before the re-review
+begins.
 
 The [Phase 1 gate verdict](phase-1-gate-verdict.md) is now consistent with this
 record: row #2 is OPEN (F5), row #7 is NOT APPROVED (remediation in progress),
