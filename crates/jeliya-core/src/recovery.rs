@@ -75,31 +75,41 @@ impl RecoveryKey {
     /// Parse a grouped-hex phrase (case-insensitive; spaces/dashes/colons/underscores
     /// optional) back into a recovery key.
     pub fn from_phrase(phrase: &str) -> CoreResult<Self> {
-        // Pre-size so growth cannot reallocate and leave unwiped copies of
-        // phrase prefixes on the heap (Step 7 verdict condition 3). The cap
-        // bounds the allocation against a hostile oversized phrase: a valid
-        // phrase strips to exactly 2*KEY_LEN chars (≤ 4 UTF-8 bytes each), so
-        // only an already-invalid phrase can outgrow the cap and reallocate.
-        let mut stripped = Zeroizing::new(String::with_capacity(phrase.len().min(8 * KEY_LEN)));
-        stripped.extend(
-            phrase
-                .chars()
-                .filter(|c| !matches!(c, ' ' | '-' | '_' | ':'))
-                .map(|c| c.to_ascii_lowercase()),
-        );
-        let mut raw = hex::decode(stripped.as_str())
-            .map_err(|_| CoreError::invalid("recovery phrase is not valid hex"))?;
-        let key = if let Ok(seed) = <[u8; KEY_LEN]>::try_from(raw.as_slice()) {
-            seed
-        } else {
-            raw.zeroize();
+        // Parse into a fixed self-wiping buffer instead of a growable String:
+        // nothing input-proportional is allocated, so no reallocation can
+        // strand an unwiped copy of pasted phrase material, however long or
+        // malformed the input (Step 7 verdict condition 3, hardened after the
+        // conditions delta review).
+        const HEX_LEN: usize = 2 * KEY_LEN;
+        let mut hex_buf = Zeroizing::new([0u8; HEX_LEN]);
+        let mut n = 0usize;
+        for c in phrase.chars() {
+            if matches!(c, ' ' | '-' | '_' | ':') {
+                continue;
+            }
+            if n == HEX_LEN {
+                return Err(CoreError::invalid(format!(
+                    "recovery phrase must decode to exactly {KEY_LEN} bytes (too many characters)"
+                )));
+            }
+            if !c.is_ascii() {
+                return Err(CoreError::invalid("recovery phrase is not valid hex"));
+            }
+            hex_buf[n] = (c as u8).to_ascii_lowercase();
+            n += 1;
+        }
+        if n != HEX_LEN {
             return Err(CoreError::invalid(format!(
-                "recovery phrase must decode to exactly {KEY_LEN} bytes (got {})",
-                raw.len()
+                "recovery phrase must decode to exactly {KEY_LEN} bytes (got {n} hex characters)"
             )));
-        };
-        raw.zeroize();
-        Ok(Self(key))
+        }
+        // decode_to_slice writes into our self-wiping buffer, so even a
+        // partial decode of a non-hex input is wiped — hex::decode's error
+        // path would drop a partially filled Vec unwiped inside the crate.
+        let mut raw = Zeroizing::new([0u8; KEY_LEN]);
+        hex::decode_to_slice(&hex_buf[..], raw.as_mut_slice())
+            .map_err(|_| CoreError::invalid("recovery phrase is not valid hex"))?;
+        Ok(Self(*raw))
     }
 
     fn cipher(&self) -> Aes256Gcm {
@@ -380,6 +390,21 @@ mod tests {
         assert!(RecoveryKey::from_phrase("nothex!!").is_err());
         assert!(RecoveryKey::from_phrase(&"ab".repeat(31)).is_err());
         assert!(RecoveryKey::from_phrase(&"ab".repeat(33)).is_err());
+        assert!(RecoveryKey::from_phrase("é".repeat(32).as_str()).is_err());
+    }
+
+    #[test]
+    fn recovery_key_phrase_rejects_an_overlong_paste() {
+        // A paste that embeds a real key inside surrounding text must be
+        // rejected; the fixed-buffer parser allocates nothing proportional to
+        // the input, so no heap copy of the paste can be stranded unwiped.
+        let key = RecoveryKey::generate().unwrap();
+        let paste = format!(
+            "my recovery key: {} {}",
+            key.to_phrase(),
+            "x".repeat(10_000)
+        );
+        assert!(RecoveryKey::from_phrase(&paste).is_err());
     }
 
     #[test]

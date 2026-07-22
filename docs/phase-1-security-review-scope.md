@@ -38,12 +38,12 @@ A third module — the control-protocol core — is **deferred to the D5b/D6 gat
 because it has no wire format to review (see
 [Deferred surface](#deferred-surface--the-d5bd6-control-wire-review-gate)).
 
-> **The review target is pinned and finalized** — see
-> [Review target pin](#review-target-pin). A reviewer checks out `df28f6a`
-> and verifies the `Cargo.lock` hash, toolchain, and ADR revisions match.
-> Steps 0–6 of the
-> [remediation path](phase-1-security-review.md#remediation-path) are complete;
-> the pin is ready for the Step 7 re-review.
+> **The review target is pinned** — see [Review target pin](#review-target-pin)
+> for the current pin and its history. The Step 7 re-review approved `df28f6a`
+> and the [conditions delta review](phase-1-security-review.md#conditions-delta-review-2026-07-22)
+> extended the approval to `d610076`; a reviewer reproducing the pin checks out
+> the pin section's current SHA and verifies the `Cargo.lock` hash, toolchain,
+> and ADR revisions match.
 
 ### 1. At-rest identity encryption — `crates/jeliya-core/src/identity.rs`
 
@@ -232,7 +232,7 @@ security property (not just the happy path).
 | Raw seeds from `to_seed()` (identity.rs `secret_file_contents`, recovery.rs `export_bundle`) | iroh-rooms `SigningKey::to_seed()` returns a plain `[u8; 32]` by value | Wrapped in `Zeroizing` at all four call sites in the pinned surfaces (Step 7 verdict condition 1) | **Residual**: the by-value return can leave transient stack temporaries (full fix is an upstream self-wiping return type). Two further call sites in `supervisor.rs` (lines ~854/~1607, device-key handoff to the session layer) are outside row #7's pinned surfaces — noted by the conditions delta review for the next zeroize pass |
 | Password (identity.rs) | `password: &str` borrowed from a `String` the caller owns | The env-var `String` is plain; no wipe | Accepted: the env var outlives the process anyway (in the [accepted-risk register](phase-1-evidence-package.md#accepted-risks)) |
 | Ephemeral test-restore password (recovery.rs `test_restore`) | `Zeroizing<String>` (Step 7 verdict condition 3) | Wiped on drop | — |
-| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` builds `stripped` as `Zeroizing<String>` (Step 6 fix) | Wiped on drop; pre-sized with `with_capacity` so growth cannot leave unwiped realloc copies (Step 7 verdict condition 3) | **Resolved (Step 6 + Step 7 condition 3)** |
+| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` parses into a fixed `Zeroizing<[u8; 64]>` buffer (Step 7 condition 3, hardened post-delta-review) | Wiped on drop; **no input-proportional allocation exists**, so no reallocation can strand a copy of pasted phrase material, however long the input | **Resolved (Step 6 + Step 7 condition 3 + PR #90 hardening)** |
 | Seed hex intermediates | `PayloadV1.identity_secret` / `device_secret` as `String` in `open_bundle` and `export_bundle` | Import side: moved to `Zeroizing<String>` after parse. Export side: wiped before a serialization error can propagate (Step 7 verdict condition 3) | Correct |
 | Plaintext JSON bytes | `plaintext: Vec<u8>` in `encrypt_secret_bytes` / `open_bundle` / `load_with` | Zeroized after use | Correct |
 
@@ -367,11 +367,18 @@ tamper/version/wrong-key fail-closed.
 > a later change to any field in the "reopens review" set requires a re-review
 > before the Phase 1 gate can close.
 
-### Pin values (finalized 2026-07-22 for Step 7 re-review)
+### Pin values (re-recorded 2026-07-22 after the conditions merge)
+
+> Pin history: `35b1c5e` (Step 3) → `df28f6a` (Step 6; the Step 7 verdict and
+> GO were recorded against it) → `d610076` (verdict conditions, PR #89; the
+> approval [extends to it](phase-1-security-review.md#conditions-delta-review-2026-07-22))
+> → the PR #90 merge SHA (the `from_phrase` fixed-buffer hardening,
+> [micro-delta-reviewed](phase-1-security-review.md#conditions-delta-review-2026-07-22);
+> record the final SHA here after merge).
 
 | Field | Value |
 |---|---|
-| Source SHA | `df28f6a15c6c154c0759eea76b2c164c41c047bc` (`main`; PR #85, Step 6 merge) |
+| Source SHA | `d610076c05f0f29cb8f87c7dbe805a5f603ecc89` (`main`; PR #89, verdict-conditions merge) |
 | `Cargo.lock` SHA-256 | `dda192b513195ca512587d01609aeb5d89447001fc04549aca538a3d0c31b223` |
 | Rust toolchain (CI full gate) | `1.96.0` (stable; `dtolnay/rust-toolchain` in `ci.yml` with `toolchain: 1.96.0`) |
 | Rust MSRV (CI MSRV lane) | `1.91.0` (`dtolnay/rust-toolchain` `1.91.0` in `ci.yml` and `release.yml`) |
@@ -384,8 +391,8 @@ tamper/version/wrong-key fail-closed.
 
 | Surface | File | Last changed |
 |---|---|---|
-| At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `df28f6a` (PR #85, Step 6) |
-| Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `df28f6a` (PR #85, Step 6) |
+| At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `d610076` (PR #89, verdict conditions) |
+| Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `d610076` (PR #89, verdict conditions) |
 | Authority path (F4) | [`crates/jeliya-core/src/engine.rs`](../crates/jeliya-core/src/engine.rs) | `cdcae83` (PR #78) |
 | Daemon auth (F4) | [`crates/jeliyad/src/serve.rs`](../crates/jeliyad/src/serve.rs) | `922f620` (PR #58; created the file, unchanged since) |
 
@@ -393,7 +400,7 @@ tamper/version/wrong-key fail-closed.
 
 | ADR | Document | Last changed | Status |
 |---|---|---|---|
-| ADR #3 (recovery bundle) | [`docs/recovery-bundle-decision.md`](recovery-bundle-decision.md) | `b16842e` (PR #83) | `canonical` / `partial` (Amendments A+B; F7 lifecycle fix) |
+| ADR #3 (recovery bundle) | [`docs/recovery-bundle-decision.md`](recovery-bundle-decision.md) | `d610076` (PR #89; condition-6 corrections, delta-reviewed) | `canonical` / `partial` (Amendments A+B; F7 lifecycle fix; condition-6 corrections) |
 | ADR #2 (control protocol) | [`docs/companion-control-protocol-decision.md`](companion-control-protocol-decision.md) | `ce49d73` (PR #80) | `proposal` (D5b/D6 target) |
 
 ### Crypto dependency versions (from `Cargo.lock`)
@@ -469,33 +476,29 @@ re-review (record a new pin before the Step 7 re-review):
 - The remediation steps themselves (Steps 3–6) update this pin before the
   Step 7 re-review; those updates are expected, not reopenings.
 
-### Pin status: finalized for Step 7 re-review
+### Pin status: re-recorded at `d610076` (conditions delta review complete)
 
-Steps 0–6 of the [remediation path](phase-1-security-review.md#remediation-path)
-are complete. The pin values above are the **final** pre-re-review snapshot
-against `df28f6a`. A reviewer executing the Step 7 re-review should:
+The Step 7 re-review approved `df28f6a` (2026-07-22, APPROVE-WITH-CONDITIONS,
+GO countersigned); the verdict conditions then merged as `d610076` and the
+required **scoped delta review** was executed by an independent delta-review
+session, extending the approval to `d610076` — see the
+[delta-review record](phase-1-security-review.md#conditions-delta-review-2026-07-22)
+for the verdict, the reviewer's statement, and the run-ID erratum it caught.
+A reviewer reproducing the current pin should:
 
-1. `git checkout df28f6a`
-2. Verify `sha256sum Cargo.lock` matches `dda192b5…`
+1. `git checkout d610076`
+2. Verify `sha256sum Cargo.lock` matches `dda192b5…` (unchanged across all
+   three pins)
 3. Verify the toolchain matches (CI full-gate Rust `1.96.0`, or MSRV `1.91.0`;
    Node `22.22.3`)
 4. Run the commands in the [evidence package](phase-1-evidence-package.md#reproduce-the-review)
+   (expected: 127 passed / 0 failed / 1 ignored at `d610076`; 128 at the
+   PR #90 tree, which adds the overlong-paste rejection test)
 5. Verify the pin values above against the tree they checked out
 
 If any value does not match, the pin is stale and the review cannot proceed
-until a new pin is recorded.
-
-> **Pin status update (2026-07-22, post-GO).** The
-> [Step 7 verdict's conditions](phase-1-security-review.md#step-7-re-review-verdict-2026-07-22)
-> were implemented after the GO was recorded; that work changes `identity.rs`,
-> `recovery.rs`, their tests, this document's zeroize inventory, the evidence
-> package, the findings record (conditions-status note), and ADR #3 — all in
-> the reopen set. **The `df28f6a` approval
-> remains valid for `df28f6a`.** Extending it to the conditions tree requires
-> a re-pin (new source SHA after the conditions PR merges; `Cargo.lock` and
-> toolchain unchanged) and a **scoped delta review** of the conditions diff,
-> by a reviewer who is not the conditions implementer, per the
-> [re-review rules](phase-1-evidence-package.md#re-review-rules).
+until a new pin is recorded. Any future change in the
+[reopen set](#reopens-review) requires the same re-pin + delta-review cycle.
 
 ## Citations
 

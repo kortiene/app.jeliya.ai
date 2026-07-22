@@ -131,10 +131,11 @@ node scripts/check-ui-i18n.mjs
 # 6. Expected results (gate).
 # cargo fmt: no output (clean).
 # cargo clippy: no warnings.
-# cargo test: 125 passed, 0 failed, 1 ignored at the df28f6a pin.
-#   (At the conditions tree the count is 127 — verdict condition 4 adds two
-#    identity-envelope tests; 127 becomes the expected count when the pin is
-#    re-recorded at the conditions merge SHA.)
+# cargo test: 127 passed, 0 failed, 1 ignored at the d610076 pin.
+#   (125 at the prior df28f6a pin — verdict condition 4 added two
+#    identity-envelope tamper/truncation tests. 128 at the PR #90 tree,
+#    which adds the overlong-paste rejection test with the from_phrase
+#    fixed-buffer hardening.)
 # check-docs: OK.
 # check-ui-i18n: OK.
 ```
@@ -162,8 +163,9 @@ CI artifact links for the remediation PRs (all six jobs green):
 | [#82](https://github.com/kortiene/app.jeliya.ai/pull/82) (Step 3) | run `29913916028` |
 | [#83](https://github.com/kortiene/app.jeliya.ai/pull/83) (Step 4) | run `29915796041` |
 | [#84](https://github.com/kortiene/app.jeliya.ai/pull/84) (Step 5) | run `29920201448` |
-| [#85](https://github.com/kortiene/app.jeliya.ai/pull/85) (Step 6 — the pinned `df28f6a` tree) | run `29925118834` |
-| [#86](https://github.com/kortiene/app.jeliya.ai/pull/86) (Step 7 handoff) | run `29932744561` |
+| [#85](https://github.com/kortiene/app.jeliya.ai/pull/85) (Step 6 — the `df28f6a` tree) | push run `29922951249` at merge SHA `df28f6a` (ID corrected per the [delta-review erratum](phase-1-security-review.md#conditions-delta-review-2026-07-22)) |
+| [#86](https://github.com/kortiene/app.jeliya.ai/pull/86) (Step 7 handoff) | push run `29928189003` at merge SHA `5fa0bae` (ID corrected per the same erratum) |
+| [#89](https://github.com/kortiene/app.jeliya.ai/pull/89) (verdict conditions — the re-pinned `d610076` tree) | push run `29951799090` at merge SHA `d610076` |
 
 ### Test-to-finding mapping
 
