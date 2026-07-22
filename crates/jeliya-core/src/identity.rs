@@ -72,11 +72,12 @@ struct KdfParams {
 
 /// Envelope version 1 KDF parameters. These are the **OWASP minimum** for
 /// Argon2id (per the OWASP Password Storage Cheat Sheet), **not** an RFC 9106
-/// profile — RFC 9106's profiles are m=64 MiB/t=3/p=4 (first) and
-/// m=2 GiB/t=1/p=4 (second). The previous attribution ("RFC 9106 example-1
-/// tier") was wrong; corrected per finding F6. These values are **immutable**:
-/// changing them requires bumping [`ENCRYPTED_VERSION`] to 2, and this const
-/// set stays as the v1 legacy reader so existing identity files keep loading.
+/// profile — RFC 9106 section 7.4 recommends two Argon2id profiles:
+/// m=2 GiB/t=1/p=4 (high-memory) and m=64 MiB/t=3/p=4 (memory-constrained).
+/// The previous attribution ("RFC 9106 example-1 tier") was wrong; corrected
+/// per finding F6. These values are **immutable**: changing them requires
+/// bumping [`ENCRYPTED_VERSION`] to 2, and this const set stays as the v1
+/// legacy reader so existing identity files keep loading.
 const V1_KDF: KdfParams = KdfParams {
     m_cost: 19_456,
     t_cost: 2,
@@ -536,6 +537,8 @@ fn write_new_owner_only(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 mod tests {
     use super::{create, create_with, load_profile, SecretKeys, IDENTITY_FILE, SECRET_FILE};
     use crate::error::ErrorKind;
+    use aes_gcm::aead::{Aead, KeyInit};
+    use aes_gcm::{Aes256Gcm, Key, Nonce};
     use tempfile::tempdir;
 
     #[test]
@@ -740,6 +743,34 @@ mod tests {
             keys.identity.identity_key().to_string(),
             profile.identity_id
         );
+    }
+
+    #[test]
+    fn v1_legacy_dispatch_opens_a_v1_envelope_regardless_of_sealing_version() {
+        // Migration fixture (F6): explicitly construct a version-1 envelope
+        // and prove the reader opens it via the 1 => &V1_KDF dispatch arm,
+        // independent of what ENCRYPTED_VERSION currently is. If a future v2
+        // bump changes the sealing version, this test still exercises v1.
+        let plaintext = br#"{"version":1,"identity_secret":"deadbeef","device_secret":"cafebabe"}"#;
+        let password = "legacy-fixture-pw";
+        // Seal under V1_KDF explicitly (not via encrypt_secret_bytes, which
+        // uses whatever ENCRYPTED_VERSION currently is).
+        let salt = [0xABu8; super::ARGON_SALT_LEN];
+        let nonce = [0xCDu8; super::AEAD_NONCE_LEN];
+        let key = super::derive_kek(password, &salt, &super::V1_KDF).unwrap();
+        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+        let ciphertext = cipher
+            .encrypt(Nonce::from_slice(&nonce), &plaintext[..])
+            .unwrap();
+        // Build the v1 envelope: version(1) || salt || nonce || ct+tag.
+        let mut blob = Vec::with_capacity(1 + salt.len() + nonce.len() + ciphertext.len());
+        blob.push(1u8); // explicitly version 1
+        blob.extend_from_slice(&salt);
+        blob.extend_from_slice(&nonce);
+        blob.extend_from_slice(&ciphertext);
+        // The reader must open it.
+        let opened = super::decrypt_secret_bytes(&blob, password).unwrap();
+        assert_eq!(opened, plaintext);
     }
 
     #[test]
