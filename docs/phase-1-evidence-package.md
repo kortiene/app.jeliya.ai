@@ -119,10 +119,22 @@ cargo test --locked --workspace
 node scripts/check-docs.mjs
 node scripts/check-ui-i18n.mjs
 
-# 5. Expected results.
+# 5. Reproduce the KDF memory/latency + zeroize-wipe evidence (Linux only;
+#    committed probe harness — see tools/step7-kdf-probe/README.md for the
+#    recorded transcript and interpretation).
+(cd tools/step7-kdf-probe && cargo build --release && ./target/release/step7-kdf-probe)
+# Expected: vm_hwm_delta_mib ≈ 19 (the m_cost=19456 KiB target);
+# kdf_latency_ms well above the in-tree 5 ms floor (21-80 ms typical);
+# stack_probe_zeroed true; heap probe bytes 16..32 all-zero vs 0xAA residue
+# in heap_control (bytes 0..16 are allocator tcache metadata in both).
+
+# 6. Expected results (gate).
 # cargo fmt: no output (clean).
 # cargo clippy: no warnings.
-# cargo test: 125 passed, 0 failed, 1 ignored.
+# cargo test: 125 passed, 0 failed, 1 ignored at the df28f6a pin.
+#   (At the conditions tree the count is 127 — verdict condition 4 adds two
+#    identity-envelope tests; 127 becomes the expected count when the pin is
+#    re-recorded at the conditions merge SHA.)
 # check-docs: OK.
 # check-ui-i18n: OK.
 ```
@@ -150,6 +162,8 @@ CI artifact links for the remediation PRs (all six jobs green):
 | [#82](https://github.com/kortiene/app.jeliya.ai/pull/82) (Step 3) | run `29913916028` |
 | [#83](https://github.com/kortiene/app.jeliya.ai/pull/83) (Step 4) | run `29915796041` |
 | [#84](https://github.com/kortiene/app.jeliya.ai/pull/84) (Step 5) | run `29920201448` |
+| [#85](https://github.com/kortiene/app.jeliya.ai/pull/85) (Step 6 — the pinned `df28f6a` tree) | run `29925118834` |
+| [#86](https://github.com/kortiene/app.jeliya.ai/pull/86) (Step 7 handoff) | run `29932744561` |
 
 ### Test-to-finding mapping
 
@@ -160,9 +174,9 @@ CI artifact links for the remediation PRs (all six jobs green):
 | F3 (control core) | 8 `jeliya-control` tests (replay, SAS, expiry, revocation, scope, nonce) | State-machine unit properties pass | Does NOT prove enforcement at runtime (crate is scaffolding) |
 | F4 (authority path) | [Honest-boundary statement](phase-1-security-review-scope.md#honest-boundaries-the-review-should-confirm-are-communicated); `recovery_rpc_round_trips_through_dispatch` | The authority path is documented; engine.rs + serve.rs + PROTOCOL.md are in the reopen set | Does NOT prove a same-user socket boundary is enforced |
 | F5 (opt-in encryption) | `create_with_password_seals_the_secret_not_plaintext`, `load_with_a_wrong_password_fails_closed`, `load_an_encrypted_secret_without_a_password_fails_closed` | Encryption works when a password is set; fails closed on wrong/missing password | Does NOT prove production enforces it (row #2 is OPEN) |
-| F6 (KDF versioning) | `v1_kdf_params_are_pinned`, `v1_legacy_dispatch_opens_a_v1_envelope_regardless_of_sealing_version`, `unknown_envelope_version_is_rejected`, `kdf_derivation_is_memory_hard` | Params are immutable per version; v1 legacy dispatch works; latency is measurable | Memory/RSS verification (Step 7 evidence); no v2 migration yet |
+| F6 (KDF versioning) | `v1_kdf_params_are_pinned`, `v1_legacy_dispatch_opens_a_v1_envelope_regardless_of_sealing_version`, `unknown_envelope_version_is_rejected`, `kdf_derivation_is_memory_hard` (≥5 ms floor) + [`tools/step7-kdf-probe`](../tools/step7-kdf-probe/README.md) (RSS ≈ 18.95 MiB) | Params are immutable per version; v1 legacy dispatch works; latency and memory target measured | No v2 migration yet |
 | F7 (lifecycle) | [Lifecycle section](phase-1-security-review-scope.md#key-lifecycle-summary-surfaces-in-scope); ADR #3 "What the bundle restores" | Re-export does not rotate; old material irrevocable | N/A (doc fix) |
-| F8 (zeroize) | [Zeroize audit](phase-1-security-review-scope.md#zeroization-recast-per-f8); `aes-gcm`/`argon2` `zeroize` features enabled; `derive_kek` returns `Zeroizing`; `from_phrase` wipes `stripped` | Dependency features enabled; KEK and phrase intermediates are `Zeroizing` | Does NOT include heap inspection or measured RSS evidence (Step 7) |
+| F8 (zeroize) | [Zeroize audit](phase-1-security-review-scope.md#zeroization-recast-per-f8); `aes-gcm`/`argon2` `zeroize` features enabled; `derive_kek` returns `Zeroizing`; `from_phrase` wipes `stripped`; wipe probes in [`tools/step7-kdf-probe`](../tools/step7-kdf-probe/README.md) (heap wipe vs control, stack wipe) | Dependency features enabled and behaviorally verified; KEK, phrase, raw-seed, and ephemeral-password intermediates are `Zeroizing` (Step 7 verdict conditions 1+3) | Transient stack temporaries from by-value `to_seed()` returns (upstream API limitation, recorded in the audit table) |
 | F9 (approval contract) | (this document) | Contract codified: independence, taxonomy, threshold, risk-owner, artifacts, re-review | Must be exercised by a real independent reviewer at Step 7 |
 | F10 (evidence package) | (this document) | Reproducible commands, expected results, test mapping, threat-model mapping | Fuzz/property tests, cross-platform permission checks, and concurrency tests are noted as gaps below |
 
@@ -174,13 +188,15 @@ CI artifact links for the remediation PRs (all six jobs green):
 | Wrong recovery key | `open_rejects_a_wrong_recovery_key` | Covered |
 | Tampered bundle | `open_rejects_a_tampered_bundle` (flip last ciphertext byte) | Covered |
 | Unknown version | `open_rejects_an_unknown_version`, `unknown_envelope_version_is_rejected` | Covered |
-| Truncated bundle | `decrypt_secret_bytes` header-length check | Covered (implicit in the parse) |
+| Truncated identity envelope | `truncated_encrypted_secret_fails_closed` (Step 7 verdict condition 4) | Covered |
+| Tampered identity envelope | `tampered_encrypted_secret_fails_closed` (Step 7 verdict condition 4) | Covered |
+| Truncated recovery bundle | `open_bundle` length check + AEAD failure on short ciphertext | Code-reviewed, untested (Step 7 re-review read the path; no dedicated test) |
 | Wrong password | `load_with_a_wrong_password_fails_closed` | Covered |
 | Encrypted-without-password | `load_an_encrypted_secret_without_a_password_fails_closed` | Covered |
 | Seed↔profile consistency | `load_with` cross-check in identity.rs; `open_bundle` id-match in recovery.rs | Covered |
 | V1 legacy dispatch | `v1_legacy_dispatch_opens_a_v1_envelope_regardless_of_sealing_version` | Covered |
 | KDF param immutability | `v1_kdf_params_are_pinned` | Covered |
-| KDF latency | `kdf_derivation_is_memory_hard` | Covered |
+| KDF latency + memory | `kdf_derivation_is_memory_hard` (≥5 ms floor, Step 7 verdict condition 2) + the committed probe harness [`tools/step7-kdf-probe`](../tools/step7-kdf-probe/README.md) (VmHWM delta ≈ 18.95 MiB, latency transcript) | Covered |
 | File permissions | `files_are_owner_only`, `encrypted_secret_stays_owner_only` | Covered (Unix only) |
 | Replay defense | `replayed_nonce_is_rejected`, `out_of_order_nonces_inside_the_window_are_accepted`, `nonce_below_the_window_floor_is_rejected`, `nonce_zero_is_rejected` | Covered (state machine) |
 | SAS MITM detection | `sas_changes_when_either_key_is_substituted`, `sas_is_role_symmetric` | Covered (state machine) |
@@ -199,7 +215,7 @@ should be addressed before or during the Step 7 re-review:
 |---|---|---|
 | Fuzz / property tests | No `proptest` or `cargo-fuzz` harness for envelope parsing, KDF edge cases, or replay-window state | Medium |
 | Cross-platform permissions | File-permission tests are Unix-only (`#[cfg(unix)]`); Windows ACL behavior is not tested locally | Medium |
-| Memory/RSS verification | `kdf_derivation_is_memory_hard` measures wall-clock time only; no RSS/heap inspection to prove the configured memory target is exercised | Medium |
+| Memory/RSS verification | **Closed at Step 7** — the committed probe harness [`tools/step7-kdf-probe`](../tools/step7-kdf-probe/README.md) measures the VmHWM delta (≈ 18.95 MiB ≈ m_cost) and wipe behavior; the in-tree test keeps a 5 ms latency floor (process-wide RSS is not assertable reliably in a threaded test binary) | Closed |
 | Control concurrency | No test for `ControlGateway` under concurrent access (the documented invariant requires external serialization) | Low (D5b/D6 scope) |
 | Max-lifetime / clock-rollback | `expired_key_is_rejected` tests a single boundary; no clock-rollback or NTP-skew property test | Low (D5b/D6 scope) |
 

@@ -75,7 +75,12 @@ impl RecoveryKey {
     /// Parse a grouped-hex phrase (case-insensitive; spaces/dashes/colons/underscores
     /// optional) back into a recovery key.
     pub fn from_phrase(phrase: &str) -> CoreResult<Self> {
-        let mut stripped = Zeroizing::new(String::new());
+        // Pre-size so growth cannot reallocate and leave unwiped copies of
+        // phrase prefixes on the heap (Step 7 verdict condition 3). The cap
+        // bounds the allocation against a hostile oversized phrase: a valid
+        // phrase strips to exactly 2*KEY_LEN chars (≤ 4 UTF-8 bytes each), so
+        // only an already-invalid phrase can outgrow the cap and reallocate.
+        let mut stripped = Zeroizing::new(String::with_capacity(phrase.len().min(8 * KEY_LEN)));
         stripped.extend(
             phrase
                 .chars()
@@ -141,9 +146,12 @@ pub fn export_bundle_from_dir(data_dir: &Path) -> CoreResult<(Vec<u8>, RecoveryK
 pub fn export_bundle(profile: &Profile, keys: &SecretKeys) -> CoreResult<(Vec<u8>, RecoveryKey)> {
     let recovery_key = RecoveryKey::generate()?;
     // Extract the seeds as hex; zeroize every intermediate (mirrors
-    // `identity::secret_file_contents`).
-    let identity_seed = keys.identity.to_seed();
-    let device_seed = keys.device.to_seed();
+    // `identity::secret_file_contents`). to_seed() returns a plain [u8; 32]
+    // by value; wrap immediately so the named copies are wiped (transient
+    // stack temporaries from the by-value return remain an upstream
+    // limitation).
+    let identity_seed = Zeroizing::new(keys.identity.to_seed());
+    let device_seed = Zeroizing::new(keys.device.to_seed());
     let mut identity_hex = Zeroizing::new(hex::encode(identity_seed.as_slice()));
     let mut device_hex = Zeroizing::new(hex::encode(device_seed.as_slice()));
 
@@ -160,10 +168,13 @@ pub fn export_bundle(profile: &Profile, keys: &SecretKeys) -> CoreResult<(Vec<u8
     identity_hex.zeroize();
     device_hex.zeroize();
 
-    let mut plaintext = serde_json::to_vec(&payload)
-        .map_err(|e| CoreError::internal(format!("could not encode recovery payload: {e}")))?;
+    // Wipe the payload's seed-hex copies BEFORE propagating a serialization
+    // error, so the `?` cannot skip the wipe (Step 7 verdict condition 3).
+    let encoded = serde_json::to_vec(&payload);
     payload.identity_secret.zeroize();
     payload.device_secret.zeroize();
+    let mut plaintext = encoded
+        .map_err(|e| CoreError::internal(format!("could not encode recovery payload: {e}")))?;
     let sealed = seal_bundle(&recovery_key, &plaintext);
     plaintext.zeroize();
     sealed.map(|bundle| (bundle, recovery_key))
@@ -281,10 +292,12 @@ pub fn test_restore(data_dir: &Path) -> CoreResult<()> {
     let mut pw_bytes = [0u8; 32];
     getrandom::fill(&mut pw_bytes)
         .map_err(|e| CoreError::internal(format!("OS CSPRNG unavailable: {e}")))?;
-    let ephemeral_pw = hex::encode(pw_bytes);
+    // KEK-equivalent for the test-restore copy; wiped on drop (Step 7
+    // verdict condition 3).
+    let ephemeral_pw = Zeroizing::new(hex::encode(pw_bytes));
     pw_bytes.zeroize();
     let (profile, keys) = open_bundle(&bundle, &key)?;
-    identity::write_existing_with(&test_dir, &profile, &keys, Some(&ephemeral_pw))?;
+    identity::write_existing_with(&test_dir, &profile, &keys, Some(ephemeral_pw.as_str()))?;
 
     let src = identity::load_profile(data_dir)?.ok_or_else(|| {
         CoreError::internal("no source identity after export (data dir changed mid-test?)")
@@ -296,7 +309,7 @@ pub fn test_restore(data_dir: &Path) -> CoreResult<()> {
             "test restore: restored profile ids do not match the source",
         ));
     }
-    let restored_keys = SecretKeys::load_with(&test_dir, Some(&ephemeral_pw))?;
+    let restored_keys = SecretKeys::load_with(&test_dir, Some(ephemeral_pw.as_str()))?;
     if restored_keys.identity.identity_key().to_string() != src.identity_id
         || restored_keys.device.device_key().to_string() != src.device_id
     {

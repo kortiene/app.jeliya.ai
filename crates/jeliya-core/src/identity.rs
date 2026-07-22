@@ -91,7 +91,8 @@ const V1_KDF: KdfParams = KdfParams {
 fn kdf_params_for_version(version: u8) -> CoreResult<&'static KdfParams> {
     match version {
         1 => Ok(&V1_KDF),
-        _ => Err(CoreError::internal(format!(
+        // An unknown version is malformed/future user data, not a program bug.
+        _ => Err(CoreError::invalid(format!(
             "unsupported encrypted identity.secret version {version}"
         ))),
     }
@@ -511,8 +512,11 @@ fn signing_key_from_seed_hex(seed_hex: &str) -> CoreResult<SigningKey> {
 
 /// Build the `identity.secret` body; the caller must zeroize the result.
 fn secret_file_contents(identity_key: &SigningKey, device_key: &SigningKey) -> String {
-    let identity_seed = identity_key.to_seed();
-    let device_seed = device_key.to_seed();
+    // to_seed() returns a plain [u8; 32] by value; wrap immediately so the
+    // named copies are wiped on every exit path (transient stack temporaries
+    // from the by-value return remain an upstream limitation).
+    let identity_seed = Zeroizing::new(identity_key.to_seed());
+    let device_seed = Zeroizing::new(device_key.to_seed());
     let mut identity_hex = hex::encode(identity_seed.as_slice());
     let mut device_hex = hex::encode(device_seed.as_slice());
     let contents = format!(
@@ -788,22 +792,62 @@ mod tests {
             Ok(_) => panic!("unknown version must fail"),
             Err(e) => e,
         };
+        assert_eq!(
+            err.kind,
+            ErrorKind::InvalidParams,
+            "an unknown version is malformed user data, not an internal error"
+        );
         assert!(err.message.contains("version 255"));
     }
 
     #[test]
+    fn truncated_encrypted_secret_fails_closed() {
+        // Step 7 verdict condition 4: exercise the header-bounds branch the
+        // evidence table previously claimed only implicitly.
+        let dir = tempdir().unwrap();
+        create_with(dir.path(), Some("pw")).unwrap();
+        let blob = std::fs::read(dir.path().join(SECRET_FILE)).unwrap();
+        // Shorter than version(1) || salt(16) || nonce(12).
+        let err = match super::decrypt_secret_bytes(&blob[..10], "pw") {
+            Ok(_) => panic!("a truncated envelope must fail closed"),
+            Err(e) => e,
+        };
+        assert!(err.message.contains("truncated"));
+    }
+
+    #[test]
+    fn tampered_encrypted_secret_fails_closed() {
+        // Step 7 verdict condition 4: mirror recovery's
+        // open_rejects_a_tampered_bundle on the identity envelope.
+        let dir = tempdir().unwrap();
+        create_with(dir.path(), Some("pw")).unwrap();
+        let mut blob = std::fs::read(dir.path().join(SECRET_FILE)).unwrap();
+        let last = blob.len() - 1;
+        blob[last] ^= 0x01; // flip a ciphertext/tag bit; the AEAD must catch it
+        let err = match super::decrypt_secret_bytes(&blob, "pw") {
+            Ok(_) => panic!("a tampered envelope must fail closed"),
+            Err(e) => e,
+        };
+        assert_eq!(err.kind, ErrorKind::InvalidParams);
+    }
+
+    #[test]
     fn kdf_derivation_is_memory_hard() {
-        // Measured target (F6): a single Argon2id derivation under V1_KDF
-        // must take measurable time, proving memory-hardness is active.
-        // On the CI runner (MSRV 1.91.0, linux-x86-64) this is ~30-80ms.
-        // On aarch64 it may differ; the floor is conservative.
+        // Measured target (F6; floor raised per Step 7 verdict condition 2):
+        // a single Argon2id derivation under V1_KDF measures 21-41ms locally
+        // and ~30-80ms on the CI runner; a 5ms floor is far below every
+        // measured value yet above what a non-memory-hard KDF or a collapsed
+        // m_cost would take. The memory target itself (VmHWM delta ~19 MiB)
+        // is measured by the committed probe harness in tools/step7-kdf-probe
+        // (process-wide RSS is not assertable reliably inside a threaded
+        // test binary).
         let salt = [0u8; super::ARGON_SALT_LEN];
         let start = std::time::Instant::now();
         let _key = super::derive_kek("latency-test", &salt, &super::V1_KDF).unwrap();
         let elapsed = start.elapsed();
         assert!(
-            elapsed.as_millis() >= 1,
-            "KDF derivation took {elapsed:?}; expected >= 1ms (memory-hardness not active?)"
+            elapsed.as_millis() >= 5,
+            "KDF derivation took {elapsed:?}; expected >= 5ms (memory-hardness not active?)"
         );
         // Record the measured value for documentation (visible with --nocapture).
         eprintln!(
