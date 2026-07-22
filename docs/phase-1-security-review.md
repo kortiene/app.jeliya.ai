@@ -228,9 +228,9 @@ even if the scope is not widened.
 **Status.** Resolved (doc) 2026-07-22 — the daemon-auth/single-user boundary is
 now stated as an honest boundary in the
 [scope doc](phase-1-security-review-scope.md#honest-boundaries-the-review-should-confirm-are-communicated),
-with `engine.rs` as a reviewed surface in the
-[pin](phase-1-security-review-scope.md#review-target-pin). Full scope widening
-or same-user socket enforcement is a later product decision.
+with `engine.rs`, `serve.rs`, and `docs/PROTOCOL.md` all in the pin's
+[reopen set](phase-1-security-review-scope.md#review-target-pin). Full scope
+widening or same-user socket enforcement is a later product decision.
 
 ### F5 — High: "production encryption" is opt-in, not enforced
 
@@ -486,17 +486,25 @@ ones.
 
 ## This session's scope
 
-This session performs **Step 0** (record the findings — this page) and
-**Step 1** (settle the normative spec — F9 ADR/code contradictions resolved
-2026-07-21, dispositions recorded under
-[F9 resolutions](#resolutions-2026-07-21); ADR #3 promoted to `canonical` /
-`partial`, ADR #2 remains `proposal` with its scaffolding relationship
-documented). Steps 2–7 do not start until the user says to continue.
+This session has completed **Steps 0–4** of the remediation path:
 
-The [Phase 1 gate verdict](phase-1-gate-verdict.md) framing of "rows #1–#6
-PASS / #7 PENDING" is **known to be wrong** and is not re-asserted here: row
-#2 overclaims (F5) and row #7 cannot close as scoped (F2). The verdict doc
-itself is corrected as part of Step 4.
+- **Step 0** — findings recorded (this page).
+- **Step 1** — F9 ADR/code contradictions resolved; ADR #3 promoted to
+  `canonical` / `partial`; ADR #2 remains `proposal` with its scaffolding
+  relationship documented.
+- **Step 2** — row #7 re-scoped to the two D1 envelopes (F2); `jeliya-control`
+  relabeled as scaffolding (F3); D5b/D6 gate defined.
+- **Step 3** — review target pinned (F1): source SHA, `Cargo.lock`, toolchain,
+  ADR revisions, crypto deps, reopen rules (provisional pending Steps 5–6).
+- **Step 4** — doc overclaims fixed: row #2 relabeled OPEN (F5); lifecycle
+  corrected (F7); daemon-auth boundary stated (F4); zeroize recast (F8).
+
+**Steps 5–7** remain: KDF param encoding (F6), evidence package + approval
+contract (F10), and re-review by a different reviewer (Step 7).
+
+The [Phase 1 gate verdict](phase-1-gate-verdict.md) is now consistent with this
+record: row #2 is OPEN (F5), row #7 is NOT APPROVED (remediation in progress),
+and the control surface is deferred to D5b/D6 (F2/F3).
 
 ## Operating rules
 

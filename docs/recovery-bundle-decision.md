@@ -83,8 +83,11 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
    payload (already a workspace dependency, so no new crypto primitive is
    introduced); the nonce is fresh per seal and stored with the envelope. The
    first byte is a format version; `import` rejects an unknown future version
-   rather than guessing. AEAD gives integrity and authenticity, so a tampered,
-   truncated, or rolled-back bundle fails import with a clear error.
+   rather than guessing. AEAD gives integrity and authenticity, so a **tampered
+   or truncated** bundle fails import with a clear error. **A prior *valid*
+   bundle cannot be distinguished from the current one** — `open_bundle`
+   accepts any valid bundle and AEAD cannot detect rollback to an older valid
+   version (see [F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)).
 5. **The payload contains exactly:** the profile root seed, the device seed, and
    the profile fields (name, public ids, creation time). The room membership
    index (the known-rooms set from `state.json`), the device-authorization
@@ -144,9 +147,11 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
   never placed in a URL or query string.
 - Optional cloud hosting reduces to a confidentiality assumption on AEAD plus an
   integrity/rollback assumption on AEAD plus the version byte. The hosting
-  provider cannot read content; it also cannot silently roll the bundle back to
-  a prior version because the versioned payload is integrity-bound and the
-  client treats import failure as fatal.
+   provider cannot read content; it also cannot silently roll the bundle back
+   to a tampered version because the versioned payload is integrity-bound and
+   the client treats import failure as fatal. **A prior *valid* bundle,
+   however, is indistinguishable from the current one** — see
+   [F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false).
 - This does not change the existing room-membership boundary: every room peer
   that already received content can still keep it.
 

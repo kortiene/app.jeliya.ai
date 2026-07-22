@@ -225,7 +225,7 @@ security property (not just the happy path).
 | KEK (Argon2id output, identity.rs) | `derive_kek` returns `[u8; 32]` by value from a `Zeroizing` wrapper | The `Zeroizing` wrapper wipes its internal copy on drop; the returned array is a plain `[u8; 32]` that the caller (`encrypt_secret_bytes` / `decrypt_secret_bytes`) stores on the stack un-zeroized | The return-by-value escapes `Zeroizing`; the caller's copy is not wiped |
 | Recovery key (`RecoveryKey`) | `RecoveryKey([u8; 32])` with `Drop` impl that calls `zeroize()` | Wiped on drop | Appears correct; verify no intermediate copies |
 | Password (identity.rs) | `password: &str` borrowed from a `String` the caller owns (`password_from_env` returns `Option<String>`) | The `String` from `std::env::var` is plain; the `&str` borrow offers no wipe | The env-var `String` is not zeroized after use |
-| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` parses into `hex::decode` intermediates | Intermediates (`raw: Vec<u8>`) are zeroized on error; on success the key is moved into `RecoveryKey` which wipes on drop | Appears mostly correct; verify the caller's phrase `String` |
+| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` builds a normalized `stripped: String` (lowercased, separators removed) containing the full key hex, then calls `hex::decode` | `raw: Vec<u8>` from `hex::decode` is zeroized on error; on success the key moves into `RecoveryKey` (wipes on drop) | **`stripped: String` is never zeroized** on either success or error — a heap-resident copy of the recovery key hex outlives the call |
 | Seed hex intermediates | `PayloadV1.identity_secret` / `device_secret` as `String` in `open_bundle` | Moved to `Zeroizing<String>` after parse, wiped on drop | Correct (fixed in the self-review pass) |
 | Plaintext JSON bytes | `plaintext: Vec<u8>` in `encrypt_secret_bytes` / `open_bundle` / `load_with` | Zeroized after use | Correct |
 
@@ -379,6 +379,7 @@ tamper/version/wrong-key fail-closed.
 | At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `4a73922` (PR #79) |
 | Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `4a73922` (PR #79) |
 | Authority path (F4) | [`crates/jeliya-core/src/engine.rs`](../crates/jeliya-core/src/engine.rs) | `cdcae83` (PR #78) |
+| Daemon auth (F4) | [`crates/jeliyad/src/serve.rs`](../crates/jeliyad/src/serve.rs) | (pre-Phase-1; unchanged) |
 
 ### Normative ADR revisions
 
@@ -422,6 +423,10 @@ re-review (record a new pin before the Step 7 re-review):
   as a reviewed surface for [F4](phase-1-security-review.md#f4--high-scope-omits-the-actual-authority-path)).
   Whether `engine.rs` is fully in scope depends on Step 4; until then a change
   to it reopens review conservatively.
+- A change to `crates/jeliyad/src/serve.rs` (the daemon `/api/session` token
+  handout and the `/ws` bearer gate — the actual root-authority path per F4).
+- A change to [`docs/PROTOCOL.md`](PROTOCOL.md) (the single-user-machine
+  assumption that bounds the daemon's trust model).
 - A change to ADR #3 ([recovery-bundle-decision.md](recovery-bundle-decision.md))
   or ADR #2 ([companion-control-protocol-decision.md](companion-control-protocol-decision.md)).
 - A change to a **review-package document** — this scope doc
@@ -445,8 +450,9 @@ re-review (record a new pin before the Step 7 re-review):
 - Documentation-only changes to docs **not** listed above (i.e., not the
   normative ADRs and not the review-package documents).
 - UI changes (`ui/`).
-- Changes to other crates (`jeliyad`, `jeliya-control`, `jeliya-core/src/`
-  files other than `identity.rs`, `recovery.rs`, `engine.rs`, or their tests).
+- Changes to other crates (`jeliyad` source files **other than `serve.rs`**,
+  `jeliya-control`, `jeliya-core/src/` files other than `identity.rs`,
+  `recovery.rs`, `engine.rs`, or their tests).
 - CI/workflow changes that do not affect the toolchain versions or build
   outputs of the reviewed files.
 - The remediation steps themselves (Steps 3–6) update this pin before the
