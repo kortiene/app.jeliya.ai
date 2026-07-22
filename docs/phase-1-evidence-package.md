@@ -133,7 +133,9 @@ node scripts/check-ui-i18n.mjs
 # cargo clippy: no warnings.
 # cargo test: 127 passed, 0 failed, 1 ignored at the d610076 pin.
 #   (125 at the prior df28f6a pin — verdict condition 4 added two
-#    identity-envelope tamper/truncation tests.)
+#    identity-envelope tamper/truncation tests. 128 at the PR #90 tree,
+#    which adds the overlong-paste rejection test with the from_phrase
+#    fixed-buffer hardening.)
 # check-docs: OK.
 # check-ui-i18n: OK.
 ```

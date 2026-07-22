@@ -38,12 +38,12 @@ A third module — the control-protocol core — is **deferred to the D5b/D6 gat
 because it has no wire format to review (see
 [Deferred surface](#deferred-surface--the-d5bd6-control-wire-review-gate)).
 
-> **The review target is pinned and finalized** — see
-> [Review target pin](#review-target-pin). A reviewer checks out `df28f6a`
-> and verifies the `Cargo.lock` hash, toolchain, and ADR revisions match.
-> Steps 0–6 of the
-> [remediation path](phase-1-security-review.md#remediation-path) are complete;
-> the pin is ready for the Step 7 re-review.
+> **The review target is pinned** — see [Review target pin](#review-target-pin)
+> for the current pin and its history. The Step 7 re-review approved `df28f6a`
+> and the [conditions delta review](phase-1-security-review.md#conditions-delta-review-2026-07-22)
+> extended the approval to `d610076`; a reviewer reproducing the pin checks out
+> the pin section's current SHA and verifies the `Cargo.lock` hash, toolchain,
+> and ADR revisions match.
 
 ### 1. At-rest identity encryption — `crates/jeliya-core/src/identity.rs`
 
@@ -232,7 +232,7 @@ security property (not just the happy path).
 | Raw seeds from `to_seed()` (identity.rs `secret_file_contents`, recovery.rs `export_bundle`) | iroh-rooms `SigningKey::to_seed()` returns a plain `[u8; 32]` by value | Wrapped in `Zeroizing` at all four call sites in the pinned surfaces (Step 7 verdict condition 1) | **Residual**: the by-value return can leave transient stack temporaries (full fix is an upstream self-wiping return type). Two further call sites in `supervisor.rs` (lines ~854/~1607, device-key handoff to the session layer) are outside row #7's pinned surfaces — noted by the conditions delta review for the next zeroize pass |
 | Password (identity.rs) | `password: &str` borrowed from a `String` the caller owns | The env-var `String` is plain; no wipe | Accepted: the env var outlives the process anyway (in the [accepted-risk register](phase-1-evidence-package.md#accepted-risks)) |
 | Ephemeral test-restore password (recovery.rs `test_restore`) | `Zeroizing<String>` (Step 7 verdict condition 3) | Wiped on drop | — |
-| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` builds `stripped` as `Zeroizing<String>` (Step 6 fix) | Wiped on drop; pre-sized with `with_capacity` so growth cannot leave unwiped realloc copies (Step 7 verdict condition 3) | **Resolved (Step 6 + Step 7 condition 3)** |
+| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` parses into a fixed `Zeroizing<[u8; 64]>` buffer (Step 7 condition 3, hardened post-delta-review) | Wiped on drop; **no input-proportional allocation exists**, so no reallocation can strand a copy of pasted phrase material, however long the input | **Resolved (Step 6 + Step 7 condition 3 + PR #90 hardening)** |
 | Seed hex intermediates | `PayloadV1.identity_secret` / `device_secret` as `String` in `open_bundle` and `export_bundle` | Import side: moved to `Zeroizing<String>` after parse. Export side: wiped before a serialization error can propagate (Step 7 verdict condition 3) | Correct |
 | Plaintext JSON bytes | `plaintext: Vec<u8>` in `encrypt_secret_bytes` / `open_bundle` / `load_with` | Zeroized after use | Correct |
 
@@ -371,7 +371,10 @@ tamper/version/wrong-key fail-closed.
 
 > Pin history: `35b1c5e` (Step 3) → `df28f6a` (Step 6; the Step 7 verdict and
 > GO were recorded against it) → `d610076` (verdict conditions, PR #89; the
-> approval [extends to it](phase-1-security-review.md#conditions-delta-review-2026-07-22)).
+> approval [extends to it](phase-1-security-review.md#conditions-delta-review-2026-07-22))
+> → the PR #90 merge SHA (the `from_phrase` fixed-buffer hardening,
+> [micro-delta-reviewed](phase-1-security-review.md#conditions-delta-review-2026-07-22);
+> record the final SHA here after merge).
 
 | Field | Value |
 |---|---|
@@ -489,7 +492,8 @@ A reviewer reproducing the current pin should:
 3. Verify the toolchain matches (CI full-gate Rust `1.96.0`, or MSRV `1.91.0`;
    Node `22.22.3`)
 4. Run the commands in the [evidence package](phase-1-evidence-package.md#reproduce-the-review)
-   (expected: 127 passed / 0 failed / 1 ignored)
+   (expected: 127 passed / 0 failed / 1 ignored at `d610076`; 128 at the
+   PR #90 tree, which adds the overlong-paste rejection test)
 5. Verify the pin values above against the tree they checked out
 
 If any value does not match, the pin is stale and the review cannot proceed

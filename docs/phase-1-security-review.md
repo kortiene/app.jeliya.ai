@@ -682,8 +682,10 @@ evidence (2); `from_phrase` pre-sizing, `Zeroizing` ephemeral password, and
 the export-side wipe-before-error fix (3); identity-envelope
 truncation/tamper tests + corrected evidence rows (4); the PR #85/#86 CI rows
 (5); the two stale ADR #3 passages amended (6); unknown-envelope-version now
-`InvalidParams` (7 — its AAD half remains a v2 design note). The conditions
-merged as `d610076` (PR #89). The re-pin and the scoped delta review are
+`InvalidParams` (7 — its AAD half remains a v2 design note; the `from_phrase`
+piece of condition 3 was subsequently hardened from a pre-sized `String` to a
+fixed buffer — see the delta-review record's post-review hardening note). The
+conditions merged as `d610076` (PR #89). The re-pin and the scoped delta review are
 **complete** — see [Conditions delta review](#conditions-delta-review-2026-07-22).
 
 #### Conditions delta review (2026-07-22)
@@ -724,6 +726,39 @@ The delta reviewer's statement, verbatim:
    independently re-verified against the GitHub API before recording.
 2. **`d610076` push run — confirmed.** Run `29951799090` completed with
    conclusion `success` (all six jobs) after the review; verified directly.
+
+**Post-review hardening (2026-07-22, recording PR #90).** A review comment on
+the recording PR showed the delta-reviewed 256-byte-cap pre-size in
+`from_phrase` still reallocates for overlong pastes — which can embed real key
+material — so the residual the delta review had noted as disclosed was
+eliminated outright: `from_phrase` now parses into fixed `Zeroizing` stack
+buffers with **no heap allocation at all** (including `hex::decode_to_slice`
+in place of `hex::decode`, whose error path dropped a partially decoded Vec
+unwiped), plus an overlong-paste rejection test and a non-ASCII rejection
+assertion. The change was micro-delta-reviewed by a fresh reviewer context
+(two passes — the second closing a residual its own first pass flagged),
+verdict **APPROVE**, statement verbatim:
+
+> I re-verified the amended `RecoveryKey::from_phrase` (working tree, diffed
+> against pinned tree d610076) to the same adversarial standard: the parse is
+> now fully heap-free — both the 64-byte normalization buffer and the 32-byte
+> decode target are fixed Zeroizing stack buffers, `hex::decode_to_slice`
+> allocates nothing, and even a partial decode of a malformed 64-character
+> input lands only in the self-wiping buffer, closing the residual I flagged
+> in my first pass. The function cannot panic on any input (the bounds guard
+> precedes the indexed write, the ASCII check precedes the cast, and
+> decode_to_slice's length-error branches are structurally unreachable),
+> preserves round-trip, case, separator, wrong-length, garbage, and non-ASCII
+> behavior, and returns ErrorKind::InvalidParams with length-only,
+> content-free messages on every rejection path. All 13 recovery-matching
+> tests pass under `cargo test --locked -p jeliya-core recovery` against a
+> binary confirmed built from the amended source, including the new
+> overlong-paste and é-input assertions; I have no remaining issues.
+
+This changes `recovery.rs` after `d610076`; the pin's final SHA is therefore
+the PR #90 merge commit (recorded in the
+[pin history](phase-1-security-review-scope.md#review-target-pin) after
+merge), with this note as the micro-delta record.
 
 Carried notes (no action this gate): the two `to_seed()` call sites in
 `supervisor.rs` outside row #7's surfaces (disclosed in the

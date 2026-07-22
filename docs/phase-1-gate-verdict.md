@@ -49,14 +49,15 @@ control transport — so it has no wire format for row #7 to review yet; see
 
 The six passing rows are satisfied by the Phase 1 implementation merged to
 `main` as `cdcae83…` (pull request #78), verified by the local test suite and
-the daemon-only six-job CI matrix (run `29868870066`, all green), and
+the daemon-only six-job CI matrix (run `29868870066` — a `pull_request` run at
+the PR #78 branch head `e9f1ed5`, all green), and
 re-verified at the row #7 re-review pin `df28f6a` (push run `29922951249`, all
 green) and at the delta-reviewed conditions tree `d610076` (push run
 `29951799090`, all green — see the candidate table below). They are **local/unit evidence**, not
 the network qualification a *release* requires: these SHAs are past the
 network-qualified pre-Phase-1 pair `922f620…` + `a5d98b70…`, so a release at
-`df28f6a` additionally needs fresh signed direct/relay runs. This record
-advances no release status.
+the current `d610076` candidate additionally needs fresh signed direct/relay
+runs. This record advances no release status.
 
 ## Candidate under verdict
 
