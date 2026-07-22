@@ -13,7 +13,7 @@ audience: ["security-reviewers", "maintainers"]
 
 # Phase 1 security review scope
 
-This is the review package for [Phase 1 gate row #7](phase-1-gate-verdict.md#7-independent-security-review-approves-the-wire-formats-and-the-key-lifecycle--not-approved-remediation-in-progress):
+This is the review package for [Phase 1 gate row #7](phase-1-gate-verdict.md#7-independent-security-review-approves-the-wire-formats-and-the-key-lifecycle--not-approved-remediation-complete-awaiting-re-review):
 the security review of the wire formats and key lifecycle introduced by Phase 1.
 **Re-scoped 2026-07-22 per [finding F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve)**:
 row #7 covers the **two D1 envelopes only** — the at-rest `identity.secret`
@@ -36,13 +36,12 @@ A third module — the control-protocol core — is **deferred to the D5b/D6 gat
 because it has no wire format to review (see
 [Deferred surface](#deferred-surface--the-d5bd6-control-wire-review-gate)).
 
-> **The review target is pinned** — see
-> [Review target pin](#review-target-pin). A reviewer checks out the pinned
-> SHA and verifies the `Cargo.lock` hash, toolchain, and ADR revisions match.
-> The pin is **provisional**: Steps 4–6 of the
-> [remediation path](phase-1-security-review.md#remediation-path) may modify
-> reviewed surfaces (notably Step 5 changes `identity.rs` for KDF param
-> encoding); the pin will be re-recorded before the Step 7 re-review.
+> **The review target is pinned and finalized** — see
+> [Review target pin](#review-target-pin). A reviewer checks out `df28f6a`
+> and verifies the `Cargo.lock` hash, toolchain, and ADR revisions match.
+> Steps 0–6 of the
+> [remediation path](phase-1-security-review.md#remediation-path) are complete;
+> the pin is ready for the Step 7 re-review.
 
 ### 1. At-rest identity encryption — `crates/jeliya-core/src/identity.rs`
 
@@ -364,12 +363,12 @@ tamper/version/wrong-key fail-closed.
 > a later change to any field in the "reopens review" set requires a re-review
 > before the Phase 1 gate can close.
 
-### Pin values (recorded 2026-07-22; re-recorded Steps 3–6)
+### Pin values (finalized 2026-07-22 for Step 7 re-review)
 
 | Field | Value |
 |---|---|
-| Source SHA | `9f905d3…` (Step 5 merge; Steps 5–6 changes pending — finalize at Step 7) |
-| `Cargo.lock` SHA-256 | `dda192b513195ca512587d01609aeb5d89447001fc04549aca538a3d0c31b223` (Step 6: `zeroize` features enabled on `aes-gcm`/`argon2`) |
+| Source SHA | `df28f6a15c6c154c0759eea76b2c164c41c047bc` (`main`; PR #85, Step 6 merge) |
+| `Cargo.lock` SHA-256 | `dda192b513195ca512587d01609aeb5d89447001fc04549aca538a3d0c31b223` |
 | Rust toolchain (CI + release) | `1.91.0` (MSRV; pinned via `dtolnay/rust-toolchain` in `ci.yml` and `release.yml`) |
 | Node (CI + release) | `22.22.3` (pinned in `ci.yml` and `release.yml` `node-version`) |
 | Local builder (this pin was recorded with) | `rustc 1.97.1`, Node `v24.18.0` — not the release toolchain; recorded for transparency only |
@@ -380,10 +379,10 @@ tamper/version/wrong-key fail-closed.
 
 | Surface | File | Last changed |
 |---|---|---|
-| At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `4a73922` (PR #79) |
-| Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `4a73922` (PR #79) |
+| At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `df28f6a` (PR #85, Step 6) |
+| Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `df28f6a` (PR #85, Step 6) |
 | Authority path (F4) | [`crates/jeliya-core/src/engine.rs`](../crates/jeliya-core/src/engine.rs) | `cdcae83` (PR #78) |
-| Daemon auth (F4) | [`crates/jeliyad/src/serve.rs`](../crates/jeliyad/src/serve.rs) | (pre-Phase-1; unchanged) |
+| Daemon auth (F4) | [`crates/jeliyad/src/serve.rs`](../crates/jeliyad/src/serve.rs) | `922f620` (pre-Phase-1) |
 
 ### Normative ADR revisions
 
@@ -463,24 +462,20 @@ re-review (record a new pin before the Step 7 re-review):
 - The remediation steps themselves (Steps 3–6) update this pin before the
   Step 7 re-review; those updates are expected, not reopenings.
 
-### Provisional status
+### Pin status: finalized for Step 7 re-review
 
-This pin is **provisional**. The [remediation path](phase-1-security-review.md#remediation-path)
-includes:
-- **Step 4** (F5/F7/F4/F8) — may add the daemon-auth/single-user boundary to
-  the reviewed-surface set (F4); does not change `identity.rs` or `recovery.rs`
-  code but may change their docs.
-- **Step 5** (F6) — ✅ **Changed `identity.rs`**: replaced bare `ARGON_*_COST`
-  constants with a `KdfParams` struct + `V1_KDF` const +
-  `kdf_params_for_version` dispatch. The envelope format is unchanged (still
-  `version(1) || salt || nonce || ct+tag`); the params are an immutable
-  per-version set, not inline bytes. **The pin's source SHA and `identity.rs`
-  last-change SHA must be re-recorded** after this step merges.
+Steps 0–6 of the [remediation path](phase-1-security-review.md#remediation-path)
+are complete. The pin values above are the **final** pre-re-review snapshot
+against `df28f6a`. A reviewer executing the Step 7 re-review should:
 
-The **final pin** is recorded when Steps 3–6 are all complete, immediately
-before the Step 7 re-review. A reviewer executing the Step 7 re-review should
-verify the pin values against the tree they are reviewing, not against the
-provisional values recorded here.
+1. `git checkout df28f6a`
+2. Verify `sha256sum Cargo.lock` matches `dda192b5…`
+3. Verify the toolchain matches (Rust `1.91.0`, Node `22.22.3`)
+4. Run the commands in the [evidence package](phase-1-evidence-package.md#reproduce-the-review)
+5. Verify the pin values above against the tree they checked out
+
+If any value does not match, the pin is stale and the review cannot proceed
+until a new pin is recorded.
 
 ## Citations
 

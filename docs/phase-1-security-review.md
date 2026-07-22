@@ -497,26 +497,77 @@ ones.
 | 4 | F5, F7, F4, F8 | ✅ Doc overclaims fixed: row #2 relabeled OPEN (F5, opt-in not enforced); lifecycle corrected — re-export adds a backup, old material irrevocable (F7); daemon-auth/single-user boundary stated as honest boundary, `engine.rs` in pin (F4); zeroize recast as source/dep audit + secret-data-flow inventory (F8, full audit is Step 6). |
 | 5 | F6 | ✅ KDF params are now an immutable per-version param-set (`KdfParams` + `V1_KDF` + `kdf_params_for_version` dispatch); attribution corrected (OWASP minimum); migration fixtures + latency measurement added. `identity.rs` changed — pin needs re-record before Step 7. |
 | 6 | F10 | ✅ Evidence package built ([new doc](phase-1-evidence-package.md)): exact commands, expected results, CI links, test-to-finding mapping, threat-model cross-reference, gap list, accepted-risk register. Approval contract codified (F9 remaining). Zeroize dependency features enabled + KEK/phrase Zeroizing fixes (F8 remaining). Pin re-recorded (Cargo.lock hash updated). |
-| 7 | all | Re-review against the pinned, settled target, by a reviewer who is not the implementer. |
+| 7 | all | **Ready for re-review.** The pin is finalized (`df28f6a`); all artifacts are linked below. The re-review itself must be performed by a **different reviewer** (not the implementer/analyst who produced this record). See [Step 7 — re-review handoff](#step-7--re-review-handoff). |
 
 ## This session's scope
 
-This session has completed **Steps 0–6** of the remediation path:
+This session has completed **Steps 0–6** of the remediation path and
+**prepared Step 7** (re-review handoff below). The pin is finalized against
+`df28f6a`. The re-review itself requires a **different reviewer** — the
+implementer cannot self-certify.
 
-- **Step 0** — findings recorded (this page).
-- **Step 1** — F9 ADR/code contradictions resolved.
-- **Step 2** — row #7 re-scoped to the two D1 envelopes (F2); `jeliya-control`
-  relabeled as scaffolding (F3); D5b/D6 gate defined.
-- **Step 3** — review target pinned (F1).
-- **Step 4** — doc overclaims fixed (F5/F7/F4/F8 doc).
-- **Step 5** — KDF params encoded as immutable per-version param-set (F6).
-- **Step 6** — evidence package + approval contract built (F10/F9 remaining);
-  zeroize dependency features enabled + code gaps fixed (F8 remaining); pin
-  re-recorded.
+## Step 7 — re-review handoff
 
-**Step 7** remains: re-review by a **different reviewer** against the final
-pin. The pin must be finalized (post-Step-6 merge SHA) before the re-review
-begins.
+> **The implementer cannot perform this step.** The prior implementer and the
+> prior analyst were the same agent. The Step 7 re-review must be executed by
+> a different reviewer, with demonstrated cryptography expertise for the
+> cryptographic choices.
+
+### What to check out
+
+```sh
+git checkout df28f6a15c6c154c0759eea76b2c164c41c047bc
+sha256sum Cargo.lock   # Expected: dda192b5...
+```
+
+Verify the pin values in the
+[scope doc's Review target pin](phase-1-security-review-scope.md#review-target-pin)
+match the tree you checked out.
+
+### What to read (in order)
+
+1. **This document** — the 10 findings and how each was resolved.
+2. [The scope doc](phase-1-security-review-scope.md) — what is under review
+   (the two D1 envelopes), what is deferred (control wire → D5b/D6), and the
+   honest boundaries.
+3. [The evidence package](phase-1-evidence-package.md) — exact commands,
+   expected results, test-to-finding mapping, threat-model cross-reference,
+   and the codified approval contract.
+4. [ADR #3](recovery-bundle-decision.md) — the normative recovery-bundle spec
+   (`canonical` / `partial`).
+5. [ADR #2](companion-control-protocol-decision.md) — the Phase-2 control
+   target (`proposal`; not under Phase 1 review).
+6. [The gate verdict](phase-1-gate-verdict.md) — the current verdict (row #2
+   OPEN, row #7 NOT APPROVED → remediation complete, awaiting re-review).
+
+### What to assess
+
+The review covers **two surfaces only** (per F2):
+
+- **At-rest identity envelope** (`identity.rs`): the AES-256-GCM envelope
+  format, the Argon2id KDF (immutable per-version param-set, OWASP minimum),
+  the opt-in encryption policy (F5 — row #2 OPEN), the version dispatch
+  (`kdf_params_for_version`), and the zeroize coverage (features enabled, KEK
+  returns `Zeroizing`).
+- **Recovery bundle** (`recovery.rs`): the AEAD construction, the recovery key
+  (random 256-bit, grouped-hex phrase), the lifecycle (re-export does not
+  rotate — F7), the fail-closed paths, and the zeroize coverage (`stripped` is
+  `Zeroizing<String>`).
+
+### What is explicitly NOT in scope
+
+- The control-protocol wire (D5b/D6 gate).
+- Enforcement of opt-in encryption in production (F5 accepted risk).
+- Runtime enforcement of the control core (F3 accepted risk).
+- Root authority rotation / old-material revocation (F7 accepted risk, Phase 4).
+- The single-user-machine assumption as an enforced boundary (F4 accepted risk).
+
+### What the output should be
+
+Per the [approval contract](phase-1-evidence-package.md#codified-approval-contract):
+APPROVE, APPROVE-WITH-CONDITIONS, or REJECT — recorded against the pin, with
+the reviewer's identity, date, and any conditions. The output updates the
+[gate verdict](phase-1-gate-verdict.md) row #7.
 
 The [Phase 1 gate verdict](phase-1-gate-verdict.md) is now consistent with this
 record: row #2 is OPEN (F5), row #7 is NOT APPROVED (remediation in progress),

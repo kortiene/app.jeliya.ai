@@ -1,9 +1,9 @@
 ---
 type: "Decision"
 title: "Phase 1 go/no-go gate verdict"
-description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions. Row #7 re-scoped to the two D1 wire envelopes (F2) and returned NOT APPROVED with 10 findings (2026-07-21); remediation in progress, blocking Phase 2. Row #2 relabeled OPEN (opt-in encryption, F5). Rows #1/#3-#6 recorded PASS with scope limits."
+description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions. Row #7 re-scoped to the two D1 wire envelopes (F2) and returned NOT APPROVED with 10 findings (2026-07-21); remediation complete (Steps 0–6), awaiting independent re-review (Step 7). Row #2 relabeled OPEN (opt-in encryption, F5). Rows #1/#3-#6 recorded PASS with scope limits."
 tags: ["phase-1", "decision", "release", "verification", "governance"]
-timestamp: "2026-07-22T02:30:00Z"
+timestamp: "2026-07-22T05:00:00Z"
 status: "canonical"
 implementation_status: "not-applicable"
 verification_status: "partial"
@@ -144,7 +144,7 @@ scopes are global not per-room. The Noise wire transport, browser Wasm side,
 and daemon wiring that would bind these checks to a real session are **Phase 2
 (D5b)**, under the [D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate).
 
-### 7. Independent security review approves the wire formats and the key lifecycle — NOT APPROVED (remediation in progress)
+### 7. Independent security review approves the wire formats and the key lifecycle — NOT APPROVED (remediation complete; awaiting re-review)
 
 **The review landed 2026-07-21 and returned NOT APPROVED with 10 findings**
 (3 blockers, 6 highs, 1 medium). The full findings record, severity taxonomy,
@@ -164,11 +164,11 @@ recovery-bundle AEAD and key handling ([recovery.rs](../crates/jeliya-core/src/r
 review and is deferred to the
 [D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate).
 
-The remediation is in progress (Steps 0–1 complete; Steps 2–7 tracked in the
-[findings record](phase-1-security-review.md#remediation-path)). Until it
-completes and a re-review by a **different reviewer** (especially for the
-cryptographic choices) lands, the Phase 1 gate is not closed and Phase 2 is
-blocked.
+The remediation path (Steps 0–6) is **complete**; the pin is finalized against
+`df28f6a`. The re-review handoff is in the
+[findings record](phase-1-security-review.md#step-7--re-review-handoff). Until
+a re-review by a **different reviewer** (especially for the cryptographic
+choices) lands, the Phase 1 gate is not closed and Phase 2 is blocked.
 
 ## Amendment A1 is in scope but lands with D5
 
