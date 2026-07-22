@@ -227,6 +227,7 @@ Risks that are accepted (not fixed in Phase 1) with owner and exit criterion:
 | Old recovery material is irrevocable (F7) | Risk-owner-of-record | Phase 4 multi-device revocation enables root authority rotation |
 | Single-user-machine assumption (F4) | Risk-owner-of-record | A same-user socket boundary is enforced, or the scope is widened to include the daemon auth path |
 | KEK/phrase zeroize (F8) | Implementer | Step 7 re-review verifies heap inspection or equivalent |
+| Env-var password is process-environment-readable (`/proc/PID/environ`; disclosed in the [scope doc's zeroize table](phase-1-security-review-scope.md#zeroization-recast-per-f8)) | Risk-owner-of-record | D1c OS-keystore backends (Keychain / DPAPI / Secret Service) replace the env-var path |
 
 ## Citations
 
