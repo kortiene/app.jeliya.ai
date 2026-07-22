@@ -1,9 +1,9 @@
 ---
 type: "Decision"
 title: "Phase 1 go/no-go gate verdict"
-description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions. Row #7 re-scoped to the two D1 wire envelopes (F2) and returned NOT APPROVED with 10 findings (2026-07-21); remediation complete (Steps 0–6), awaiting independent re-review (Step 7). Row #2 relabeled OPEN (opt-in encryption, F5). Rows #1/#3-#6 recorded PASS with scope limits."
+description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions. Row #7 (re-scoped to the two D1 wire envelopes per F2): Step 7 independent re-review landed 2026-07-22 with APPROVE-WITH-CONDITIONS against pin df28f6a (no blocker/high; conditions tracked); gate-level GO awaits the risk-owner's countersignature. Row #2 remains OPEN (opt-in encryption, F5). Rows #1/#3-#6 recorded PASS with scope limits."
 tags: ["phase-1", "decision", "release", "verification", "governance"]
-timestamp: "2026-07-22T05:00:00Z"
+timestamp: "2026-07-22T15:07:00Z"
 status: "canonical"
 implementation_status: "not-applicable"
 verification_status: "partial"
@@ -13,19 +13,23 @@ audience: ["contributors", "maintainers", "release-engineers", "security-reviewe
 
 # Phase 1 go/no-go gate verdict
 
-**Verdict: NOT APPROVED — row #7 returned 10 findings (2026-07-21); remediation
-in progress.** The [security review](phase-1-security-review.md)
-landed and returned **NOT APPROVED** with 10 findings (3 blockers, 6 highs, 1
-medium). **This review was conducted by an analyst who was also the Phase-1
-implementer (the same agent); it is not independent, and the gate condition's
-independence requirement is not satisfied.** Final row #7 sign-off requires a
-different reviewer. Row #7 was [re-scoped to the two D1 wire envelopes](phase-1-security-review-scope.md)
+**Verdict: row #7 APPROVE-WITH-CONDITIONS (re-review landed 2026-07-22);
+gate-level GO awaits the risk-owner's countersignature.** The original
+[security review](phase-1-security-review.md) (2026-07-21, by the implementer —
+not independent) returned **NOT APPROVED** with 10 findings (3 blockers, 6
+highs, 1 medium); the remediation path (Steps 0–6) completed, and the
+**Step 7 independent re-review landed 2026-07-22 with
+[APPROVE-WITH-CONDITIONS](phase-1-security-review.md#step-7-re-review-verdict-2026-07-22)**
+against pin `df28f6a` (no blocker or high confirmed; 2 medium + 10 low/info
+conditions tracked; independence caveat stated in the verdict). Row #7 remains
+[re-scoped to the two D1 wire envelopes](phase-1-security-review-scope.md)
 (the at-rest `identity.secret` envelope and the recovery-bundle envelope) plus
 their key lifecycle; the control-protocol wire is deferred to a
 [D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate)
 because it does not exist yet ([finding F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve)).
-**Phase 2 may not begin** until the remediation path completes and a re-review
-by a different reviewer lands.
+**Phase 2 may not begin** until the risk-owner-of-record countersigns the
+verdict and records the GO decision here (row #2 remains OPEN as an accepted
+risk with an exit criterion).
 
 Rows #1–#6 were recorded PASS with linked test evidence, but **row #2 is now
 relabeled OPEN** (opt-in encryption is not enforced — see
@@ -43,20 +47,32 @@ control transport — so it has no wire format for row #7 to review yet; see
 
 The six passing rows are satisfied by the Phase 1 implementation merged to
 `main` as `cdcae83…` (pull request #78), verified by the local test suite and
-the daemon-only six-job CI matrix (run `29868870066`, all green). They are
-**local/unit evidence**, not the network qualification a *release* requires:
-`cdcae83` is past the network-qualified pre-Phase-1 pair `922f620…` +
-`a5d98b70…`, so a release at `cdcae83` additionally needs fresh signed
-direct/relay runs. This record advances no release status.
+the daemon-only six-job CI matrix (run `29868870066`, all green), and
+re-verified at the row #7 re-review pin `df28f6a` (run `29925118834`, all
+green — see the candidate table below). They are **local/unit evidence**, not
+the network qualification a *release* requires: these SHAs are past the
+network-qualified pre-Phase-1 pair `922f620…` + `a5d98b70…`, so a release at
+`df28f6a` additionally needs fresh signed direct/relay runs. This record
+advances no release status.
 
 ## Candidate under verdict
 
 | Field | Value |
 |---|---|
-| Jeliya source candidate | `cdcae8397700be792f4efea2a387ea60af65e232` (`main`; PR #78 on `922f620…`) |
-| Pre-Phase-1 network-qualified candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` (signed direct `098c4979` + relay `8bda01e6` bind this pair; does not transfer to `cdcae83`) |
+| Jeliya source candidate (rows #1–#6, original verdict) | `cdcae8397700be792f4efea2a387ea60af65e232` (`main`; PR #78 on `922f620…`) |
+| Jeliya source candidate (row #7 re-review pin) | `df28f6a15c6c154c0759eea76b2c164c41c047bc` (`main`; PR #85 — the [review target pin](phase-1-security-review-scope.md#review-target-pin)) |
+| Pre-Phase-1 network-qualified candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` (signed direct `098c4979` + relay `8bda01e6` bind this pair; does not transfer to later SHAs) |
 | Iroh Rooms pin | `a5d98b70d717f35d3ce60953a88e12e646f2e871` (unchanged from the pre-Phase-1 candidate) |
-| Verdict date (UTC) | 2026-07-21 |
+| Verdict dates (UTC) | rows #1–#6: 2026-07-21 (at `cdcae83`; test evidence re-verified green at `df28f6a`, CI run `29925118834`); row #7: 2026-07-22 (at `df28f6a`) |
+
+**Single candidate for the GO decision: `df28f6a`.** The reviewed crypto
+surfaces changed between `cdcae83` and `df28f6a` (remediation Steps 5–6
+touched `identity.rs`/`recovery.rs` and `Cargo.lock`), so the rows #1–#6 test
+evidence recorded at `cdcae83` is carried to `df28f6a` by the full six-job CI
+matrix running green there (run `29925118834`; also at the docs-only
+`5fa0bae` HEAD, run `29932744561`) — the same suites, including every test the
+row verdicts cite. A risk-owner countersigning this record countersigns
+`df28f6a`.
 
 ## The gate conditions
 
@@ -144,16 +160,26 @@ scopes are global not per-room. The Noise wire transport, browser Wasm side,
 and daemon wiring that would bind these checks to a real session are **Phase 2
 (D5b)**, under the [D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate).
 
-### 7. Independent security review approves the wire formats and the key lifecycle — NOT APPROVED (remediation complete; awaiting re-review)
+### 7. Independent security review approves the wire formats and the key lifecycle — APPROVE-WITH-CONDITIONS (re-review landed 2026-07-22)
 
-**The review landed 2026-07-21 and returned NOT APPROVED with 10 findings**
-(3 blockers, 6 highs, 1 medium). The full findings record, severity taxonomy,
-and ordered remediation path live in
-[Phase 1 security review — findings record](phase-1-security-review.md). **The
-review was conducted by the Phase-1 implementer (same agent), not an independent
-reviewer; the gate condition names independence as a requirement, and that
-requirement is not satisfied until the Step 7 re-review by a different
-reviewer lands.**
+**The Step 7 re-review landed 2026-07-22 and returned APPROVE-WITH-CONDITIONS**
+against pin `df28f6a` — see the
+[Step 7 re-review verdict](phase-1-security-review.md#step-7-re-review-verdict-2026-07-22)
+for the reviewer identity, the reproduced evidence (125/0/1 test gate, measured
+Argon2id RSS 19.06 MiB / ~41 ms, zeroize features verified), the 12 confirmed
+findings (no blocker, no high; 2 medium evidence-quality overclaims + 10
+low/info), and the 7 tracked conditions. **Independence caveat:** the reviewer
+was a different agent session than the implementer/analyst but the same model
+family; a countersignature by the human risk-owner-of-record is recommended
+before the gate-level GO decision.
+
+The original review landed 2026-07-21 and returned NOT APPROVED with 10
+findings (3 blockers, 6 highs, 1 medium); the full findings record, severity
+taxonomy, and ordered remediation path live in
+[Phase 1 security review — findings record](phase-1-security-review.md). That
+review was conducted by the Phase-1 implementer (same agent) and did not
+satisfy the independence requirement; the 2026-07-22 re-review above is the
+independent pass.
 
 Row #7 was [re-scoped per finding F2](phase-1-security-review-scope.md) to the
 **two D1 wire envelopes only** — the at-rest encryption envelope and Argon2id
@@ -164,11 +190,13 @@ recovery-bundle AEAD and key handling ([recovery.rs](../crates/jeliya-core/src/r
 review and is deferred to the
 [D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate).
 
-The remediation path (Steps 0–6) is **complete**; the pin is finalized against
-`df28f6a`. The re-review handoff is in the
-[findings record](phase-1-security-review.md#step-7--re-review-handoff). Until
-a re-review by a **different reviewer** (especially for the cryptographic
-choices) lands, the Phase 1 gate is not closed and Phase 2 is blocked.
+The remediation path (Steps 0–7) is **complete**: the pin was finalized against
+`df28f6a` and the re-review landed 2026-07-22 with the verdict above. Row #7's
+independence requirement is satisfied subject to the stated caveat. The
+gate-level GO decision — weighing row #2 remaining OPEN as an accepted risk and
+countersigning this verdict — belongs to the risk-owner-of-record per the
+[approval contract](phase-1-evidence-package.md#codified-approval-contract);
+Phase 2 remains blocked until that decision is recorded here.
 
 ## Amendment A1 is in scope but lands with D5
 
@@ -212,12 +240,13 @@ has no wire format either, and its review is deferred to the
 
 ## What this record authorizes
 
-None beyond recording the verdict. Phase 2 implementation is blocked on row #7.
-The review landed 2026-07-21 and returned NOT APPROVED; the remediation path is
-tracked in the [findings record](phase-1-security-review.md#remediation-path).
-When the remediation completes and a re-review by a different reviewer approves
-the two D1 wire formats and key lifecycle (or records conditions), this record
-updates to GO and Phase 2 may begin.
+None beyond recording the verdict. The Step 7 re-review recorded
+APPROVE-WITH-CONDITIONS for the two D1 wire formats and key lifecycle
+(2026-07-22); its conditions are tracked in the
+[verdict record](phase-1-security-review.md#step-7-re-review-verdict-2026-07-22).
+Phase 2 remains blocked until the risk-owner-of-record countersigns the
+verdict (including the reviewer-independence caveat and row #2 staying OPEN as
+an accepted risk) and updates this record to GO.
 
 ## Citations
 
