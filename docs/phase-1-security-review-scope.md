@@ -54,9 +54,13 @@ The on-disk `identity.secret` is sealed when `JELIYA_IDENTITY_PASSWORD` is set
   lets `load` auto-detect the format without a sidecar.
   ([`encrypt_secret_bytes`](../crates/jeliya-core/src/identity.rs),
   [`decrypt_secret_bytes`](../crates/jeliya-core/src/identity.rs)).
-- **KDF:** Argon2id, m=19456 KiB, t=2, p=1 (RFC 9106 example-1 tier), output
-  32 bytes. Params are versioned via the envelope; strengthening before launch
-  is a review item, not a silent change.
+- **KDF:** Argon2id, m=19456 KiB, t=2, p=1 (the **OWASP minimum** for
+  Argon2id, not an RFC 9106 profile — corrected per [F6](phase-1-security-review.md#f6--high-kdf-versioningattribution-is-inaccurate)),
+  output 32 bytes. Params are an **immutable per-version set**: v1 maps to
+  `V1_KDF` via `kdf_params_for_version`; changing params requires a version
+  bump, and the v1 reader stays as the legacy dispatch. The **latency** target
+  is measured by `kdf_derivation_is_memory_hard` (wall-clock; memory/RSS
+  verification is Step 6 evidence work).
 - **Policy:** password unset ⇒ plaintext `0600` (dev default, explicit);
   password set ⇒ sealed. A plaintext identity keeps loading after a password is
   introduced (auto-detect + warning); there is no force-migrate-on-read (it
@@ -333,9 +337,12 @@ P1/critical** issue; the design is sound. Findings and dispositions:
 
 ### Accepted / deferred (P3, informational)
 
-- **Argon2id params** (m=19 MiB, t=2, p=1) are the RFC 9106 example-1 tier —
-  legitimate and versioned; recommend strengthening (m=46–64 MiB) in a
-  pre-release hardening pass before the encrypted file is exposed broadly.
+- **Argon2id params** (m=19 MiB, t=2, p=1) are the **OWASP minimum** for
+  Argon2id (corrected per F6; the prior "RFC 9106 example-1 tier" attribution
+  was wrong). Now pinned as an immutable per-version param-set via
+  `kdf_params_for_version`; strengthening requires a version bump to v2.
+  hardening pass before the encrypted file is exposed broadly (RFC 9106 §7.4
+  recommends m=2 GiB/t=1/p=4 or m=64 MiB/t=3/p=4).
 - **Env-var password is process-environment-readable** (`/proc/PID/environ`);
   acceptable for the loopback daemon; the durable fix is the OS keystore (D1c).
 - **SAS has no domain-separation tag** and is ~32 bits — acceptable for
@@ -439,9 +446,10 @@ re-review (record a new pin before the Step 7 re-review):
 - A version change in `Cargo.lock` to any crypto dependency listed above
   (`aes-gcm`, `argon2`, `zeroize`, `getrandom`, `hex`; and `blake3` for the
   D5b/D6 gate).
-- A change to the KDF parameters (`ARGON_M_COST`, `ARGON_T_COST`,
-  `ARGON_P_COST`) or the envelope format constants (`ENCRYPTED_VERSION`,
-  `BUNDLE_VERSION`, `PAYLOAD_VERSION`, `ARGON_SALT_LEN`, `AEAD_NONCE_LEN`).
+- A change to the KDF parameter set (`V1_KDF`, the `KdfParams` struct,
+  `kdf_params_for_version`) or the envelope format constants
+  (`ENCRYPTED_VERSION`, `ARGON_SALT_LEN`, `AEAD_NONCE_LEN`). Adding a future
+  `V2_KDF` or a new dispatch arm also reopens.
 - A change to the Rust toolchain that affects codegen of the reviewed files
   (a rustc version bump in `ci.yml`/`release.yml`; MSRV stays `1.91`).
 
@@ -465,9 +473,12 @@ includes:
 - **Step 4** (F5/F7/F4/F8) — may add the daemon-auth/single-user boundary to
   the reviewed-surface set (F4); does not change `identity.rs` or `recovery.rs`
   code but may change their docs.
-- **Step 5** (F6) — **changes `identity.rs`** to encode authenticated KDF
-  params per envelope version. This reopens the code surface; the pin will be
-  re-recorded after Step 5 lands.
+- **Step 5** (F6) — ✅ **Changed `identity.rs`**: replaced bare `ARGON_*_COST`
+  constants with a `KdfParams` struct + `V1_KDF` const +
+  `kdf_params_for_version` dispatch. The envelope format is unchanged (still
+  `version(1) || salt || nonce || ct+tag`); the params are an immutable
+  per-version set, not inline bytes. **The pin's source SHA and `identity.rs`
+  last-change SHA must be re-recorded** after this step merges.
 
 The **final pin** is recorded when Steps 3–6 are all complete, immediately
 before the Step 7 re-review. A reviewer executing the Step 7 re-review should
