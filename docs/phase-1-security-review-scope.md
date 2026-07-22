@@ -83,10 +83,9 @@ the AEAD construction, the recovery key, and the import-time fail-closed paths.
   profile root + device seeds. Room provenance / device-auth state / relay
   config are Phase-2 slices (the versioned payload makes adding them a
   migration, not a break). See [ADR #3 decision 5](recovery-bundle-decision.md).
-- **Assess:** the AEAD choice and nonce handling; zeroize coverage
-  (`export_bundle` and `open_bundle` both zeroize the plaintext bytes — asserted
-  by the round-trip and tamper tests); the `restore_to_dir` clobber refusal and
-  the secret/public id consistency check on import.
+- **Assess:** the AEAD choice and nonce handling; the `restore_to_dir` clobber
+  refusal and the secret/public id consistency check on import. **Zeroize
+  claims are recast** — see [Zeroization (recast per F8)](#zeroization-recast-per-f8).
 
 ## Deferred surface — the D5b/D6 control-wire review gate
 
@@ -165,13 +164,22 @@ the implementation that actually enforces it:
 | Secret | Where it lives | Protection | Rotation / revocation |
 |---|---|---|---|
 | Identity + device seeds (root authority) | `identity.secret` on the daemon's data dir | `0600` plaintext (dev) or AES-256-GCM under `JELIYA_IDENTITY_PASSWORD` (prod) | not yet (Phase 4 multi-device revocation); `recovery.export` is the only backup |
-| Recovery key (256-bit random) | user-held (phrase); never persisted by the daemon | out of band | re-export adds a backup; old material is irrevocable until root authority rotates (Phase 4) — see [F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false), corrected in Step 4 |
+| Recovery key (256-bit random) | user-held (phrase); never persisted by the daemon | out of band | re-export adds a backup; old material is irrevocable until root authority rotates (Phase 4) — see [F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false) |
 | Browser control key (per pairing) | browser WebCrypto non-extractable; public half on the companion | non-extractable + bounded lifetime + default-deny scopes | immediate revocation via `ControlGateway::revoke` — **D5b/D6 scope, not Phase 1 row #7** |
 
-> The recovery-key rotation text previously said "rotate by re-exporting under
-> a fresh key," which [finding F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)
-> records as false. The corrected lifecycle is shown above; the full narrative
-> fix is [Step 4](phase-1-security-review.md#remediation-path).
+> **Recovery-key lifecycle (corrected per [F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)).**
+> The previous text said "rotate by re-exporting under a fresh key," which is
+> false. `recovery::export_bundle` mints a fresh random `RecoveryKey` and a
+> fresh valid bundle; it does not revoke, invalidate, or retire any prior key
+> or bundle. `open_bundle` accepts any valid bundle for the same identity; AEAD
+> cannot detect rollback of an older-but-valid bundle. There is no bundle
+> generation, supersession list, or revocation concept. **Every prior recovery
+> key and bundle remains valid indefinitely** until root authority itself
+> rotates (Phase 4 multi-device revocation). Residual risks: (a) a duplicated
+> device seed exported in a prior bundle stays valid; (b) a lost device whose
+> authority was backed up retains authority until root rotation; (c) an
+> attacker who obtained an old bundle+key has permanent identity authority
+> that cannot be revoked short of Phase 4 root rotation.
 
 ## Test evidence to rely on
 
@@ -199,8 +207,65 @@ security property (not just the happy path).
   properties hold in a running system (see [F3](phase-1-security-review.md#f3--high-jeliya-control-core-does-not-enforce-the-attributed-properties),
   [F8](phase-1-security-review.md#f8--high-test-evidence-overclaims-zeroization)).
 
+## Zeroization (recast per F8)
+
+> **[Finding F8](phase-1-security-review.md#f8--high-test-evidence-overclaims-zeroization)**:
+> the prior test evidence overclaimed zeroization. Functional round-trip and
+> tamper tests exercise correctness, not zeroization — they never inspect the
+> process's former heap. `wrong_password_does_not_leak_seed_bytes_in_the_error`
+> checks a field-name literal and the `{` marker, not seed bytes. This section
+> recasts the claim as a source/dependency audit + a secret-data-flow inventory.
+> The full audit (with measured evidence) is [Step 6](phase-1-security-review.md#remediation-path)
+> work; this section records what is known now.
+
+### Known zeroize gaps (source audit)
+
+| Secret | Where it lives in memory | Current handling | Gap |
+|---|---|---|---|
+| KEK (Argon2id output, identity.rs) | `derive_kek` returns `[u8; 32]` by value from a `Zeroizing` wrapper | The `Zeroizing` wrapper wipes its internal copy on drop; the returned array is a plain `[u8; 32]` that the caller (`encrypt_secret_bytes` / `decrypt_secret_bytes`) stores on the stack un-zeroized | The return-by-value escapes `Zeroizing`; the caller's copy is not wiped |
+| Recovery key (`RecoveryKey`) | `RecoveryKey([u8; 32])` with `Drop` impl that calls `zeroize()` | Wiped on drop | Appears correct; verify no intermediate copies |
+| Password (identity.rs) | `password: &str` borrowed from a `String` the caller owns (`password_from_env` returns `Option<String>`) | The `String` from `std::env::var` is plain; the `&str` borrow offers no wipe | The env-var `String` is not zeroized after use |
+| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` builds a normalized `stripped: String` (lowercased, separators removed) containing the full key hex, then calls `hex::decode` | `raw: Vec<u8>` from `hex::decode` is zeroized on error; on success the key moves into `RecoveryKey` (wipes on drop) | **`stripped: String` is never zeroized** on either success or error — a heap-resident copy of the recovery key hex outlives the call |
+| Seed hex intermediates | `PayloadV1.identity_secret` / `device_secret` as `String` in `open_bundle` | Moved to `Zeroizing<String>` after parse, wiped on drop | Correct (fixed in the self-review pass) |
+| Plaintext JSON bytes | `plaintext: Vec<u8>` in `encrypt_secret_bytes` / `open_bundle` / `load_with` | Zeroized after use | Correct |
+
+### Dependency feature audit (pending Step 6)
+
+The `zeroize` crate is a direct dependency (`zeroize = "1"` → `1.9.0`). However,
+the **crypto crates that handle secret inputs** must have their `zeroize`
+cargo features enabled for those features to take effect:
+
+| Crate | Version | `zeroize` feature enabled? | Status |
+|---|---|---|---|
+| `aes-gcm` | `0.10.3` | **To verify** — `aes-gcm` exposes a `zeroize` feature that wipes the AES round keys on drop | Pending Step 6 |
+| `argon2` | `0.5.3` | **To verify** — `argon2` exposes a `zeroize` feature that wipes internal state | Pending Step 6 |
+
+A reviewer should not treat zeroization as proven until this audit closes
+(Step 6) and the measured evidence (heap inspection or equivalent) is recorded.
+
 ## Honest boundaries the review should confirm are communicated
 
+- **The actual root-authority path is the daemon token, not the file mode
+  ([finding F4](phase-1-security-review.md#f4--high-scope-omits-the-actual-authority-path)).**
+  Root authority is reached through [`engine.rs`](../crates/jeliya-core/src/engine.rs)
+  (the 24-method dispatch table with no per-method auth) via a WebSocket
+  authenticated by the per-start daemon bearer token. The token is handed out by
+  [`/api/session`](../crates/jeliyad/src/serve.rs) whose `Origin` /
+  `Sec-Fetch-Site` checks are browser-shaped — forgeable by any non-browser
+  local process (e.g. `curl` can set any header). The route performs no token
+  comparison; the constant-time bearer comparison guards only `/ws` and
+  `/api/files/*`. The [threat model](security-threat-model.md) admits this
+  (lines 226–231): a hostile same-user local process can forge the session
+  header, get the daemon token, and reach the full root+device authority
+  surface over WS. **At-rest encryption and `0600` do not help** — the token is
+  the authority, not the file mode. The binding assumption is single-user,
+  single-OS-account operation, documented in
+  [`docs/PROTOCOL.md`](PROTOCOL.md) ("The trust boundary is a single-user
+  machine"). A co-resident companion inherits this exclusion; the weaker of the
+  two surfaces bounds the pair. This surface is in the review pin's
+  [reopen set](#review-target-pin) (`engine.rs` is a reviewed surface) but its
+  full inclusion depends on whether the user chooses to enforce a same-user
+  socket boundary or widen the scope at a later step.
 - Recovery restores identity *authority*, not unreplicated events/blobs (a
   missing event with no peer holding it is gone — TB4).
 - Cancellation is eventual (signed-log); a redeeming peer that committed before
@@ -211,10 +276,10 @@ security property (not just the happy path).
   and [F3](phase-1-security-review.md#f3--high-jeliya-control-core-does-not-enforce-the-attributed-properties).
   The encrypted transport and the daemon's exposure of the gateway are Phase 2
   (D5b), under the [D5b/D6 review gate](#deferred-surface--the-d5bd6-control-wire-review-gate).
-- At-rest encryption's password fallback is explicit, not the OS keystore
-  (D1c lanes pending). Encryption is **opt-in, not enforced** — see
-  [F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced),
-  corrected in [Step 4](phase-1-security-review.md#remediation-path).
+- At-rest encryption is **opt-in, not enforced** — see
+  [F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced).
+  The gate-verdict row #2 is relabeled OPEN; encryption works when a password
+  is set but no production path sets or requires one.
 
 ## Self-review findings (2026-07-21) — superseded
 
@@ -314,6 +379,7 @@ tamper/version/wrong-key fail-closed.
 | At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `4a73922` (PR #79) |
 | Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `4a73922` (PR #79) |
 | Authority path (F4) | [`crates/jeliya-core/src/engine.rs`](../crates/jeliya-core/src/engine.rs) | `cdcae83` (PR #78) |
+| Daemon auth (F4) | [`crates/jeliyad/src/serve.rs`](../crates/jeliyad/src/serve.rs) | (pre-Phase-1; unchanged) |
 
 ### Normative ADR revisions
 
@@ -357,6 +423,10 @@ re-review (record a new pin before the Step 7 re-review):
   as a reviewed surface for [F4](phase-1-security-review.md#f4--high-scope-omits-the-actual-authority-path)).
   Whether `engine.rs` is fully in scope depends on Step 4; until then a change
   to it reopens review conservatively.
+- A change to `crates/jeliyad/src/serve.rs` (the daemon `/api/session` token
+  handout and the `/ws` bearer gate — the actual root-authority path per F4).
+- A change to [`docs/PROTOCOL.md`](PROTOCOL.md) (the single-user-machine
+  assumption that bounds the daemon's trust model).
 - A change to ADR #3 ([recovery-bundle-decision.md](recovery-bundle-decision.md))
   or ADR #2 ([companion-control-protocol-decision.md](companion-control-protocol-decision.md)).
 - A change to a **review-package document** — this scope doc
@@ -380,8 +450,9 @@ re-review (record a new pin before the Step 7 re-review):
 - Documentation-only changes to docs **not** listed above (i.e., not the
   normative ADRs and not the review-package documents).
 - UI changes (`ui/`).
-- Changes to other crates (`jeliyad`, `jeliya-control`, `jeliya-core/src/`
-  files other than `identity.rs`, `recovery.rs`, `engine.rs`, or their tests).
+- Changes to other crates (`jeliyad` source files **other than `serve.rs`**,
+  `jeliya-control`, `jeliya-core/src/` files other than `identity.rs`,
+  `recovery.rs`, `engine.rs`, or their tests).
 - CI/workflow changes that do not affect the toolchain versions or build
   outputs of the reviewed files.
 - The remediation steps themselves (Steps 3–6) update this pin before the

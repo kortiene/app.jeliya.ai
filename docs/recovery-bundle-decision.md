@@ -83,8 +83,11 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
    payload (already a workspace dependency, so no new crypto primitive is
    introduced); the nonce is fresh per seal and stored with the envelope. The
    first byte is a format version; `import` rejects an unknown future version
-   rather than guessing. AEAD gives integrity and authenticity, so a tampered,
-   truncated, or rolled-back bundle fails import with a clear error.
+   rather than guessing. AEAD gives integrity and authenticity, so a **tampered
+   or truncated** bundle fails import with a clear error. **A prior *valid*
+   bundle cannot be distinguished from the current one** — `open_bundle`
+   accepts any valid bundle and AEAD cannot detect rollback to an older valid
+   version (see [F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)).
 5. **The payload contains exactly:** the profile root seed, the device seed, and
    the profile fields (name, public ids, creation time). The room membership
    index (the known-rooms set from `state.json`), the device-authorization
@@ -123,6 +126,16 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
   revocation, not this ADR. It also cannot recall material already received by
   an authorized peer (trust boundary TB4 in
   [Production deployment architecture](production-deployment.md#target-system-and-trust-boundaries)).
+- **Re-export does not rotate ([finding F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)):**
+  calling `recovery.export` a second time mints a fresh random recovery key and
+  a fresh valid bundle — it does not revoke, invalidate, or retire the prior
+  key or bundle. `open_bundle` accepts any valid bundle; AEAD cannot detect
+  rollback of an older-but-valid bundle. Every prior recovery key and bundle
+  remains valid indefinitely until root authority itself rotates (Phase 4).
+  Residual risks: (a) a duplicated device seed in a prior bundle stays valid;
+  (b) a lost device whose authority was backed up retains authority until root
+  rotation; (c) an attacker who obtained an old bundle+key has permanent
+  identity authority that cannot be revoked short of Phase 4 root rotation.
 
 ## Threat model and boundaries
 
@@ -134,9 +147,11 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
   never placed in a URL or query string.
 - Optional cloud hosting reduces to a confidentiality assumption on AEAD plus an
   integrity/rollback assumption on AEAD plus the version byte. The hosting
-  provider cannot read content; it also cannot silently roll the bundle back to
-  a prior version because the versioned payload is integrity-bound and the
-  client treats import failure as fatal.
+   provider cannot read content; it also cannot silently roll the bundle back
+   to a tampered version because the versioned payload is integrity-bound and
+   the client treats import failure as fatal. **A prior *valid* bundle,
+   however, is indistinguishable from the current one** — see
+   [F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false).
 - This does not change the existing room-membership boundary: every room peer
   that already received content can still keep it.
 
