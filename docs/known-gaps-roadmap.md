@@ -17,8 +17,15 @@ audience: ["contributors", "maintainers", "product", "release-engineers"]
 were met (published safe pin, signed certifying direct and relay evidence,
 hosted gates, complete verified artifact set). The table below records that
 closure and the gaps that carry forward to the current post-release source
-candidate `922f620…`, which repins `iroh-rooms` to the untagged upstream revision
-`a5d98b70...` and must earn fresh signed network evidence at that exact pin.
+candidate on `main`: the pre-Phase-1 candidate `922f620…` (which repins
+`iroh-rooms` to the untagged upstream revision `a5d98b70...` and earned signed
+direct/relay evidence at that pair) plus merged PR #78 (Phase 1 protocol
+primitives), bringing `main` to `cdcae83…`. Phase 1 is implemented and CI-green
+but its gate is not yet closed — see the
+[Phase 1 go/no-go gate verdict](phase-1-gate-verdict.md) (rows #1–#6 pass by
+tests; row #7, the independent security review, is pending). `cdcae83` is past
+the network-qualified `922f620…` pair, so a release at `cdcae83` needs fresh
+signed direct/relay evidence in addition to row #7.
 
 ## NOW — closure status
 

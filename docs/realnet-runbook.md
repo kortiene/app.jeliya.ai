@@ -34,11 +34,13 @@ Neither run certifies room-scoped synchronization isolation: both manifests set
 administrative-tip traversal rest on the upstream suite at the recorded
 revision.
 
-The current source candidate is Jeliya `922f620...` with the deliberately
+The pre-Phase-1 source candidate is Jeliya `922f620...` with the deliberately
 untagged Iroh Rooms pin `a5d98b70...`. Its local exact-revision qualification
 passes, and both the direct (`098c4979`) and forced-relay (`8bda01e6`) halves
-are now certified at the current pin. The release evidence gate is READY for
-`922f620…` + `a5d98b70…`.
+are certified at that pin. The release evidence gate is READY for
+`922f620…` + `a5d98b70…`. `main` has since advanced to `cdcae83…` (Phase 1,
+PR #78); a release at `cdcae83` needs fresh signed direct/relay runs in addition
+to the pending Phase 1 gate row #7 (independent security review).
 
 The superseded `v0.5.0` runs (direct `3b86ac67`,
 [manifest](evidence/v0.5.0/direct.json); forced relay `a3c76859`,
