@@ -206,7 +206,7 @@ pub fn open_bundle(bundle: &[u8], key: &RecoveryKey) -> CoreResult<(Profile, Sec
     })?;
     // The decrypted bytes hold both signing seeds as hex; zeroize them as soon
     // as the payload is parsed (defense-in-depth alongside the SigningKey zeroize).
-    let payload: PayloadV1 = serde_json::from_slice(&plaintext)
+    let mut payload: PayloadV1 = serde_json::from_slice(&plaintext)
         .map_err(|_| CoreError::invalid("the recovery payload is malformed"))?;
     plaintext.zeroize();
     if payload.version != PAYLOAD_VERSION {
@@ -217,6 +217,10 @@ pub fn open_bundle(bundle: &[u8], key: &RecoveryKey) -> CoreResult<(Profile, Sec
     }
     let identity_key = signing_key_from_seed_hex(&payload.identity_secret)?;
     let device_key = signing_key_from_seed_hex(&payload.device_secret)?;
+    // The seed hex is no longer needed once the SigningKeys exist; wipe the
+    // parsed copies (the plaintext Vec was already zeroized above).
+    payload.identity_secret.zeroize();
+    payload.device_secret.zeroize();
     // The seeds must reproduce the bundle's public ids — a bundle whose halves
     // disagree is rejected whole, trusting neither side.
     if identity_key.identity_key().to_string() != payload.identity_id
@@ -262,7 +266,17 @@ pub fn test_restore(data_dir: &Path) -> CoreResult<()> {
         .map_err(|e| CoreError::internal(format!("OS CSPRNG unavailable: {e}")))?;
     let test_dir = data_dir.join(format!(".restore-test-{}", hex::encode(nonce)));
     let _cleanup = CleanUp(&test_dir);
-    restore_to_dir(&test_dir, &bundle, &key)?;
+
+    // Write the restored copy ENCRYPTED under a fresh ephemeral password, so
+    // that a cleanup failure cannot leave a second *plaintext* copy of the
+    // root identity under the data dir. The password is random and discarded.
+    let mut pw_bytes = [0u8; 32];
+    getrandom::fill(&mut pw_bytes)
+        .map_err(|e| CoreError::internal(format!("OS CSPRNG unavailable: {e}")))?;
+    let ephemeral_pw = hex::encode(pw_bytes);
+    pw_bytes.zeroize();
+    let (profile, keys) = open_bundle(&bundle, &key)?;
+    identity::write_existing_with(&test_dir, &profile, &keys, Some(&ephemeral_pw))?;
 
     let src = identity::load_profile(data_dir)?.ok_or_else(|| {
         CoreError::internal("no source identity after export (data dir changed mid-test?)")
@@ -274,7 +288,7 @@ pub fn test_restore(data_dir: &Path) -> CoreResult<()> {
             "test restore: restored profile ids do not match the source",
         ));
     }
-    let restored_keys = SecretKeys::load(&test_dir)?;
+    let restored_keys = SecretKeys::load_with(&test_dir, Some(&ephemeral_pw))?;
     if restored_keys.identity.identity_key().to_string() != src.identity_id
         || restored_keys.device.device_key().to_string() != src.device_id
     {

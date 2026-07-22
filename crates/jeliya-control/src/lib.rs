@@ -213,6 +213,16 @@ impl Pairing {
 /// ([`ControlGateway::authorize`]) checks scope, replay, expiry, and
 /// revocation, in that order. The gateway never partially authorizes: a denial
 /// advances no state that grants anything.
+///
+/// **Synchronization invariant (security-critical).** [`ControlGateway`] carries
+/// **no internal lock** — `authorize`, `install`, and `revoke` all take
+/// `&mut self`, and the replay window (`highest_nonce` + the `seen` set) only
+/// stays correct under **external serialization**. Two concurrent `authorize`
+/// calls for the same key can both observe a pre-update window and both accept
+/// the same nonce, defeating replay defense. The host (the Phase 2 daemon
+/// wiring) MUST hold a mutex (or otherwise serialize) around every gateway
+/// mutation; this core deliberately does not pick an async/sync locking strategy
+/// for its caller. This is tracked for the D5b transport seam.
 pub struct ControlGateway {
     keys: BTreeMap<ControlKey, ControlKeyRecord>,
 }

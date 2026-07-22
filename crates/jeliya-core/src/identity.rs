@@ -47,6 +47,9 @@ pub const IDENTITY_PASSWORD_ENV: &str = "JELIYA_IDENTITY_PASSWORD";
 /// file starts with `{` (`0x7B`), so the first byte distinguishes the formats
 /// unambiguously and [`SecretKeys::load`] can auto-detect without a sidecar.
 const ENCRYPTED_VERSION: u8 = 1;
+// Guard against a future version bump colliding with the plaintext JSON marker
+// `{` (0x7B), which would break load's auto-detection.
+const _: () = assert!(ENCRYPTED_VERSION != b'{');
 /// Argon2id salt length.
 const ARGON_SALT_LEN: usize = 16;
 /// AES-256-GCM nonce length (96 bits).
@@ -339,6 +342,11 @@ fn write_secret_and_profile(
             sealed.and_then(|enc| write_new_owner_only(secret_path, &enc).map_err(map_io))
         }
         None => {
+            tracing::warn!(
+                "identity.secret is being written PLAINTEXT (no password configured); \
+                 set {} to seal it at rest",
+                IDENTITY_PASSWORD_ENV,
+            );
             let w = write_new_owner_only(secret_path, &plaintext);
             plaintext.zeroize();
             w.map_err(map_io)
