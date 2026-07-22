@@ -20,12 +20,14 @@ closure and the gaps that carry forward to the current post-release source
 candidate on `main`: the pre-Phase-1 candidate `922f620…` (which repins
 `iroh-rooms` to the untagged upstream revision `a5d98b70...` and earned signed
 direct/relay evidence at that pair) plus merged PR #78 (Phase 1 protocol
-primitives), bringing `main` to `cdcae83…`. Phase 1 is implemented and CI-green
-but its gate is not yet closed — see the
-[Phase 1 go/no-go gate verdict](phase-1-gate-verdict.md) (rows #1–#6 pass by
-tests; row #7, the independent security review, is pending). `cdcae83` is past
-the network-qualified `922f620…` pair, so a release at `cdcae83` needs fresh
-signed direct/relay evidence in addition to row #7.
+primitives) and the Phase 1 remediation (PRs #80–#85), bringing the reviewed
+code surfaces to `df28f6a…` (later `main` commits are docs-only governance
+records). Phase 1 is implemented, CI-green, and **its gate is closed**: see the
+[Phase 1 go/no-go gate verdict](phase-1-gate-verdict.md) — rows #1–#6 pass by
+tests; row #7's independent re-review returned APPROVE-WITH-CONDITIONS and the
+risk-owner recorded GO (2026-07-22). `df28f6a` is past the network-qualified
+`922f620…` pair, so a release at `df28f6a` still needs fresh signed
+direct/relay evidence.
 
 ## NOW — closure status
 
