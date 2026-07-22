@@ -15,14 +15,17 @@ audience: ["contributors", "maintainers", "operators", "release-engineers"]
 
 This page separates implementation, verification, and public availability.
 `v0.5.0` shipped on 2026-07-14 as a daemon-only prerelease backed by signed,
-certifying direct and forced-relay evidence. The current `v0.6.0` source
-candidate repins `iroh-rooms` to untagged upstream revision `a5d98b70...`, the
-first `main` merge carrying the provisional-peer and store-degradation fixes.
-It is locally qualified and network-qualified at `922f620…` + `a5d98b70…`
-(signed direct `098c4979` and forced-relay `8bda01e6` runs), but not yet
-published. Signed runs at
-the earlier `55024a4...` + `71fbb500...` snapshot remain valid for that exact
-pair and do not transfer to the current dependency.
+certifying direct and forced-relay evidence. The post-release source candidate
+on `main` pins `iroh-rooms` at the untagged upstream revision `a5d98b70...`
+(the first merge carrying the provisional-peer and store-degradation fixes) and,
+on top of that, carries the Phase 1 protocol primitives; the exact current
+revision and which signed runs bind which pair are in the Snapshot boundary
+table below (the table is the authoritative reference, since the prose would
+otherwise go stale each merge). The candidate is not yet published. Network
+qualification binds the pre-Phase-1 candidate `922f620…` + `a5d98b70…` (signed
+direct `098c4979`, forced-relay `8bda01e6`) and does not transfer to the current
+`main` HEAD, which needs fresh signed runs. Signed runs at the earlier
+`55024a4...` + `71fbb500...` snapshot remain valid for that exact pair only.
 
 ## Snapshot boundary
 

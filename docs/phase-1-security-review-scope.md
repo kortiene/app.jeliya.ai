@@ -25,8 +25,10 @@ verdict.
 
 ## Surfaces under review
 
-Three modules carry the new cryptography and key-lifecycle logic. All merged to
-`main` as `cdcae83…` (PR #78).
+Three modules carry the new cryptography and key-lifecycle logic. They live on
+`main`; the reviewer should read them at the revision current at review time
+(`cdcae83…` from PR #78 plus the self-review hardening PR #79 — i.e. the current
+`main` HEAD, not a frozen hash).
 
 ### 1. At-rest identity encryption — `crates/jeliya-core/src/identity.rs`
 

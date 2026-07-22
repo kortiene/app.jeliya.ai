@@ -13,15 +13,23 @@ audience: ["contributors", "maintainers", "release-engineers", "security-reviewe
 
 # Phase 1 go/no-go gate verdict
 
-**Verdict: IMPLEMENTATION COMPLETE — rows #1–#6 PASS, row #7 PENDING
-(2026-07-21).** Every Phase 1 go/no-go gate condition the
-[Production deployment architecture](production-deployment.md) names is
+**Verdict: IMPLEMENTATION COMPLETE — rows #1–#6 PASS (two with stated scope
+limits), row #7 PENDING (2026-07-21).** Every Phase 1 go/no-go gate condition
+the [Production deployment architecture](production-deployment.md) names is
 discharged by code except the last: the **independent security review of the
 wire formats and key lifecycle (row #7)**. That is a governance step over
 `crates/jeliya-core/src/{identity,recovery}.rs` and `crates/jeliya-control`,
 not implementation, and an implementer cannot independently review their own
 work. **Phase 2 may not begin until row #7 lands**, because the roadmap is
 dependency-ordered on phase gates.
+
+Two rows pass with a stated scope limit rather than blanket: row #1 (recovery)
+is verified on Linux with the OS-keystore breadth deferred to D1c, and row #5
+(expired/cancelled tickets) at loopback + fold level with the live cross-transport
+half pending D5b. D6 (protocol version/capability negotiation) is a Phase 1
+deliverable deliberately folded into D5b — its value only emerges with the
+control transport — so it has no wire format for row #7 to review yet; see
+[Out of scope](#out-of-scope).
 
 The six passing rows are satisfied by the Phase 1 implementation merged to
 `main` as `cdcae83…` (pull request #78), verified by the local test suite and
@@ -44,7 +52,7 @@ direct/relay runs. This record advances no release status.
 
 The plan's Phase 1 go/no-go gate lists seven conditions. Each is evaluated below.
 
-### 1. Recovery succeeds from a fresh install on every supported OS — PASS
+### 1. Recovery succeeds from a fresh install on every supported OS — PASS (Linux; OS-keystore breadth pending D1c)
 
 `recovery::restore_to_dir_reproduces_a_loadable_identity_in_a_fresh_install`
 ([recovery.rs](../crates/jeliya-core/src/recovery.rs)) exports an identity, then
@@ -85,7 +93,7 @@ including one built with concurrent interleaved authoring — and assert the
 concatenation equals the full materialization suffix in canonical
 `(lamport, event_id)` order.
 
-### 5. Expired and cancelled tickets fail on every transport — PASS
+### 5. Expired and cancelled tickets fail on every transport — PASS (loopback + fold-level; live cross-transport pending D5b)
 
 `expired_invite_join_fails_with_ticket_expired` proves an expired ticket is
 rejected before any network IO (the ticket's signed `expires_at`).
@@ -132,6 +140,19 @@ redemption with human confirmation) and the default-deny scope model is
 implemented in `crates/jeliya-control`. The `room.join` redemption-confirmation
 half of A1 is a transport-layer concern and lands with D5b (Phase 2); it is not
 a Phase 1 gate condition separate from row #6/#7.
+
+## D6 is a Phase 1 deliverable folded into D5b
+
+D6 (protocol version and capability negotiation) is named as a Phase 1
+deliverable in the [Phase 1 implementation plan](phase-1-plan.md). It was
+deliberately folded into D5b rather than built standalone: a version/capability
+handshake has no consumer until the companion control transport exists, so
+building it ahead of D5 would produce unconsumed scaffolding. The consequence
+this record states plainly: Phase 1's deliverable tally is **D1, D2, D3, D4,
+D5a, D7 done; D6 deferred into D5b (Phase 2)** — not "seven of seven". D6's wire
+format therefore does not exist for row #7 to review; row #7 covers the wire
+formats that DO exist (D1's recovery/encryption envelopes, D5a's control-protocol
+state machine), and D6's handshake wire lands for review with D5b.
 
 ## Out of scope
 

@@ -204,23 +204,29 @@ pub fn open_bundle(bundle: &[u8], key: &RecoveryKey) -> CoreResult<(Profile, Sec
         )
         .with_hint("check the recovery phrase, or obtain a fresh bundle")
     })?;
-    // The decrypted bytes hold both signing seeds as hex; zeroize them as soon
-    // as the payload is parsed (defense-in-depth alongside the SigningKey zeroize).
-    let mut payload: PayloadV1 = serde_json::from_slice(&plaintext)
-        .map_err(|_| CoreError::invalid("the recovery payload is malformed"))?;
+    // Parse the payload, zeroizing the decrypted plaintext on every path — a
+    // malformed payload's `?` would otherwise skip the wipe.
+    let mut payload: PayloadV1 = match serde_json::from_slice(&plaintext) {
+        Ok(p) => p,
+        Err(_) => {
+            plaintext.zeroize();
+            return Err(CoreError::invalid("the recovery payload is malformed"));
+        }
+    };
     plaintext.zeroize();
+    // Move the seed hex into Zeroizing locals immediately so every later exit
+    // (version check, hex decode, consistency check) wipes them on drop — the
+    // value of zeroize is on the error paths, not the happy path.
+    let identity_hex = Zeroizing::new(std::mem::take(&mut payload.identity_secret));
+    let device_hex = Zeroizing::new(std::mem::take(&mut payload.device_secret));
     if payload.version != PAYLOAD_VERSION {
         return Err(CoreError::invalid(format!(
             "unsupported recovery payload version {} (expected {PAYLOAD_VERSION})",
             payload.version
         )));
     }
-    let identity_key = signing_key_from_seed_hex(&payload.identity_secret)?;
-    let device_key = signing_key_from_seed_hex(&payload.device_secret)?;
-    // The seed hex is no longer needed once the SigningKeys exist; wipe the
-    // parsed copies (the plaintext Vec was already zeroized above).
-    payload.identity_secret.zeroize();
-    payload.device_secret.zeroize();
+    let identity_key = signing_key_from_seed_hex(identity_hex.as_str())?;
+    let device_key = signing_key_from_seed_hex(device_hex.as_str())?;
     // The seeds must reproduce the bundle's public ids — a bundle whose halves
     // disagree is rejected whole, trusting neither side.
     if identity_key.identity_key().to_string() != payload.identity_id
