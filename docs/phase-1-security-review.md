@@ -33,7 +33,9 @@ This page records the findings and the remediation path. Each finding's
 settled target **landed 2026-07-22** with APPROVE-WITH-CONDITIONS — see the
 [Step 7 re-review verdict](#step-7-re-review-verdict-2026-07-22); the
 [Phase 1 gate verdict](phase-1-gate-verdict.md) row #7 reflects it, and the
-gate-level GO awaits the risk-owner's countersignature.
+risk-owner countersigned the
+[gate-level GO](phase-1-gate-verdict.md#go-decision--risk-owner-countersignature-2026-07-22)
+the same day.
 
 ## Candidate under review
 
@@ -683,7 +685,9 @@ irrevocable old recovery material (F7), the single-user-machine assumption
 
 **Effect.** Gate-verdict row #7 is updated to APPROVE-WITH-CONDITIONS. The
 gate-level GO decision (given row #2 remains OPEN as an accepted risk) belongs
-to the risk-owner-of-record per the approval contract, not to this review.
+to the risk-owner-of-record per the approval contract, not to this review; the
+risk-owner
+[countersigned and recorded GO on 2026-07-22](phase-1-gate-verdict.md#go-decision--risk-owner-countersignature-2026-07-22).
 
 ## Operating rules
 

@@ -1,9 +1,9 @@
 ---
 type: "Decision"
 title: "Phase 1 go/no-go gate verdict"
-description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions. Row #7 (re-scoped to the two D1 wire envelopes per F2): Step 7 independent re-review landed 2026-07-22 with APPROVE-WITH-CONDITIONS against pin df28f6a (no blocker/high; conditions tracked); gate-level GO awaits the risk-owner's countersignature. Row #2 remains OPEN (opt-in encryption, F5). Rows #1/#3-#6 recorded PASS with scope limits."
+description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions. GO recorded 2026-07-22: the risk-owner-of-record countersigned the Step 7 APPROVE-WITH-CONDITIONS re-review against candidate df28f6a; Phase 2 may begin. Row #2 remains OPEN as an accepted risk (opt-in encryption, F5); verdict conditions tracked; no release status advanced."
 tags: ["phase-1", "decision", "release", "verification", "governance"]
-timestamp: "2026-07-22T15:07:00Z"
+timestamp: "2026-07-22T17:06:00Z"
 status: "canonical"
 implementation_status: "not-applicable"
 verification_status: "partial"
@@ -13,8 +13,9 @@ audience: ["contributors", "maintainers", "release-engineers", "security-reviewe
 
 # Phase 1 go/no-go gate verdict
 
-**Verdict: row #7 APPROVE-WITH-CONDITIONS (re-review landed 2026-07-22);
-gate-level GO awaits the risk-owner's countersignature.** The original
+**Verdict: GO — recorded 2026-07-22 with the risk-owner's countersignature
+(see [GO decision](#go-decision--risk-owner-countersignature-2026-07-22));
+Phase 2 may begin.** The original
 [security review](phase-1-security-review.md) (2026-07-21, by the implementer —
 not independent) returned **NOT APPROVED** with 10 findings (3 blockers, 6
 highs, 1 medium); the remediation path (Steps 0–6) completed, and the
@@ -27,9 +28,10 @@ conditions tracked; independence caveat stated in the verdict). Row #7 remains
 their key lifecycle; the control-protocol wire is deferred to a
 [D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate)
 because it does not exist yet ([finding F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve)).
-**Phase 2 may not begin** until the risk-owner-of-record countersigns the
-verdict and records the GO decision here (row #2 remains OPEN as an accepted
-risk with an exit criterion).
+**The risk-owner-of-record countersigned 2026-07-22 and Phase 2 may begin**
+(row #2 remains OPEN as an accepted risk with an exit criterion; the verdict's
+conditions stay tracked) — see the
+[GO decision](#go-decision--risk-owner-countersignature-2026-07-22).
 
 Rows #1–#6 were recorded PASS with linked test evidence, but **row #2 is now
 relabeled OPEN** (opt-in encryption is not enforced — see
@@ -73,6 +75,40 @@ matrix running green there (run `29925118834`; also at the docs-only
 `5fa0bae` HEAD, run `29932744561`) — the same suites, including every test the
 row verdicts cite. A risk-owner countersigning this record countersigns
 `df28f6a`.
+
+## GO decision — risk-owner countersignature (2026-07-22)
+
+**Decision: GO. Phase 2 implementation may begin.**
+
+| Field | Value |
+|---|---|
+| Decision | GO |
+| Candidate countersigned | `df28f6a15c6c154c0759eea76b2c164c41c047bc` |
+| Risk-owner-of-record | Sekou (the human decision-maker named by the [approval contract](phase-1-evidence-package.md#codified-approval-contract)) |
+| Recorded | 2026-07-22, on the risk-owner's explicit directive ("record GO") in the Step 7 review session |
+
+By countersigning, the risk-owner accepts:
+
+- The [Step 7 re-review verdict](phase-1-security-review.md#step-7-re-review-verdict-2026-07-22)
+  of APPROVE-WITH-CONDITIONS, **including its reviewer-independence caveat**
+  (the re-reviewer was a different agent session than the implementer but the
+  same model family).
+- **Row #2 remaining OPEN** as an accepted risk (opt-in at-rest encryption,
+  F5) with its exit criterion (enforced production invariant or D1c
+  OS-keystore backends).
+- The verdict's **seven conditions remaining open and tracked** (none
+  blocking); landing conditions 1–6 (and 7's error-kind half) reopens the pin
+  and requires a scoped delta review.
+- The other accepted risks as recorded in the
+  [accepted-risk register](phase-1-evidence-package.md#accepted-risks)
+  (F3 scaffolding, F7 irrevocable old recovery material, F4 single-user
+  assumption, env-var password).
+
+The GO authorizes **Phase 2 implementation only**. It advances no release
+status: a release still requires fresh network qualification (signed
+direct/relay runs) past `df28f6a`, and the control-protocol wire remains
+gated by the
+[D5b/D6 review](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate).
 
 ## The gate conditions
 
@@ -193,10 +229,9 @@ review and is deferred to the
 The remediation path (Steps 0–7) is **complete**: the pin was finalized against
 `df28f6a` and the re-review landed 2026-07-22 with the verdict above. Row #7's
 independence requirement is satisfied subject to the stated caveat. The
-gate-level GO decision — weighing row #2 remaining OPEN as an accepted risk and
-countersigning this verdict — belongs to the risk-owner-of-record per the
-[approval contract](phase-1-evidence-package.md#codified-approval-contract);
-Phase 2 remains blocked until that decision is recorded here.
+gate-level GO decision was **recorded 2026-07-22 with the risk-owner's
+countersignature** — see the
+[GO decision](#go-decision--risk-owner-countersignature-2026-07-22).
 
 ## Amendment A1 is in scope but lands with D5
 
@@ -240,13 +275,15 @@ has no wire format either, and its review is deferred to the
 
 ## What this record authorizes
 
-None beyond recording the verdict. The Step 7 re-review recorded
+**Phase 2 implementation.** The Step 7 re-review recorded
 APPROVE-WITH-CONDITIONS for the two D1 wire formats and key lifecycle
-(2026-07-22); its conditions are tracked in the
+(2026-07-22); the risk-owner-of-record countersigned the same day and the
+[GO decision](#go-decision--risk-owner-countersignature-2026-07-22) is
+recorded above. The verdict's conditions stay tracked in the
 [verdict record](phase-1-security-review.md#step-7-re-review-verdict-2026-07-22).
-Phase 2 remains blocked until the risk-owner-of-record countersigns the
-verdict (including the reviewer-independence caveat and row #2 staying OPEN as
-an accepted risk) and updates this record to GO.
+Nothing else is authorized: no release status advances (fresh network
+qualification is still required past `df28f6a`), and the control-protocol
+wire remains gated by the D5b/D6 review.
 
 ## Citations
 
