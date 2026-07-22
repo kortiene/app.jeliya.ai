@@ -14,9 +14,12 @@ audience: ["contributors", "maintainers", "release-engineers", "security-reviewe
 # Phase 1 go/no-go gate verdict
 
 **Verdict: NOT APPROVED — row #7 returned 10 findings (2026-07-21); remediation
-in progress.** The [independent security review](phase-1-security-review.md)
+in progress.** The [security review](phase-1-security-review.md)
 landed and returned **NOT APPROVED** with 10 findings (3 blockers, 6 highs, 1
-medium). Row #7 was [re-scoped to the two D1 wire envelopes](phase-1-security-review-scope.md)
+medium). **This review was conducted by an analyst who was also the Phase-1
+implementer (the same agent); it is not independent, and the gate condition's
+independence requirement is not satisfied.** Final row #7 sign-off requires a
+different reviewer. Row #7 was [re-scoped to the two D1 wire envelopes](phase-1-security-review-scope.md)
 (the at-rest `identity.secret` envelope and the recovery-bundle envelope) plus
 their key lifecycle; the control-protocol wire is deferred to a
 [D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate)
@@ -138,7 +141,11 @@ and daemon wiring that would bind these checks to a real session are **Phase 2
 **The review landed 2026-07-21 and returned NOT APPROVED with 10 findings**
 (3 blockers, 6 highs, 1 medium). The full findings record, severity taxonomy,
 and ordered remediation path live in
-[Phase 1 security review — findings record](phase-1-security-review.md).
+[Phase 1 security review — findings record](phase-1-security-review.md). **The
+review was conducted by the Phase-1 implementer (same agent), not an independent
+reviewer; the gate condition names independence as a requirement, and that
+requirement is not satisfied until the Step 7 re-review by a different
+reviewer lands.**
 
 Row #7 was [re-scoped per finding F2](phase-1-security-review-scope.md) to the
 **two D1 wire envelopes only** — the at-rest encryption envelope and Argon2id
