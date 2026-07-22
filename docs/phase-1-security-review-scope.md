@@ -1,9 +1,9 @@
 ---
 type: "Reference"
 title: "Phase 1 security review scope"
-description: "The review package for Phase 1 gate row #7: the wire formats, key lifecycle, and enforcement surfaces an independent reviewer must approve, with the exact files, tests, and design rationale behind each."
+description: "The review package for Phase 1 gate row #7: re-scoped (2026-07-22, finding F2) to the two D1 wire envelopes (at-rest identity encryption + recovery bundle) and their key lifecycle; the control-protocol wire is deferred to a separate D5b/D6 review gate."
 tags: ["security", "review", "phase-1", "cryptography", "identity", "control-protocol"]
-timestamp: "2026-07-21T21:30:00Z"
+timestamp: "2026-07-22T00:30:00Z"
 status: "canonical"
 implementation_status: "implemented"
 verification_status: "partial"
@@ -13,22 +13,39 @@ audience: ["security-reviewers", "maintainers"]
 
 # Phase 1 security review scope
 
-This is the review package for [Phase 1 gate row #7](phase-1-gate-verdict.md#7-independent-security-review-approves-the-wire-formats-and-key-lifecycle--pending):
-the independent security review of the wire formats and key lifecycle introduced
-by Phase 1. It scopes what to review, where the code and tests are, and the
-design rationale behind each choice, so a reviewer who was not the implementer
-can reach an approval (or record conditions) efficiently. The review's outcome
-updates the [Phase 1 verdict](phase-1-gate-verdict.md) row #7 from PENDING.
+This is the review package for [Phase 1 gate row #7](phase-1-gate-verdict.md#7-independent-security-review-approves-the-wire-formats-and-the-key-lifecycle--not-approved-remediation-in-progress):
+the security review of the wire formats and key lifecycle introduced by Phase 1.
+**Re-scoped 2026-07-22 per [finding F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve)**:
+row #7 covers the **two D1 envelopes only** — the at-rest `identity.secret`
+envelope and the recovery-bundle envelope — plus their key lifecycle. The
+control-protocol wire does not exist yet (there is no framing, serialization,
+handshake, or daemon binding), so there is nothing byte-level to review on the
+control side. The control wire gets its own **D5b/D6 review gate** (see
+[Deferred surface — the D5b/D6 control-wire review gate](#deferred-surface--the-d5bd6-control-wire-review-gate)).
 
-The implementer cannot self-satisfy row #7; this document is the input, not the
-verdict.
+The [independent review landed 2026-07-21](phase-1-security-review.md) and
+returned **NOT APPROVED** with 10 findings; row #7 is not "PENDING" (waiting for
+a review) but "NOT APPROVED — remediation in progress." This document is the
+input package, not the verdict; the verdict lives in the
+[findings record](phase-1-security-review.md).
 
 ## Surfaces under review
 
-Three modules carry the new cryptography and key-lifecycle logic. They live on
-`main`; the reviewer should read them at the revision current at review time
-(`cdcae83…` from PR #78 plus the self-review hardening PR #79 — i.e. the current
-`main` HEAD, not a frozen hash).
+**Two modules carry the D1 wire formats and key-lifecycle logic under row #7.**
+A third module — the control-protocol core — is **deferred to the D5b/D6 gate**
+because it has no wire format to review (see
+[Deferred surface](#deferred-surface--the-d5bd6-control-wire-review-gate)).
+
+> **Pinning caveat ([finding F1](phase-1-security-review.md#f1--blocker-mutable-review-target)).**
+> This document previously told reviewers to read the code "at the revision
+> current at review time … i.e. the current `main` HEAD, not a frozen hash."
+> That floating reference is itself a blocker: `main` advanced while the first
+> review was in flight. The immutable pin (source SHA + `Cargo.lock` +
+> toolchain + ADR revisions + clean-worktree assertion) is
+> [Step 3](phase-1-security-review.md#remediation-path) of the remediation path.
+> Until it lands, the candidate is `ce49d73…` (PR #80, which recorded the
+> findings and settled F9); treat code references below as describing that
+> revision's surfaces, not as a reproducible pin.
 
 ### 1. At-rest identity encryption — `crates/jeliya-core/src/identity.rs`
 
@@ -74,46 +91,98 @@ the AEAD construction, the recovery key, and the import-time fail-closed paths.
   by the round-trip and tamper tests); the `restore_to_dir` clobber refusal and
   the secret/public id consistency check on import.
 
-### 3. Control-protocol core — `crates/jeliya-control/src/lib.rs` (ADR #2, amendment A1)
+## Deferred surface — the D5b/D6 control-wire review gate
 
-The host-independent gateway every scoped companion RPC will cross (gate row #6).
-Review the pairing/SAS, the scope model, and the replay/expiry/revocation
-enforcement.
+The control-protocol core in `crates/jeliya-control/src/lib.rs` is **not under
+Phase 1 row #7 review**. [Finding F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve)
+established that the crate has no wire format — no framing, serialization,
+handshake, proof-of-possession, request authentication, method-to-scope
+mapping, or daemon binding — so there is nothing byte-level for a Phase 1
+reviewer to approve. [Finding F3](phase-1-security-review.md#f3--high-jeliya-control-core-does-not-enforce-the-attributed-properties)
+further established that the crate does not enforce its attributed properties
+at the API surface it exposes (public `install`/`ControlKeyRecord::new` bypass
+SAS and lifetime; `authorize` trusts caller-supplied time; no rate limiting;
+global scopes). The crate's module doc now states plainly that it is
+**scaffolding toward ADR #2**, not a security boundary.
+
+The **D5b/D6 review gate** owns the control wire. It triggers when D5b (the
+control-protocol transport + browser Wasm + daemon wiring) and D6 (version and
+capability negotiation) land, and it covers:
+
+- **Framing and serialization:** the versioned wire format for scoped RPCs,
+  method-to-scope mapping, and the ALPN registration.
+- **Handshake and proof-of-possession:** the Noise XX-equivalent transcript,
+  SAS derivation from the transcript hash (not the simple BLAKE3-over-two-keys
+  the Phase 1 scaffolding uses), and the ephemeral bootstrap.
+- **Request authentication:** binding each scoped RPC to a confirmed control
+  key, enforcing SAS-gated pairing, bounded lifetime (with a real default and
+  max), default-deny scopes with per-room "selected-room" binding, nonce/counter
+  replay defense, per-key rate limiting, and immediate revocation with
+  session teardown.
+- **Daemon integration:** the `ControlGateway` serialization invariant (the
+  daemon must hold a mutex around every mutation), persistence of control-key
+  records across daemon restarts, and the `room.join` redemption confirmation
+  (A1 confused-deputy).
+- **Independence:** this gate requires a reviewer who is not the implementer,
+  especially for the cryptographic choices (SAS entropy, Noise transcript
+  binding, nonce construction).
+
+Until D5b/D6 review closes, the [Phase 1 gate verdict](phase-1-gate-verdict.md)
+row #6 ("replay, wrong-SAS, expired-key, revoked-key pairing tests fail closed")
+passes only at the **state-machine unit-test level** — not as a property of a
+running, enforcing system.
+
+### What the D5b/D6 gate will assess (design context from the scaffolding)
+
+The Phase 1 scaffolding establishes the intended design; the D5b/D6 gate reviews
+the implementation that actually enforces it:
 
 - **Pairing + SAS:** `Pairing::sas` derives a ~32-bit short authentication
   string (BLAKE3 over both public keys, role-symmetric, two 5-digit groups). A
   MITM substituting either key changes the SAS; the user compares both displays.
-  `Pairing::confirm` yields a `ControlKeyRecord` only on a matching SAS.
+  `Pairing::confirm` yields a `ControlKeyRecord` only on a matching SAS. **The
+  D5b gate reviews the transcript-derived SAS, not this simple construction**
+  (see [ADR #2](companion-control-protocol-decision.md) decision 4; F9
+  divergence #2 deferred).
 - **Control key (A1):** non-extractable public key (the private half never
   leaves the browser); a **bounded lifetime as a duration** (`expires_at_ms` =
-  created + lifetime); default-deny scopes; immediate revocation.
+  created + lifetime); default-deny scopes; immediate revocation. **The D5b
+  gate reviews the enforced default and max** (F9 divergence #4 deferred).
 - **Gateway:** `ControlGateway::authorize` is the single enforcement point,
   fixed order identity → revocation → expiry → scope → replay. A denial advances
-  no granting state.
+  no granting state. **The D5b gate reviews the daemon's call site**, not just
+  the library function.
 - **Replay defense:** a sliding per-key window (`REPLAY_WINDOW = 64`); the
   highest nonce seen plus a bounded `seen` set; out-of-order gaps in-window
   accepted, exact replays and below-floor nonces rejected. Nonce 0 rejected;
   clients start at 1.
-- **Assess:** SAS entropy and the comparison model (Phase 1 binds identities;
-  Phase 2's Noise handshake binds the DH transcript — confirm the upgrade path);
-  replay-window correctness under concurrency; that scope is default-deny and
-  `room.join` is NOT a silent scope (A1 confused-deputy — confirmation lands at
-  the D5b transport seam); the per-room scope binding (deferred to D5b, named in
-  ADR #2 decision 6).
+- **Rate limiting:** ADR #2 decision 8 names per-key rate limiting; the crate
+  has none. **The D5b gate reviews the implementation** (F9 divergence #3
+  deferred).
+- **Per-room scope binding:** ADR #2 decision 6 names "selected-room"; the
+  crate's scopes are global. **The D5b gate reviews the binding** (F9 divergence
+  #6 deferred; the transport seam is where a room id is available on an RPC).
 
-## Key lifecycle summary
+## Key lifecycle summary (surfaces in scope)
 
 | Secret | Where it lives | Protection | Rotation / revocation |
 |---|---|---|---|
 | Identity + device seeds (root authority) | `identity.secret` on the daemon's data dir | `0600` plaintext (dev) or AES-256-GCM under `JELIYA_IDENTITY_PASSWORD` (prod) | not yet (Phase 4 multi-device revocation); `recovery.export` is the only backup |
-| Recovery key (256-bit random) | user-held (phrase); never persisted by the daemon | out of band | rotate by re-exporting under a fresh key |
-| Browser control key (per pairing) | browser WebCrypto non-extractable; public half on the companion | non-extractable + bounded lifetime + default-deny scopes | immediate revocation via `ControlGateway::revoke` |
+| Recovery key (256-bit random) | user-held (phrase); never persisted by the daemon | out of band | re-export adds a backup; old material is irrevocable until root authority rotates (Phase 4) — see [F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false), corrected in Step 4 |
+| Browser control key (per pairing) | browser WebCrypto non-extractable; public half on the companion | non-extractable + bounded lifetime + default-deny scopes | immediate revocation via `ControlGateway::revoke` — **D5b/D6 scope, not Phase 1 row #7** |
+
+> The recovery-key rotation text previously said "rotate by re-exporting under
+> a fresh key," which [finding F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)
+> records as false. The corrected lifecycle is shown above; the full narrative
+> fix is [Step 4](phase-1-security-review.md#remediation-path).
 
 ## Test evidence to rely on
 
 The reviewer should read the tests that back each gate row (cited in the
 [Phase 1 verdict](phase-1-gate-verdict.md)) and confirm they actually prove the
-security property (not just the happy path). Of particular interest:
+security property (not just the happy path).
+
+**In scope (D1 envelopes, row #7):**
 
 - `crates/jeliya-core/src/recovery.rs`: `open_rejects_a_wrong_recovery_key`,
   `open_rejects_a_tampered_bundle`, `open_rejects_an_unknown_version`,
@@ -121,9 +190,17 @@ security property (not just the happy path). Of particular interest:
 - `crates/jeliya-core/src/identity.rs`: `create_with_password_seals_the_secret_not_plaintext`,
   `load_with_a_wrong_password_fails_closed`,
   `load_an_encrypted_secret_without_a_password_fails_closed`.
-- `crates/jeliya-control/src/lib.rs`: the four fail-closed assertions plus
+
+**Deferred (control state machine, D5b/D6 gate):**
+
+- `crates/jeliya-control/src/lib.rs`: the four fail-closed assertions
+  (`replayed_nonce_is_rejected`, `wrong_sas_yields_no_record`,
+  `expired_key_is_rejected`, `revoked_key_is_rejected`) plus
   `scope_is_default_deny`, `out_of_order_nonces_inside_the_window_are_accepted`,
   `nonce_below_the_window_floor_is_rejected`, `sas_changes_when_either_key_is_substituted`.
+  These prove state-machine unit properties only; they do not prove the
+  properties hold in a running system (see [F3](phase-1-security-review.md#f3--high-jeliya-control-core-does-not-enforce-the-attributed-properties),
+  [F8](phase-1-security-review.md#f8--high-test-evidence-overclaims-zeroization)).
 
 ## Honest boundaries the review should confirm are communicated
 
@@ -131,18 +208,34 @@ security property (not just the happy path). Of particular interest:
   missing event with no peer holding it is gone — TB4).
 - Cancellation is eventual (signed-log); a redeeming peer that committed before
   the cancellation reached it is not recalled.
-- The control-protocol core is the state machine; the encrypted transport and
-  the daemon's exposure of the gateway are Phase 2 (D5b).
+- The control-protocol core is **scaffolding, not a reviewed boundary**: it has
+  no wire format, and its enforcement gaps are recorded as
+  [F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve)
+  and [F3](phase-1-security-review.md#f3--high-jeliya-control-core-does-not-enforce-the-attributed-properties).
+  The encrypted transport and the daemon's exposure of the gateway are Phase 2
+  (D5b), under the [D5b/D6 review gate](#deferred-surface--the-d5bd6-control-wire-review-gate).
 - At-rest encryption's password fallback is explicit, not the OS keystore
-  (D1c lanes pending).
+  (D1c lanes pending). Encryption is **opt-in, not enforced** — see
+  [F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced),
+  corrected in [Step 4](phase-1-security-review.md#remediation-path).
 
-## Self-review findings (2026-07-21)
+## Self-review findings (2026-07-21) — superseded
 
-An implementer self-review (this is **not** the independent review row #7
-requires — that needs a different reviewer; this section exists so the
-independent reviewer starts from a finding list rather than re-discovering it).
-The self-review found **no P1/critical** issue; the design is sound. Findings
-and dispositions:
+> **Superseded 2026-07-21 by the [Phase 1 security review — findings record](phase-1-security-review.md).**
+> The self-review below recommended APPROVE-WITH-CONDITIONS; the independent
+> review rejected that and returned NOT APPROVED with 10 findings. This section
+> is retained for historical context (the specific fixes and carry-overs are
+> real), but its severity assessments and its "design is sound" conclusion are
+> **not authoritative**. In particular: the Argon2id attribution "RFC 9106
+> example-1 tier" is wrong (F6 — it is the OWASP minimum); the zeroize claims
+> are overclaimed (F8); "no P1/critical" is superseded by the 3 blockers the
+> independent review found. Read this section against the findings record, not
+> as a stand-alone assessment.
+
+An implementer self-review (this is **not** the review row #7 requires — that
+needs a different reviewer; this section exists so the reviewer starts from a
+finding list rather than re-discovering it). The self-review found **no
+P1/critical** issue; the design is sound. Findings and dispositions:
 
 ### Fixed in tree (this pass)
 
@@ -199,7 +292,8 @@ tamper/version/wrong-key fail-closed.
 
 ## Citations
 
-- [Phase 1 gate verdict](phase-1-gate-verdict.md) — row #7 is the open condition this package discharges.
-- [Recovery bundle decision (ADR #3)](recovery-bundle-decision.md) — the bundle format and custody.
-- [Companion control protocol decision (ADR #2)](companion-control-protocol-decision.md) — the pairing transcript and scope model.
+- [Phase 1 security review — findings record](phase-1-security-review.md) — the NOT APPROVED verdict (10 findings) and the remediation path; authoritative input that supersedes the self-review below.
+- [Phase 1 gate verdict](phase-1-gate-verdict.md) — row #7 re-scoped to the two D1 envelopes; status NOT APPROVED (remediation in progress).
+- [Recovery bundle decision (ADR #3)](recovery-bundle-decision.md) — `canonical` / `partial`; the bundle format and custody, amended 2026-07-21 (grouped-hex phrase, password wrap = Phase 2).
+- [Companion control protocol decision (ADR #2)](companion-control-protocol-decision.md) — `proposal`; the pairing transcript and scope model the D5b/D6 gate reviews against.
 - [Production deployment decision — amendment A1](production-deployment-decision.md#a1-bound-the-companions-authority-to-what-the-browser-may-name) — the browser-authority boundary.

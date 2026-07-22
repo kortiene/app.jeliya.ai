@@ -1,9 +1,9 @@
 ---
 type: "Decision"
 title: "Phase 1 go/no-go gate verdict"
-description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions for the current candidate (cdcae83 + a5d98b70). Rows #1-#6 PASS with linked test evidence; row #7 (independent security review) is PENDING, blocking Phase 2."
+description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions. Row #7 re-scoped to the two D1 wire envelopes (F2) and returned NOT APPROVED with 10 findings (2026-07-21); remediation in progress, blocking Phase 2. Rows #1-#6 recorded PASS but row #2 is overclaimed (F5, corrected in Step 4)."
 tags: ["phase-1", "decision", "release", "verification", "governance"]
-timestamp: "2026-07-21T21:30:00Z"
+timestamp: "2026-07-22T00:45:00Z"
 status: "canonical"
 implementation_status: "not-applicable"
 verification_status: "partial"
@@ -13,15 +13,24 @@ audience: ["contributors", "maintainers", "release-engineers", "security-reviewe
 
 # Phase 1 go/no-go gate verdict
 
-**Verdict: IMPLEMENTATION COMPLETE — rows #1–#6 PASS (two with stated scope
-limits), row #7 PENDING (2026-07-21).** Every Phase 1 go/no-go gate condition
-the [Production deployment architecture](production-deployment.md) names is
-discharged by code except the last: the **independent security review of the
-wire formats and key lifecycle (row #7)**. That is a governance step over
-`crates/jeliya-core/src/{identity,recovery}.rs` and `crates/jeliya-control`,
-not implementation, and an implementer cannot independently review their own
-work. **Phase 2 may not begin until row #7 lands**, because the roadmap is
-dependency-ordered on phase gates.
+**Verdict: NOT APPROVED — row #7 returned 10 findings (2026-07-21); remediation
+in progress.** The [independent security review](phase-1-security-review.md)
+landed and returned **NOT APPROVED** with 10 findings (3 blockers, 6 highs, 1
+medium). Row #7 was [re-scoped to the two D1 wire envelopes](phase-1-security-review-scope.md)
+(the at-rest `identity.secret` envelope and the recovery-bundle envelope) plus
+their key lifecycle; the control-protocol wire is deferred to a
+[D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate)
+because it does not exist yet ([finding F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve)).
+**Phase 2 may not begin** until the remediation path completes and a re-review
+by a different reviewer lands.
+
+Rows #1–#6 were recorded PASS with linked test evidence, but that framing is
+**known to be partially wrong**: row #2 ("native production mode no longer
+leaves the root secret plaintext") overclaims because production encryption is
+opt-in, not enforced ([finding F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced));
+its correction is [Step 4](phase-1-security-review.md#remediation-path) of the
+remediation path. The other rows' PASS claims have not been individually
+re-examined against the findings record and may carry similar caveats.
 
 Two rows pass with a stated scope limit rather than blanket: row #1 (recovery)
 is verified on Linux with the OS-keystore breadth deferred to D1c, and row #5
@@ -115,20 +124,36 @@ control-protocol gateway directly. Plus `scope_is_default_deny` (A1),
 properties.
 
 **Honest boundary:** the four assertions pass at the control-protocol *state
-machine* (the security-reviewable core in `crates/jeliya-control`). The Noise
-wire transport, browser Wasm side, and daemon wiring are **Phase 2 (D5b)** —
-real RPCs route through this same gateway once the transport lands.
+machine* — **which is scaffolding, not a security boundary**
+([finding F3](phase-1-security-review.md#f3--high-jeliya-control-core-does-not-enforce-the-attributed-properties)).
+The crate provides types and checks a correct host *could* enforce, but nothing
+in it forces enforcement: `install`/`ControlKeyRecord::new` bypass SAS and
+lifetime; `authorize` trusts caller-supplied time; there is no rate limiting;
+scopes are global not per-room. The Noise wire transport, browser Wasm side,
+and daemon wiring that would bind these checks to a real session are **Phase 2
+(D5b)**, under the [D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate).
 
-### 7. Independent security review approves the wire formats and key lifecycle — PENDING
+### 7. Independent security review approves the wire formats and the key lifecycle — NOT APPROVED (remediation in progress)
 
-**This is the one open condition.** The review covers the at-rest encryption
-envelope and Argon2id parameters ([identity.rs](../crates/jeliya-core/src/identity.rs)),
-the recovery-bundle AEAD and key handling ([recovery.rs](../crates/jeliya-core/src/recovery.rs)),
-and the control-protocol pairing/SAS/scope/replay/expiry/revocation surface
-([jeliya-control](../crates/jeliya-control/src/lib.rs)). Its scope is packaged
-in [Phase 1 security review scope](phase-1-security-review-scope.md) so a
-reviewer can execute efficiently. Until it lands, the Phase 1 gate is not
-closed and Phase 2 is blocked.
+**The review landed 2026-07-21 and returned NOT APPROVED with 10 findings**
+(3 blockers, 6 highs, 1 medium). The full findings record, severity taxonomy,
+and ordered remediation path live in
+[Phase 1 security review — findings record](phase-1-security-review.md).
+
+Row #7 was [re-scoped per finding F2](phase-1-security-review-scope.md) to the
+**two D1 wire envelopes only** — the at-rest encryption envelope and Argon2id
+parameters ([identity.rs](../crates/jeliya-core/src/identity.rs)), and the
+recovery-bundle AEAD and key handling ([recovery.rs](../crates/jeliya-core/src/recovery.rs))
+— plus their key lifecycle. The control-protocol surface
+([jeliya-control](../crates/jeliya-control/src/lib.rs)) has no wire format to
+review and is deferred to the
+[D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate).
+
+The remediation is in progress (Steps 0–1 complete; Steps 2–7 tracked in the
+[findings record](phase-1-security-review.md#remediation-path)). Until it
+completes and a re-review by a **different reviewer** (especially for the
+cryptographic choices) lands, the Phase 1 gate is not closed and Phase 2 is
+blocked.
 
 ## Amendment A1 is in scope but lands with D5
 
@@ -150,16 +175,20 @@ handshake has no consumer until the companion control transport exists, so
 building it ahead of D5 would produce unconsumed scaffolding. The consequence
 this record states plainly: Phase 1's deliverable tally is **D1, D2, D3, D4,
 D5a, D7 done; D6 deferred into D5b (Phase 2)** — not "seven of seven". D6's wire
-format therefore does not exist for row #7 to review; row #7 covers the wire
-formats that DO exist (D1's recovery/encryption envelopes, D5a's control-protocol
-state machine), and D6's handshake wire lands for review with D5b.
+format therefore does not exist for row #7 to review. **Re-scoped per F2**:
+row #7 covers the two D1 envelopes only (the at-rest `identity.secret`
+envelope and the recovery-bundle envelope); the control-protocol state machine
+has no wire format either, and its review is deferred to the
+[D5b/D6 gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate).
 
 ## Out of scope
 
 - **D1c** (OS keystore backends: Keychain / DPAPI / Secret Service) and **D5b**
   (control-protocol wire transport + browser Wasm + daemon wiring) are Phase 2
-  lanes, not Phase 1 gate conditions. Rows #1 and #6 pass via the
-  password-hardened fallback and the state-machine core respectively.
+  lanes, not Phase 1 gate conditions. Row #1 passes via the password-hardened
+  fallback; row #6 passes at the **state-machine unit-test level only** — the
+  crate is [scaffolding](phase-1-security-review.md#f3--high-jeliya-control-core-does-not-enforce-the-attributed-properties),
+  not an enforced boundary.
 - **Network qualification at `cdcae83`** is a *release* gate, not a Phase 1 gate
   condition. `cdcae83` is past the network-qualified `922f620…` pair, so fresh
   signed direct/relay runs are required for any release here.
@@ -169,14 +198,17 @@ state machine), and D6's handshake wire lands for review with D5b.
 ## What this record authorizes
 
 None beyond recording the verdict. Phase 2 implementation is blocked on row #7.
-When the independent security review lands and approves the wire formats and key
-lifecycle (or records conditions), this record updates to GO and Phase 2 may
-begin.
+The review landed 2026-07-21 and returned NOT APPROVED; the remediation path is
+tracked in the [findings record](phase-1-security-review.md#remediation-path).
+When the remediation completes and a re-review by a different reviewer approves
+the two D1 wire formats and key lifecycle (or records conditions), this record
+updates to GO and Phase 2 may begin.
 
 ## Citations
 
+- [Phase 1 security review — findings record](phase-1-security-review.md) — the NOT APPROVED verdict, 10 findings, and the ordered remediation path.
+- [Phase 1 security review scope](phase-1-security-review-scope.md) — the re-scoped review package for row #7 (two D1 envelopes; control deferred to D5b/D6).
 - [Production deployment architecture](production-deployment.md) — Phase 1 deliverables, gate conditions, and the dependency-ordered roadmap.
 - [Phase 1 implementation plan](phase-1-plan.md) — the sequenced deliverables this verdict evaluates.
 - [Phase 0 go/no-go gate verdict](phase-0-gate-verdict.md) — the 2026-07-21 GO that unlocked Phase 1.
-- [Phase 1 security review scope](phase-1-security-review-scope.md) — the package for row #7.
 - [Release versus main](release-vs-main.md) — the `cdcae83` / `922f620…` boundary and the evidence non-transfer.
