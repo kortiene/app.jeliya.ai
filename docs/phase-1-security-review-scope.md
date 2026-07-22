@@ -3,7 +3,7 @@ type: "Reference"
 title: "Phase 1 security review scope"
 description: "The review package for Phase 1 gate row #7: re-scoped (2026-07-22, finding F2) to the two D1 wire envelopes (at-rest identity encryption + recovery bundle) and their key lifecycle; the control-protocol wire is deferred to a separate D5b/D6 review gate."
 tags: ["security", "review", "phase-1", "cryptography", "identity", "control-protocol"]
-timestamp: "2026-07-22T00:30:00Z"
+timestamp: "2026-07-22T01:30:00Z"
 status: "canonical"
 implementation_status: "implemented"
 verification_status: "partial"
@@ -36,16 +36,13 @@ A third module — the control-protocol core — is **deferred to the D5b/D6 gat
 because it has no wire format to review (see
 [Deferred surface](#deferred-surface--the-d5bd6-control-wire-review-gate)).
 
-> **Pinning caveat ([finding F1](phase-1-security-review.md#f1--blocker-mutable-review-target)).**
-> This document previously told reviewers to read the code "at the revision
-> current at review time … i.e. the current `main` HEAD, not a frozen hash."
-> That floating reference is itself a blocker: `main` advanced while the first
-> review was in flight. The immutable pin (source SHA + `Cargo.lock` +
-> toolchain + ADR revisions + clean-worktree assertion) is
-> [Step 3](phase-1-security-review.md#remediation-path) of the remediation path.
-> Until it lands, the candidate is `ce49d73…` (PR #80, which recorded the
-> findings and settled F9); treat code references below as describing that
-> revision's surfaces, not as a reproducible pin.
+> **The review target is pinned** — see
+> [Review target pin](#review-target-pin). A reviewer checks out the pinned
+> SHA and verifies the `Cargo.lock` hash, toolchain, and ADR revisions match.
+> The pin is **provisional**: Steps 4–6 of the
+> [remediation path](phase-1-security-review.md#remediation-path) may modify
+> reviewed surfaces (notably Step 5 changes `identity.rs` for KDF param
+> encoding); the pin will be re-recorded before the Step 7 re-review.
 
 ### 1. At-rest identity encryption — `crates/jeliya-core/src/identity.rs`
 
@@ -289,6 +286,96 @@ replay-window correctness (in-window / out-of-order / below-floor / exact-replay
 scope (A1); the load-time seed↔profile consistency check that mitigates an
 encrypted→plaintext downgrade; restore clobber refusal; bundle
 tamper/version/wrong-key fail-closed.
+
+## Review target pin
+
+> **Finding F1** ([mutable review target](phase-1-security-review.md#f1--blocker-mutable-review-target))
+> required an immutable pin. This section records it. A reviewer reproduces the
+> review by checking out the source SHA and verifying every field below matches;
+> a later change to any field in the "reopens review" set requires a re-review
+> before the Phase 1 gate can close.
+
+### Pin values (recorded 2026-07-22 against `35b1c5e`)
+
+| Field | Value |
+|---|---|
+| Source SHA | `35b1c5e60b79a94934c2e3263b60401e76071fc9` (`main`; PR #81) |
+| `Cargo.lock` SHA-256 | `f0baf2f1aa821ff2014a9cc4d391867630045e993a30f9332e7c940e8423c516` |
+| Rust toolchain (build) | `rustc 1.97.1 (8bab26f4f 2026-07-14)` |
+| Rust MSRV (`Cargo.toml`) | `1.91` |
+| Node | `v24.18.0` |
+| Worktree at pin time | clean (`git status --porcelain` empty) |
+| Pin date (UTC) | 2026-07-22 |
+
+### Reviewed surfaces (last-change SHA)
+
+| Surface | File | Last changed |
+|---|---|---|
+| At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `4a73922` (PR #79) |
+| Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `4a73922` (PR #79) |
+| Authority path (F4) | [`crates/jeliya-core/src/engine.rs`](../crates/jeliya-core/src/engine.rs) | `cdcae83` (PR #78) |
+
+### Normative ADR revisions
+
+| ADR | Document | Last changed | Status |
+|---|---|---|---|
+| ADR #3 (recovery bundle) | [`docs/recovery-bundle-decision.md`](recovery-bundle-decision.md) | `ce49d73` (PR #80) | `canonical` / `partial` (Amendments A+B) |
+| ADR #2 (control protocol) | [`docs/companion-control-protocol-decision.md`](companion-control-protocol-decision.md) | `ce49d73` (PR #80) | `proposal` (D5b/D6 target) |
+
+### Crypto dependency versions (from `Cargo.lock`)
+
+| Crate | Version |
+|---|---|
+| `aes-gcm` | `0.10.3` |
+| `argon2` | `0.5.3` |
+| `blake3` | `1.8.5` |
+| `zeroize` | `1.9.0` |
+| `getrandom` | `0.2.17` |
+| `hex` | `0.4.3` |
+
+### Reopens review
+
+Any of the following after this pin invalidates the review and requires a
+re-review (record a new pin before the Step 7 re-review):
+
+- A change to `crates/jeliya-core/src/identity.rs` or its tests.
+- A change to `crates/jeliya-core/src/recovery.rs` or its tests.
+- A change to ADR #3 ([recovery-bundle-decision.md](recovery-bundle-decision.md))
+  or ADR #2 ([companion-control-protocol-decision.md](companion-control-protocol-decision.md)).
+- A version change in `Cargo.lock` to any crypto dependency listed above
+  (`aes-gcm`, `argon2`, `blake3`, `zeroize`, `getrandom`, `hex`).
+- A change to the KDF parameters (`ARGON_M_COST`, `ARGON_T_COST`,
+  `ARGON_P_COST`) or the envelope format constants (`ENCRYPTED_VERSION`,
+  `BUNDLE_VERSION`, `PAYLOAD_VERSION`, `ARGON_SALT_LEN`, `AEAD_NONCE_LEN`).
+- A change to the Rust toolchain that affects codegen of the reviewed files
+  (a rustc version bump; MSRV stays `1.91`).
+
+### Does not reopen review
+
+- Documentation-only changes to docs not listed as normative ADRs above.
+- UI changes (`ui/`).
+- Changes to other crates (`jeliyad`, `jeliya-control`, `jeliya-core/src/`
+  files other than `identity.rs` / `recovery.rs` / their tests).
+- CI/workflow changes that do not affect the build outputs of the reviewed
+  files.
+- The remediation steps themselves (Steps 3–6) update this pin before the
+  Step 7 re-review; those updates are expected, not reopenings.
+
+### Provisional status
+
+This pin is **provisional**. The [remediation path](phase-1-security-review.md#remediation-path)
+includes:
+- **Step 4** (F5/F7/F4/F8) — may add the daemon-auth/single-user boundary to
+  the reviewed-surface set (F4); does not change `identity.rs` or `recovery.rs`
+  code but may change their docs.
+- **Step 5** (F6) — **changes `identity.rs`** to encode authenticated KDF
+  params per envelope version. This reopens the code surface; the pin will be
+  re-recorded after Step 5 lands.
+
+The **final pin** is recorded when Steps 3–6 are all complete, immediately
+before the Step 7 re-review. A reviewer executing the Step 7 re-review should
+verify the pin values against the tree they are reviewing, not against the
+provisional values recorded here.
 
 ## Citations
 

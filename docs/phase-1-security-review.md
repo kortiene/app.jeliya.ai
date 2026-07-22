@@ -66,7 +66,7 @@ convention, not as a binding contract:
 
 | # | Severity | Title |
 |---|---|---|
-| F1 | Blocker | Mutable review target — scope points at "current main HEAD," not an immutable pin |
+| F1 | Blocker | Mutable review target — scope points at "current main HEAD," not an immutable pin — **resolved 2026-07-22 (pin recorded; provisional pending Steps 4–6)** |
 | F2 | Blocker | No control-protocol wire format exists to approve; row #7 is mis-scoped — **resolved 2026-07-22 (re-scoped to two D1 envelopes; control deferred to D5b/D6)** |
 | F3 | High | `jeliya-control` core does not enforce the attributed security properties — **resolved (labeling) 2026-07-22 (relabel as scaffolding); enforcement gaps are D5b/D6 work** |
 | F4 | High | Review scope omits the actual authority path (`engine.rs` + daemon `/api/session` + single-user assumption) |
@@ -103,7 +103,12 @@ exact document revisions under review. The scope doc must also state which
 later changes reopen review (any change to a reviewed surface; any change to
 the normative ADRs) and which do not (whitespace, unrelated docs).
 
-**Status.** Open. Tracked as [Step 3](#remediation-path).
+**Status.** Resolved 2026-07-22 — the review target is now pinned in the
+[scope doc's Review target pin section](phase-1-security-review-scope.md#review-target-pin)
+(source SHA `35b1c5e`, `Cargo.lock` hash, toolchain, ADR revisions, crypto
+dependency versions, clean-worktree assertion, reopen rules). The pin is
+**provisional**: Step 5 changes `identity.rs` (KDF param encoding) and will
+require a re-pin before the Step 7 re-review.
 
 ### F2 — Blocker: no control wire format exists to approve
 
@@ -455,7 +460,7 @@ ones.
 | 0 | (this page) | ✅ The findings are recorded in the repo as the durable independent-review record, linked from [the wiki index](index.md). |
 | 1 | F9 | ✅ ADR/code contradictions resolved 2026-07-21 (see [F9 resolutions](#resolutions-2026-07-21)): ADR #3 promoted `proposal → canonical` / `partial` with [Amendments A and B](recovery-bundle-decision.md#amendments-a-and-b-2026-07-21); ADR #2 remains `proposal` with its [scaffolding relationship](companion-control-protocol-decision.md#relationship-to-the-phase-1-scaffolding-2026-07-21) documented. Approval-contract codification is still open and folds into Step 6 + Step 7. |
 | 2 | F2, F3 | ✅ Row #7 re-scoped to the two D1 envelopes ([scope doc](phase-1-security-review-scope.md)); `jeliya-control` relabeled as scaffolding in its [module doc](../crates/jeliya-control/src/lib.rs) and the [gate verdict](phase-1-gate-verdict.md) row #6; D5b/D6 control-wire review gate defined in the [scope doc](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate). |
-| 3 | F1 | Pin the review target: source SHA + `Cargo.lock` + toolchain + ADR revisions + clean-worktree assertion + reopen rules. |
+| 3 | F1 | ✅ Review target pinned in the [scope doc](phase-1-security-review-scope.md#review-target-pin): source SHA `35b1c5e` + `Cargo.lock` hash + toolchain + ADR revisions + crypto dep versions + clean-worktree assertion + reopen rules. **Provisional** — Step 5 changes `identity.rs` and requires a re-pin before Step 7. |
 | 4 | F5, F7, F4, F8 | Fix the doc overclaims: row #2 → opt-in (gate open); lifecycle → re-export adds a backup (old material irrevocable); daemon-auth/single-user boundary in scope; zeroize recast as a source/dep audit + secret-data-flow inventory. |
 | 5 | F6 | Encode authenticated KDF params per envelope version + migration fixtures + measured latency/memory targets. |
 | 6 | F10 | Build the evidence package (including the codified approval contract: independence, taxonomy, blocking threshold, risk-owner, required artifact, remediation ownership, re-review rules). |
