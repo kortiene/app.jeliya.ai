@@ -23,10 +23,12 @@ handshake, or daemon binding), so there is nothing byte-level to review on the
 control side. The control wire gets its own **D5b/D6 review gate** (see
 [Deferred surface — the D5b/D6 control-wire review gate](#deferred-surface--the-d5bd6-control-wire-review-gate)).
 
-The [independent review landed 2026-07-21](phase-1-security-review.md) and
-returned **NOT APPROVED** with 10 findings; row #7 is not "PENDING" (waiting for
-a review) but "NOT APPROVED — remediation in progress." This document is the
-input package, not the verdict; the verdict lives in the
+The [original review landed 2026-07-21](phase-1-security-review.md) and
+returned **NOT APPROVED** with 10 findings; the remediation path (Steps 0–6)
+completed, and the **Step 7 independent re-review landed 2026-07-22 with
+[APPROVE-WITH-CONDITIONS](phase-1-security-review.md#step-7-re-review-verdict-2026-07-22)**
+against the pin below (no blocker or high; conditions tracked). This document
+is the input package, not the verdict; the verdict lives in the
 [findings record](phase-1-security-review.md).
 
 ## Surfaces under review

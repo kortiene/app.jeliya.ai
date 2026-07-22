@@ -47,20 +47,32 @@ control transport — so it has no wire format for row #7 to review yet; see
 
 The six passing rows are satisfied by the Phase 1 implementation merged to
 `main` as `cdcae83…` (pull request #78), verified by the local test suite and
-the daemon-only six-job CI matrix (run `29868870066`, all green). They are
-**local/unit evidence**, not the network qualification a *release* requires:
-`cdcae83` is past the network-qualified pre-Phase-1 pair `922f620…` +
-`a5d98b70…`, so a release at `cdcae83` additionally needs fresh signed
-direct/relay runs. This record advances no release status.
+the daemon-only six-job CI matrix (run `29868870066`, all green), and
+re-verified at the row #7 re-review pin `df28f6a` (run `29925118834`, all
+green — see the candidate table below). They are **local/unit evidence**, not
+the network qualification a *release* requires: these SHAs are past the
+network-qualified pre-Phase-1 pair `922f620…` + `a5d98b70…`, so a release at
+`df28f6a` additionally needs fresh signed direct/relay runs. This record
+advances no release status.
 
 ## Candidate under verdict
 
 | Field | Value |
 |---|---|
-| Jeliya source candidate | `cdcae8397700be792f4efea2a387ea60af65e232` (`main`; PR #78 on `922f620…`) |
-| Pre-Phase-1 network-qualified candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` (signed direct `098c4979` + relay `8bda01e6` bind this pair; does not transfer to `cdcae83`) |
+| Jeliya source candidate (rows #1–#6, original verdict) | `cdcae8397700be792f4efea2a387ea60af65e232` (`main`; PR #78 on `922f620…`) |
+| Jeliya source candidate (row #7 re-review pin) | `df28f6a15c6c154c0759eea76b2c164c41c047bc` (`main`; PR #85 — the [review target pin](phase-1-security-review-scope.md#review-target-pin)) |
+| Pre-Phase-1 network-qualified candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` (signed direct `098c4979` + relay `8bda01e6` bind this pair; does not transfer to later SHAs) |
 | Iroh Rooms pin | `a5d98b70d717f35d3ce60953a88e12e646f2e871` (unchanged from the pre-Phase-1 candidate) |
-| Verdict date (UTC) | 2026-07-21 |
+| Verdict dates (UTC) | rows #1–#6: 2026-07-21 (at `cdcae83`; test evidence re-verified green at `df28f6a`, CI run `29925118834`); row #7: 2026-07-22 (at `df28f6a`) |
+
+**Single candidate for the GO decision: `df28f6a`.** The reviewed crypto
+surfaces changed between `cdcae83` and `df28f6a` (remediation Steps 5–6
+touched `identity.rs`/`recovery.rs` and `Cargo.lock`), so the rows #1–#6 test
+evidence recorded at `cdcae83` is carried to `df28f6a` by the full six-job CI
+matrix running green there (run `29925118834`; also at the docs-only
+`5fa0bae` HEAD, run `29932744561`) — the same suites, including every test the
+row verdicts cite. A risk-owner countersigning this record countersigns
+`df28f6a`.
 
 ## The gate conditions
 

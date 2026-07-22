@@ -28,10 +28,12 @@ security review approves the wire formats and key lifecycle" — that is the
 this record as satisfying the independence requirement. This page exists so the
 findings are durable and reviewable, not so they self-certify.
 
-This page records the findings and the remediation path. It does not assert any
-remediation is complete: each finding's "Status" line tracks where the work
-sits, and the [Phase 1 gate verdict](phase-1-gate-verdict.md) row #7 remains
-open until a re-review against a pinned, settled target lands.
+This page records the findings and the remediation path. Each finding's
+"Status" line tracks where the work sits. The re-review against the pinned,
+settled target **landed 2026-07-22** with APPROVE-WITH-CONDITIONS — see the
+[Step 7 re-review verdict](#step-7-re-review-verdict-2026-07-22); the
+[Phase 1 gate verdict](phase-1-gate-verdict.md) row #7 reflects it, and the
+gate-level GO awaits the risk-owner's countersignature.
 
 ## Candidate under review
 
@@ -609,14 +611,20 @@ risk-owner-of-record is recommended before the gate-level GO decision.
 `check-docs` OK; `check-ui-i18n` OK. Local toolchain rustc 1.97.1 (the pin's
 transparency note; CI lanes 1.96.0 / 1.91.0 are the authoritative build path).
 
-**Measured evidence (closes the Step 7 RSS/heap ask).** An external probe
-harness pinned to the exact reviewed versions (`argon2 0.5.3`,
-`aes-gcm 0.10.3`, `zeroize 1.9.0`) measured: Argon2id `V1_KDF` peak-RSS delta
-**19.06 MiB** (≈ the configured m=19456 KiB — the memory parameter is real),
-derivation latency **~41 ms** (release, mean of 5); `cargo tree -e features`
-on the pinned tree confirms the `zeroize` feature resolves onto `argon2`,
-`aes-gcm`, and their cipher internals; a volatile-read probe observed
-`Zeroizing` buffers zeroed after drop (heap and stack; empirical, UB-caveated).
+**Measured evidence (closes the Step 7 RSS/heap ask).** The probe harness is
+committed at [`tools/step7-kdf-probe/`](../tools/step7-kdf-probe/README.md)
+(standalone crate pinning the exact reviewed versions `argon2 =0.5.3`,
+`aes-gcm =0.10.3`, `zeroize =1.9.0`; commands and the recorded transcript in
+its README). Measured: Argon2id `V1_KDF` peak-RSS delta **≈ 18.95 MiB**
+(≈ the configured m=19456 KiB — the memory parameter is real), derivation
+latency **21–29 ms** on the recording machine (a review-time run on a loaded
+machine measured ~41 ms; both dwarf the in-tree 1 ms floor — condition 2);
+`cargo tree --locked -p jeliya-core -e features` on the pinned tree confirms
+the `zeroize` feature resolves onto `argon2`, `aes-gcm`, and their cipher
+internals. Volatile-read wipe probes (empirical, UB-caveated): the heap
+probe's discriminating region (bytes 16..32, past glibc tcache metadata)
+reads all-zero with `Zeroizing` vs `0xAA` residue in the no-`Zeroizing`
+control; the stack probe reads fully zeroed after an inner-scope drop.
 
 **Findings: no blocker, no high.** 22 candidate findings entered adversarial
 verification; 10 were refuted (chiefly as restatements of already-disclosed
@@ -656,11 +664,16 @@ none blocks approval; all become conditions.
    envelope version bump, bind the header (version/salt/nonce) as AEAD
    associated data — self-authenticating today, cheap defense-in-depth for v2.
 
-**Reopen note.** Conditions 1–4 change the pinned surfaces or the
-review-package documents; per the
-[reopen rules](phase-1-security-review-scope.md#reopens-review), landing them
-requires a re-pin and a scoped delta review of those diffs. This approval
-holds for the pinned tree as reviewed, with the conditions tracked.
+**Reopen note.** Landing ANY of the conditions touches the pin's
+[reopen set](phase-1-security-review-scope.md#reopens-review): conditions
+1–3 change the pinned code surfaces (`identity.rs` / `recovery.rs` or their
+tests), condition 4 changes the reviewed tests and the evidence package,
+condition 5 changes the evidence package's evidence list, condition 6 amends
+ADR #3 (any ADR #3 change reopens), and condition 7's error-kind half changes
+`identity.rs` (its AAD half is v2 design work). Condition work therefore
+lands with a re-pin and a scoped delta review of those diffs — none of it is
+"editorial" under the reopen rules' exception. This approval holds for the
+pinned tree as reviewed, with the conditions tracked.
 
 **Accepted risks reaffirmed** (unchanged owners and exit criteria, per the
 [accepted-risk register](phase-1-evidence-package.md#accepted-risks)): opt-in
