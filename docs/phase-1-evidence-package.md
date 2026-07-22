@@ -119,12 +119,22 @@ cargo test --locked --workspace
 node scripts/check-docs.mjs
 node scripts/check-ui-i18n.mjs
 
-# 5. Expected results.
+# 5. Reproduce the KDF memory/latency + zeroize-wipe evidence (Linux only;
+#    committed probe harness — see tools/step7-kdf-probe/README.md for the
+#    recorded transcript and interpretation).
+(cd tools/step7-kdf-probe && cargo build --release && ./target/release/step7-kdf-probe)
+# Expected: vm_hwm_delta_mib ≈ 19 (the m_cost=19456 KiB target);
+# kdf_latency_ms well above the in-tree 5 ms floor (21-80 ms typical);
+# stack_probe_zeroed true; heap probe bytes 16..32 all-zero vs 0xAA residue
+# in heap_control (bytes 0..16 are allocator tcache metadata in both).
+
+# 6. Expected results (gate).
 # cargo fmt: no output (clean).
 # cargo clippy: no warnings.
-# cargo test: 127 passed, 0 failed, 1 ignored.
-#   (125 at the df28f6a pin; +2 identity-envelope tamper/truncation tests
-#    added by Step 7 verdict condition 4)
+# cargo test: 125 passed, 0 failed, 1 ignored at the df28f6a pin.
+#   (At the conditions tree the count is 127 — verdict condition 4 adds two
+#    identity-envelope tests; 127 becomes the expected count when the pin is
+#    re-recorded at the conditions merge SHA.)
 # check-docs: OK.
 # check-ui-i18n: OK.
 ```

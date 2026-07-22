@@ -76,8 +76,11 @@ impl RecoveryKey {
     /// optional) back into a recovery key.
     pub fn from_phrase(phrase: &str) -> CoreResult<Self> {
         // Pre-size so growth cannot reallocate and leave unwiped copies of
-        // phrase prefixes on the heap (Step 7 verdict condition 3).
-        let mut stripped = Zeroizing::new(String::with_capacity(phrase.len()));
+        // phrase prefixes on the heap (Step 7 verdict condition 3). The cap
+        // bounds the allocation against a hostile oversized phrase: a valid
+        // phrase strips to exactly 2*KEY_LEN chars (≤ 4 UTF-8 bytes each), so
+        // only an already-invalid phrase can outgrow the cap and reallocate.
+        let mut stripped = Zeroizing::new(String::with_capacity(phrase.len().min(8 * KEY_LEN)));
         stripped.extend(
             phrase
                 .chars()
