@@ -71,7 +71,7 @@ convention, not as a binding contract:
 | F3 | High | `jeliya-control` core does not enforce the attributed security properties — **resolved (labeling) 2026-07-22 (relabel as scaffolding); enforcement gaps are D5b/D6 work** |
 | F4 | High | Review scope omits the actual authority path (`engine.rs` + daemon `/api/session` + single-user assumption) — **resolved (doc) 2026-07-22 (honest boundary stated; engine.rs in pin)** |
 | F5 | High | "Production encryption" is opt-in, not enforced — **resolved (doc) 2026-07-22 (row #2 relabeled OPEN)** |
-| F6 | High | KDF versioning/attribution is inaccurate |
+| F6 | High | KDF versioning/attribution is inaccurate — **resolved 2026-07-22 (immutable per-version param-set + dispatch; OWASP attribution corrected; migration fixtures + latency test)** |
 | F7 | High | "Rotate by re-exporting" is false — old recovery material is irrevocable — **resolved (doc) 2026-07-22 (lifecycle text corrected)** |
 | F8 | High | Test evidence overclaims zeroization — **partially resolved (doc) 2026-07-22 (recast as audit + inventory; full audit is Step 6)** |
 | F9 | Blocker | Approval contract and normative inputs undefined; ADRs #2/#3 contradict the code — **ADR/code contradictions resolved 2026-07-21; approval contract still open** |
@@ -296,7 +296,15 @@ migration fixtures (a v1 fixture that a v2 reader still opens) and measured
 latency/memory targets for each supported param-set. Cite OWASP minimum
 correctly.
 
-**Status.** Open. Tracked as [Step 5](#remediation-path).
+**Status.** Resolved 2026-07-22 — KDF params are now an immutable per-version
+param-set (`KdfParams` struct + `V1_KDF` const + `kdf_params_for_version`
+dispatch in [`identity.rs`](../crates/jeliya-core/src/identity.rs)): changing
+params requires a version bump, and the v1 reader stays as the legacy dispatch
+so existing identity files keep loading. Attribution corrected (OWASP minimum,
+not RFC 9106 example-1). Migration fixtures added: `v1_kdf_params_are_pinned`
+(param immutability), `v1_identity_round_trips_through_version_dispatch`
+(legacy read), `unknown_envelope_version_is_rejected` (future-version
+rejection). Latency target measured by `kdf_derivation_is_memory_hard`.
 
 ### F7 — High: "rotate by re-exporting" is false
 
@@ -480,13 +488,13 @@ ones.
 | 2 | F2, F3 | ✅ Row #7 re-scoped to the two D1 envelopes ([scope doc](phase-1-security-review-scope.md)); `jeliya-control` relabeled as scaffolding in its [module doc](../crates/jeliya-control/src/lib.rs) and the [gate verdict](phase-1-gate-verdict.md) row #6; D5b/D6 control-wire review gate defined in the [scope doc](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate). |
 | 3 | F1 | ✅ Review target pinned in the [scope doc](phase-1-security-review-scope.md#review-target-pin): source SHA `35b1c5e` + `Cargo.lock` hash + toolchain + ADR revisions + crypto dep versions + clean-worktree assertion + reopen rules. **Provisional** — Step 5 changes `identity.rs` and requires a re-pin before Step 7. |
 | 4 | F5, F7, F4, F8 | ✅ Doc overclaims fixed: row #2 relabeled OPEN (F5, opt-in not enforced); lifecycle corrected — re-export adds a backup, old material irrevocable (F7); daemon-auth/single-user boundary stated as honest boundary, `engine.rs` in pin (F4); zeroize recast as source/dep audit + secret-data-flow inventory (F8, full audit is Step 6). |
-| 5 | F6 | Encode authenticated KDF params per envelope version + migration fixtures + measured latency/memory targets. |
+| 5 | F6 | ✅ KDF params are now an immutable per-version param-set (`KdfParams` + `V1_KDF` + `kdf_params_for_version` dispatch); attribution corrected (OWASP minimum); migration fixtures + latency measurement added. `identity.rs` changed — pin needs re-record before Step 7. |
 | 6 | F10 | Build the evidence package (including the codified approval contract: independence, taxonomy, blocking threshold, risk-owner, required artifact, remediation ownership, re-review rules). |
 | 7 | all | Re-review against the pinned, settled target, by a reviewer who is not the implementer. |
 
 ## This session's scope
 
-This session has completed **Steps 0–4** of the remediation path:
+This session has completed **Steps 0–5** of the remediation path:
 
 - **Step 0** — findings recorded (this page).
 - **Step 1** — F9 ADR/code contradictions resolved; ADR #3 promoted to
@@ -498,9 +506,13 @@ This session has completed **Steps 0–4** of the remediation path:
   ADR revisions, crypto deps, reopen rules (provisional pending Steps 5–6).
 - **Step 4** — doc overclaims fixed: row #2 relabeled OPEN (F5); lifecycle
   corrected (F7); daemon-auth boundary stated (F4); zeroize recast (F8).
+- **Step 5** — KDF params encoded as immutable per-version param-set with
+  version dispatch (F6); OWASP attribution corrected; migration fixtures +
+  latency measurement added. `identity.rs` changed — pin needs re-record.
 
-**Steps 5–7** remain: KDF param encoding (F6), evidence package + approval
-contract (F10), and re-review by a different reviewer (Step 7).
+**Steps 6–7** remain: evidence package + codified approval contract (F10), and
+re-review by a different reviewer (Step 7). The pin must be re-recorded before
+Step 7 to reflect the `identity.rs` change from Step 5.
 
 The [Phase 1 gate verdict](phase-1-gate-verdict.md) is now consistent with this
 record: row #2 is OPEN (F5), row #7 is NOT APPROVED (remediation in progress),
