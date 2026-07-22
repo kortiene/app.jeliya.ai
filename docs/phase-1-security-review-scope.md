@@ -13,7 +13,7 @@ audience: ["security-reviewers", "maintainers"]
 
 # Phase 1 security review scope
 
-This is the review package for [Phase 1 gate row #7](phase-1-gate-verdict.md#7-independent-security-review-approves-the-wire-formats-and-the-key-lifecycle--not-approved-remediation-complete-awaiting-re-review):
+This is the review package for [Phase 1 gate row #7](phase-1-gate-verdict.md#7-independent-security-review-approves-the-wire-formats-and-the-key-lifecycle--approve-with-conditions-re-review-landed-2026-07-22):
 the security review of the wire formats and key lifecycle introduced by Phase 1.
 **Re-scoped 2026-07-22 per [finding F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve)**:
 row #7 covers the **two D1 envelopes only** — the at-rest `identity.secret`

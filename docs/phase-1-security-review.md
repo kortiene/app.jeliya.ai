@@ -1,9 +1,9 @@
 ---
 type: "Status Report"
 title: "Phase 1 security review — findings record"
-description: "Durable record of the Phase 1 security review: NOT APPROVED with 10 findings (3 blockers, 6 highs, 1 medium), the candidate under review, the severity taxonomy in use, and the ordered remediation path. This review was conducted by an analyst who was also the Phase-1 implementer, so it is NOT independent; final row #7 sign-off requires a different reviewer."
+description: "Durable record of the Phase 1 security review: NOT APPROVED with 10 findings (3 blockers, 6 highs, 1 medium), the ordered remediation path (Steps 0–6 complete), and the Step 7 re-review verdict of 2026-07-22: APPROVE-WITH-CONDITIONS against pin df28f6a by an independent review session (no blocker/high; 2 medium + 10 low/info conditions tracked)."
 tags: ["security", "review", "phase-1", "governance", "cryptography", "identity", "control-protocol"]
-timestamp: "2026-07-21T23:30:00Z"
+timestamp: "2026-07-22T15:07:00Z"
 status: "canonical"
 implementation_status: "not-applicable"
 verification_status: "partial"
@@ -497,7 +497,7 @@ ones.
 | 4 | F5, F7, F4, F8 | ✅ Doc overclaims fixed: row #2 relabeled OPEN (F5, opt-in not enforced); lifecycle corrected — re-export adds a backup, old material irrevocable (F7); daemon-auth/single-user boundary stated as honest boundary, `engine.rs` in pin (F4); zeroize recast as source/dep audit + secret-data-flow inventory (F8, full audit is Step 6). |
 | 5 | F6 | ✅ KDF params are now an immutable per-version param-set (`KdfParams` + `V1_KDF` + `kdf_params_for_version` dispatch); attribution corrected (OWASP minimum); migration fixtures + latency measurement added. `identity.rs` changed — pin needs re-record before Step 7. |
 | 6 | F10 | ✅ Evidence package built ([new doc](phase-1-evidence-package.md)): exact commands, expected results, CI links, test-to-finding mapping, threat-model cross-reference, gap list, accepted-risk register. Approval contract codified (F9 remaining). Zeroize dependency features enabled + KEK/phrase Zeroizing fixes (F8 remaining). Pin re-recorded (Cargo.lock hash updated). |
-| 7 | all | **Ready for re-review.** The pin is finalized (`df28f6a`); all artifacts are linked below. The re-review itself must be performed by a **different reviewer** (not the implementer/analyst who produced this record). See [Step 7 — re-review handoff](#step-7--re-review-handoff). |
+| 7 | all | ✅ **Re-review landed 2026-07-22: APPROVE-WITH-CONDITIONS** against pin `df28f6a` by an independent review session (not the implementer). No blocker or high; 2 medium + 10 low/info conditions tracked. See [Step 7 re-review verdict](#step-7-re-review-verdict-2026-07-22). |
 
 ## This session's scope
 
@@ -582,8 +582,95 @@ the reviewer's identity, date, and any conditions. The output updates the
 [gate verdict](phase-1-gate-verdict.md) row #7.
 
 The [Phase 1 gate verdict](phase-1-gate-verdict.md) is now consistent with this
-record: row #2 is OPEN (F5), row #7 is NOT APPROVED (remediation in progress),
-and the control surface is deferred to D5b/D6 (F2/F3).
+record: row #2 is OPEN (F5), row #7 is APPROVE-WITH-CONDITIONS (see the
+[Step 7 re-review verdict](#step-7-re-review-verdict-2026-07-22) below), and the
+control surface is deferred to D5b/D6 (F2/F3).
+
+## Step 7 re-review verdict (2026-07-22)
+
+**Verdict: APPROVE-WITH-CONDITIONS** — recorded against pin
+`df28f6a15c6c154c0759eea76b2c164c41c047bc` (`Cargo.lock`
+`dda192b5…`, verified; worktree clean; all per-surface and ADR last-change SHAs
+match the [pin table](phase-1-security-review-scope.md#review-target-pin)).
+
+**Reviewer identity and independence.** The re-review was executed 2026-07-22
+by an independent Claude review session (Fable 5) that did not author the code
+under review or the prior findings record, running a multi-agent adversarial
+review (six finder lenses, a 2–3-lens refutation panel per candidate finding,
+an empirical measurement harness, and a completeness critic). **Independence
+caveat, stated per the approval contract:** the reviewer is a different agent
+session from the implementer/analyst but the same model family; organizational
+independence is therefore limited, and a countersignature by the human
+risk-owner-of-record is recommended before the gate-level GO decision.
+
+**Evidence reproduced.** `cargo fmt` clean; `clippy` clean;
+`cargo test --locked --workspace` = **125 passed, 0 failed, 1 ignored**
+(matching the [evidence package](phase-1-evidence-package.md#reproduce-the-review));
+`check-docs` OK; `check-ui-i18n` OK. Local toolchain rustc 1.97.1 (the pin's
+transparency note; CI lanes 1.96.0 / 1.91.0 are the authoritative build path).
+
+**Measured evidence (closes the Step 7 RSS/heap ask).** An external probe
+harness pinned to the exact reviewed versions (`argon2 0.5.3`,
+`aes-gcm 0.10.3`, `zeroize 1.9.0`) measured: Argon2id `V1_KDF` peak-RSS delta
+**19.06 MiB** (≈ the configured m=19456 KiB — the memory parameter is real),
+derivation latency **~41 ms** (release, mean of 5); `cargo tree -e features`
+on the pinned tree confirms the `zeroize` feature resolves onto `argon2`,
+`aes-gcm`, and their cipher internals; a volatile-read probe observed
+`Zeroizing` buffers zeroed after drop (heap and stack; empirical, UB-caveated).
+
+**Findings: no blocker, no high.** 22 candidate findings entered adversarial
+verification; 10 were refuted (chiefly as restatements of already-disclosed
+accepted risks — the package's honest boundaries held); 12 were confirmed:
+2 medium, 6 low, 4 info. The two mediums are evidence-quality overclaims in
+the F6/F8 closure story, not code-security defects. Under the
+[codified blocking threshold](phase-1-evidence-package.md#codified-approval-contract),
+none blocks approval; all become conditions.
+
+**Conditions (tracked to closure; none blocking):**
+
+1. **(medium, from F8's inventory-completeness claim)** `SigningKey::to_seed()`
+   returns a plain `[u8; 32]` (verified in the pinned iroh-rooms source); the
+   raw root/device seeds are bound to unwiped locals at four call sites
+   (`recovery.rs` `export_bundle`, `identity.rs` `secret_file_contents`).
+   Wrap the returns in `Zeroizing` and add a raw-seed row to the
+   [scope doc's inventory](phase-1-security-review-scope.md#zeroization-recast-per-f8).
+2. **(medium, from F6's closure evidence)** `kdf_derivation_is_memory_hard`
+   asserts only ≥ 1 ms — ~40× below the measured latency and unable to detect
+   a silently ineffective memory parameter. Raise the floor (≥ 5 ms) or add an
+   RSS assertion, and reword the evidence row; the measured values above stand
+   as the evidence for this pin.
+3. **(low)** Zeroize hygiene: pre-size `from_phrase`'s `Zeroizing<String>`
+   (realloc fragments); wrap `test_restore`'s ephemeral password in
+   `Zeroizing`; make `PayloadV1`'s two secret fields wipe on the
+   serde-error path of `export_bundle`.
+4. **(low)** The identity envelope has no tamper/truncation test (the recovery
+   bundle has both); the evidence row "Covered (implicit in the parse)" cites
+   code, not a test. Add the two tests or relabel the row.
+5. **(low)** Append the missing CI rows to the evidence-package table:
+   PR #85 → run `29925118834`, PR #86 → run `29932744561` (both verified green).
+6. **(low/info)** Amend two stale ADR #3 passages: the Consequences bullet
+   claiming Argon2id parameters live in the on-disk format (they do not, in
+   either envelope), and the "does not certify" text still calling F6/F7 open.
+7. **(info, non-binding)** Unknown identity-envelope version maps to
+   `ErrorKind::Internal` (recovery uses `InvalidParams`); and at the next
+   envelope version bump, bind the header (version/salt/nonce) as AEAD
+   associated data — self-authenticating today, cheap defense-in-depth for v2.
+
+**Reopen note.** Conditions 1–4 change the pinned surfaces or the
+review-package documents; per the
+[reopen rules](phase-1-security-review-scope.md#reopens-review), landing them
+requires a re-pin and a scoped delta review of those diffs. This approval
+holds for the pinned tree as reviewed, with the conditions tracked.
+
+**Accepted risks reaffirmed** (unchanged owners and exit criteria, per the
+[accepted-risk register](phase-1-evidence-package.md#accepted-risks)): opt-in
+at-rest encryption (F5, row #2 stays OPEN), `jeliya-control` scaffolding (F3),
+irrevocable old recovery material (F7), the single-user-machine assumption
+(F4), and the env-var password.
+
+**Effect.** Gate-verdict row #7 is updated to APPROVE-WITH-CONDITIONS. The
+gate-level GO decision (given row #2 remains OPEN as an accepted risk) belongs
+to the risk-owner-of-record per the approval contract, not to this review.
 
 ## Operating rules
 
