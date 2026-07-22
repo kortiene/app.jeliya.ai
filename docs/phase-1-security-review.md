@@ -666,6 +666,22 @@ none blocks approval; all become conditions.
    envelope version bump, bind the header (version/salt/nonce) as AEAD
    associated data — self-authenticating today, cheap defense-in-depth for v2.
 
+**Conditions status (2026-07-22, post-GO).** Conditions 1–6 and condition 7's
+error-kind half were implemented the same day in the conditions PR:
+`Zeroizing` wraps at the four `to_seed()` call sites + a raw-seed inventory
+row with the residual stack-temporary limitation stated (1); the latency-test
+floor raised to 5 ms with the committed probe harness
+[`tools/step7-kdf-probe`](../tools/step7-kdf-probe/README.md) as the memory
+evidence (2); `from_phrase` pre-sizing, `Zeroizing` ephemeral password, and
+the export-side wipe-before-error fix (3); identity-envelope
+truncation/tamper tests + corrected evidence rows (4); the PR #85/#86 CI rows
+(5); the two stale ADR #3 passages amended (6); unknown-envelope-version now
+`InvalidParams` (7 — its AAD half remains a v2 design note). **Pending: the
+re-pin and a scoped delta review of the conditions diff** (see the reopen note
+below and the
+[pin status update](phase-1-security-review-scope.md#pin-status-finalized-for-step-7-re-review));
+the conditions implementer cannot self-certify that delta.
+
 **Reopen note.** Landing ANY of the conditions touches the pin's
 [reopen set](phase-1-security-review-scope.md#reopens-review): conditions
 1–3 change the pinned code surfaces (`identity.rs` / `recovery.rs` or their

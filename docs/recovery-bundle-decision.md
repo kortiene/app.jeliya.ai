@@ -184,9 +184,13 @@ All three questions are now resolved by the 2026-07-21 reconciliation:
 - The other D1 gate ("native production mode no longer leaves the root secret
   plaintext") is the keystore abstraction's job; this ADR names the recovery
   bundle but the two land together in D1.
-- Adding Argon2id parameters and the AEAD nonce to the on-disk format means the
-  format is versioned from day one; a later change is a migration, not a
-  silent break.
+- The envelope carries a version byte and stores its AEAD nonce, and the
+  sealed payload is itself versioned, so the format is versioned from day one;
+  a later change is a migration, not a silent break. *(Corrected per Step 7
+  verdict condition 6: no Argon2id parameters are stored in the bundle — the
+  Phase-1 bundle has no password wrap (Amendment B) — and the identity
+  envelope maps its version byte to an immutable KDF param-set rather than
+  storing parameters inline.)*
 
 ## Amendments A and B (2026-07-21)
 
@@ -228,11 +232,14 @@ deferred to the D5b/D6 review gate (see
   exporting a bundle or validating a restore. This is the same opt-in-not-
   enforced pattern as [finding F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced)
   and is tracked there.
-- It does not resolve [finding F6](phase-1-security-review.md#f6--high-kdf-versioningattribution-is-inaccurate)
+- It does not itself resolve [finding F6](phase-1-security-review.md#f6--high-kdf-versioningattribution-is-inaccurate)
   (KDF param attribution and migration fixtures) or
   [finding F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)
-  (re-export does not rotate). Both are open and tracked under the
-  [remediation path](phase-1-security-review.md#remediation-path).
+  (re-export does not rotate). *(Status corrected per Step 7 verdict
+  condition 6: both were resolved 2026-07-22 by the
+  [remediation path](phase-1-security-review.md#remediation-path) — F6 via the
+  immutable per-version KDF param-set in `identity.rs`, F7 via the corrected
+  lifecycle text in this ADR and the scope doc.)*
 
 ## Citations
 

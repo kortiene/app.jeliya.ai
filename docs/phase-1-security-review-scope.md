@@ -229,9 +229,11 @@ security property (not just the happy path).
 |---|---|---|---|
 | KEK (Argon2id output, identity.rs) | `derive_kek` returns `Zeroizing<[u8; 32]>` (Step 6 fix) | Wiped on drop at every call site | **Resolved (Step 6)** — return type is `Zeroizing`; callers receive a wiping wrapper |
 | Recovery key (`RecoveryKey`) | `RecoveryKey([u8; 32])` with `Drop` impl that calls `zeroize()` | Wiped on drop | Appears correct; verify no intermediate copies |
-| Password (identity.rs) | `password: &str` borrowed from a `String` the caller owns | The env-var `String` is plain; no wipe | Accepted: the env var outlives the process anyway |
-| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` builds `stripped` as `Zeroizing<String>` (Step 6 fix) | Wiped on drop | **Resolved (Step 6)** — `stripped` is `Zeroizing<String>` |
-| Seed hex intermediates | `PayloadV1.identity_secret` / `device_secret` as `String` in `open_bundle` | Moved to `Zeroizing<String>` after parse, wiped on drop | Correct (fixed in the self-review pass) |
+| Raw seeds from `to_seed()` (identity.rs `secret_file_contents`, recovery.rs `export_bundle`) | iroh-rooms `SigningKey::to_seed()` returns a plain `[u8; 32]` by value | Wrapped in `Zeroizing` at all four call sites in the pinned surfaces (Step 7 verdict condition 1) | **Residual**: the by-value return can leave transient stack temporaries (full fix is an upstream self-wiping return type). Two further call sites in `supervisor.rs` (lines ~854/~1607, device-key handoff to the session layer) are outside row #7's pinned surfaces — noted by the conditions delta review for the next zeroize pass |
+| Password (identity.rs) | `password: &str` borrowed from a `String` the caller owns | The env-var `String` is plain; no wipe | Accepted: the env var outlives the process anyway (in the [accepted-risk register](phase-1-evidence-package.md#accepted-risks)) |
+| Ephemeral test-restore password (recovery.rs `test_restore`) | `Zeroizing<String>` (Step 7 verdict condition 3) | Wiped on drop | — |
+| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` builds `stripped` as `Zeroizing<String>` (Step 6 fix) | Wiped on drop; pre-sized with `with_capacity` so growth cannot leave unwiped realloc copies (Step 7 verdict condition 3) | **Resolved (Step 6 + Step 7 condition 3)** |
+| Seed hex intermediates | `PayloadV1.identity_secret` / `device_secret` as `String` in `open_bundle` and `export_bundle` | Import side: moved to `Zeroizing<String>` after parse. Export side: wiped before a serialization error can propagate (Step 7 verdict condition 3) | Correct |
 | Plaintext JSON bytes | `plaintext: Vec<u8>` in `encrypt_secret_bytes` / `open_bundle` / `load_with` | Zeroized after use | Correct |
 
 ### Dependency feature audit (Step 6)
@@ -482,6 +484,18 @@ against `df28f6a`. A reviewer executing the Step 7 re-review should:
 
 If any value does not match, the pin is stale and the review cannot proceed
 until a new pin is recorded.
+
+> **Pin status update (2026-07-22, post-GO).** The
+> [Step 7 verdict's conditions](phase-1-security-review.md#step-7-re-review-verdict-2026-07-22)
+> were implemented after the GO was recorded; that work changes `identity.rs`,
+> `recovery.rs`, their tests, this document's zeroize inventory, the evidence
+> package, the findings record (conditions-status note), and ADR #3 — all in
+> the reopen set. **The `df28f6a` approval
+> remains valid for `df28f6a`.** Extending it to the conditions tree requires
+> a re-pin (new source SHA after the conditions PR merges; `Cargo.lock` and
+> toolchain unchanged) and a **scoped delta review** of the conditions diff,
+> by a reviewer who is not the conditions implementer, per the
+> [re-review rules](phase-1-evidence-package.md#re-review-rules).
 
 ## Citations
 
