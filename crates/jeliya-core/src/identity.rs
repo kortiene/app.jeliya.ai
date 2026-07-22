@@ -105,8 +105,13 @@ fn password_from_env() -> Option<String> {
 }
 
 /// Derive a 256-bit AEAD key from `password` and `salt` via Argon2id under the
-/// given immutable `params` (dispatched by envelope version).
-fn derive_kek(password: &str, salt: &[u8], params: &KdfParams) -> CoreResult<[u8; AEAD_KEY_LEN]> {
+/// given immutable `params` (dispatched by envelope version). Returns a
+/// `Zeroizing` wrapper so the key is wiped on drop at every call site.
+fn derive_kek(
+    password: &str,
+    salt: &[u8],
+    params: &KdfParams,
+) -> CoreResult<Zeroizing<[u8; AEAD_KEY_LEN]>> {
     let argon_params = Params::new(
         params.m_cost,
         params.t_cost,
@@ -119,7 +124,7 @@ fn derive_kek(password: &str, salt: &[u8], params: &KdfParams) -> CoreResult<[u8
     argon
         .hash_password_into(password.as_bytes(), salt, key.as_mut_slice())
         .map_err(|e| CoreError::internal(format!("Argon2 derivation failed: {e}")))?;
-    Ok(*key)
+    Ok(key)
 }
 
 /// Seal `plaintext` (the JSON secret body) into `version || salt || nonce || ct+tag`.
@@ -134,7 +139,7 @@ fn encrypt_secret_bytes(plaintext: &[u8], password: &str) -> CoreResult<Vec<u8>>
         let params = kdf_params_for_version(ENCRYPTED_VERSION)?;
         derive_kek(password, &salt, params)?
     };
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.as_ref()));
     let ciphertext = cipher
         .encrypt(Nonce::from_slice(&nonce), plaintext)
         .map_err(|_| CoreError::internal("could not encrypt identity.secret"))?;
@@ -161,7 +166,7 @@ fn decrypt_secret_bytes(blob: &[u8], password: &str) -> CoreResult<Vec<u8>> {
     let nonce = Nonce::from_slice(&blob[1 + ARGON_SALT_LEN..1 + ARGON_SALT_LEN + AEAD_NONCE_LEN]);
     let ciphertext = &blob[header..];
     let key = derive_kek(password, salt, params)?;
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.as_ref()));
     cipher.decrypt(nonce, ciphertext).map_err(|_| {
         CoreError::invalid(
             "could not decrypt identity.secret (wrong password, or the file is corrupt)",
@@ -758,7 +763,7 @@ mod tests {
         let salt = [0xABu8; super::ARGON_SALT_LEN];
         let nonce = [0xCDu8; super::AEAD_NONCE_LEN];
         let key = super::derive_kek(password, &salt, &super::V1_KDF).unwrap();
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.as_ref()));
         let ciphertext = cipher
             .encrypt(Nonce::from_slice(&nonce), &plaintext[..])
             .unwrap();

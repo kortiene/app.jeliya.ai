@@ -75,12 +75,14 @@ impl RecoveryKey {
     /// Parse a grouped-hex phrase (case-insensitive; spaces/dashes/colons/underscores
     /// optional) back into a recovery key.
     pub fn from_phrase(phrase: &str) -> CoreResult<Self> {
-        let stripped: String = phrase
-            .chars()
-            .filter(|c| !matches!(c, ' ' | '-' | '_' | ':'))
-            .map(|c| c.to_ascii_lowercase())
-            .collect();
-        let mut raw = hex::decode(&stripped)
+        let mut stripped = Zeroizing::new(String::new());
+        stripped.extend(
+            phrase
+                .chars()
+                .filter(|c| !matches!(c, ' ' | '-' | '_' | ':'))
+                .map(|c| c.to_ascii_lowercase()),
+        );
+        let mut raw = hex::decode(stripped.as_str())
             .map_err(|_| CoreError::invalid("recovery phrase is not valid hex"))?;
         let key = if let Ok(seed) = <[u8; KEY_LEN]>::try_from(raw.as_slice()) {
             seed

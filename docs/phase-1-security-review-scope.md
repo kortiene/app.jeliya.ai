@@ -222,30 +222,27 @@ security property (not just the happy path).
 > The full audit (with measured evidence) is [Step 6](phase-1-security-review.md#remediation-path)
 > work; this section records what is known now.
 
-### Known zeroize gaps (source audit)
+### Known zeroize gaps (source audit — Step 6 fixes applied)
 
 | Secret | Where it lives in memory | Current handling | Gap |
 |---|---|---|---|
-| KEK (Argon2id output, identity.rs) | `derive_kek` returns `[u8; 32]` by value from a `Zeroizing` wrapper | The `Zeroizing` wrapper wipes its internal copy on drop; the returned array is a plain `[u8; 32]` that the caller (`encrypt_secret_bytes` / `decrypt_secret_bytes`) stores on the stack un-zeroized | The return-by-value escapes `Zeroizing`; the caller's copy is not wiped |
+| KEK (Argon2id output, identity.rs) | `derive_kek` returns `Zeroizing<[u8; 32]>` (Step 6 fix) | Wiped on drop at every call site | **Resolved (Step 6)** — return type is `Zeroizing`; callers receive a wiping wrapper |
 | Recovery key (`RecoveryKey`) | `RecoveryKey([u8; 32])` with `Drop` impl that calls `zeroize()` | Wiped on drop | Appears correct; verify no intermediate copies |
-| Password (identity.rs) | `password: &str` borrowed from a `String` the caller owns (`password_from_env` returns `Option<String>`) | The `String` from `std::env::var` is plain; the `&str` borrow offers no wipe | The env-var `String` is not zeroized after use |
-| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` builds a normalized `stripped: String` (lowercased, separators removed) containing the full key hex, then calls `hex::decode` | `raw: Vec<u8>` from `hex::decode` is zeroized on error; on success the key moves into `RecoveryKey` (wipes on drop) | **`stripped: String` is never zeroized** on either success or error — a heap-resident copy of the recovery key hex outlives the call |
+| Password (identity.rs) | `password: &str` borrowed from a `String` the caller owns | The env-var `String` is plain; no wipe | Accepted: the env var outlives the process anyway |
+| Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` builds `stripped` as `Zeroizing<String>` (Step 6 fix) | Wiped on drop | **Resolved (Step 6)** — `stripped` is `Zeroizing<String>` |
 | Seed hex intermediates | `PayloadV1.identity_secret` / `device_secret` as `String` in `open_bundle` | Moved to `Zeroizing<String>` after parse, wiped on drop | Correct (fixed in the self-review pass) |
 | Plaintext JSON bytes | `plaintext: Vec<u8>` in `encrypt_secret_bytes` / `open_bundle` / `load_with` | Zeroized after use | Correct |
 
-### Dependency feature audit (pending Step 6)
+### Dependency feature audit (Step 6)
 
-The `zeroize` crate is a direct dependency (`zeroize = "1"` → `1.9.0`). However,
-the **crypto crates that handle secret inputs** must have their `zeroize`
-cargo features enabled for those features to take effect:
-
-| Crate | Version | `zeroize` feature enabled? | Status |
+| Crate | Version | `zeroize` feature | Status |
 |---|---|---|---|
-| `aes-gcm` | `0.10.3` | **To verify** — `aes-gcm` exposes a `zeroize` feature that wipes the AES round keys on drop | Pending Step 6 |
-| `argon2` | `0.5.3` | **To verify** — `argon2` exposes a `zeroize` feature that wipes internal state | Pending Step 6 |
+| `aes-gcm` | `0.10.3` | `features = ["zeroize"]` in `Cargo.toml` | **Enabled (Step 6)** — AES round keys wiped on drop |
+| `argon2` | `0.5.3` | `features = ["zeroize"]` in `Cargo.toml` | **Enabled (Step 6)** — internal Argon2 state wiped on drop |
 
-A reviewer should not treat zeroization as proven until this audit closes
-(Step 6) and the measured evidence (heap inspection or equivalent) is recorded.
+A reviewer should still verify at Step 7 that the enabled features produce
+measurable heap-wiping (RSS/heap inspection), not just that the cargo features
+are declared.
 
 ## Honest boundaries the review should confirm are communicated
 
@@ -367,12 +364,12 @@ tamper/version/wrong-key fail-closed.
 > a later change to any field in the "reopens review" set requires a re-review
 > before the Phase 1 gate can close.
 
-### Pin values (recorded 2026-07-22 against `35b1c5e`)
+### Pin values (recorded 2026-07-22; re-recorded Steps 3–6)
 
 | Field | Value |
 |---|---|
-| Source SHA | `35b1c5e60b79a94934c2e3263b60401e76071fc9` (`main`; PR #81) |
-| `Cargo.lock` SHA-256 | `f0baf2f1aa821ff2014a9cc4d391867630045e993a30f9332e7c940e8423c516` |
+| Source SHA | `9f905d3…` (Step 5 merge; Steps 5–6 changes pending — finalize at Step 7) |
+| `Cargo.lock` SHA-256 | `dda192b513195ca512587d01609aeb5d89447001fc04549aca538a3d0c31b223` (Step 6: `zeroize` features enabled on `aes-gcm`/`argon2`) |
 | Rust toolchain (CI + release) | `1.91.0` (MSRV; pinned via `dtolnay/rust-toolchain` in `ci.yml` and `release.yml`) |
 | Node (CI + release) | `22.22.3` (pinned in `ci.yml` and `release.yml` `node-version`) |
 | Local builder (this pin was recorded with) | `rustc 1.97.1`, Node `v24.18.0` — not the release toolchain; recorded for transparency only |
