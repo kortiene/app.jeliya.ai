@@ -301,9 +301,9 @@ tamper/version/wrong-key fail-closed.
 |---|---|
 | Source SHA | `35b1c5e60b79a94934c2e3263b60401e76071fc9` (`main`; PR #81) |
 | `Cargo.lock` SHA-256 | `f0baf2f1aa821ff2014a9cc4d391867630045e993a30f9332e7c940e8423c516` |
-| Rust toolchain (build) | `rustc 1.97.1 (8bab26f4f 2026-07-14)` |
-| Rust MSRV (`Cargo.toml`) | `1.91` |
-| Node | `v24.18.0` |
+| Rust toolchain (CI + release) | `1.91.0` (MSRV; pinned via `dtolnay/rust-toolchain` in `ci.yml` and `release.yml`) |
+| Node (CI + release) | `22.22.3` (pinned in `ci.yml` and `release.yml` `node-version`) |
+| Local builder (this pin was recorded with) | `rustc 1.97.1`, Node `v24.18.0` — not the release toolchain; recorded for transparency only |
 | Worktree at pin time | clean (`git status --porcelain` empty) |
 | Pin date (UTC) | 2026-07-22 |
 
@@ -324,14 +324,27 @@ tamper/version/wrong-key fail-closed.
 
 ### Crypto dependency versions (from `Cargo.lock`)
 
-| Crate | Version |
-|---|---|
-| `aes-gcm` | `0.10.3` |
-| `argon2` | `0.5.3` |
-| `blake3` | `1.8.5` |
-| `zeroize` | `1.9.0` |
-| `getrandom` | `0.2.17` |
-| `hex` | `0.4.3` |
+Direct dependencies of `crates/jeliya-core` (the reviewed surfaces):
+
+| Crate | Direct dep (`Cargo.toml`) | Resolved (`Cargo.lock`) |
+|---|---|---|
+| `aes-gcm` | `"0.10"` | `0.10.3` |
+| `argon2` | `"0.5"` | `0.5.3` |
+| `zeroize` | `"1"` | `1.9.0` |
+| `getrandom` | `"0.4"` | `0.4.3` |
+| `hex` | `"0.4"` | `0.4.3` |
+
+> **`getrandom` disambiguation.** `Cargo.lock` contains three `getrandom`
+> entries: `0.2.17` (transitive, from `ring`/other), `0.3.4` (transitive), and
+> `0.4.3` (the direct dependency `crates/jeliya-core` uses for CSPRNG fills in
+> `identity.rs` and `recovery.rs`). A reviewer validating the RNG should check
+> `0.4.3`, not the transitive copies.
+
+Used by `crates/jeliya-control` (deferred to D5b/D6, not Phase 1 row #7):
+
+| Crate | Resolved (`Cargo.lock`) | Used for |
+|---|---|---|
+| `blake3` | `1.8.5` | SAS derivation in `jeliya-control` (scaffolding; D5b/D6 scope) |
 
 ### Reopens review
 
@@ -340,24 +353,37 @@ re-review (record a new pin before the Step 7 re-review):
 
 - A change to `crates/jeliya-core/src/identity.rs` or its tests.
 - A change to `crates/jeliya-core/src/recovery.rs` or its tests.
+- A change to `crates/jeliya-core/src/engine.rs` (the authority path; recorded
+  as a reviewed surface for [F4](phase-1-security-review.md#f4--high-scope-omits-the-actual-authority-path)).
+  Whether `engine.rs` is fully in scope depends on Step 4; until then a change
+  to it reopens review conservatively.
 - A change to ADR #3 ([recovery-bundle-decision.md](recovery-bundle-decision.md))
   or ADR #2 ([companion-control-protocol-decision.md](companion-control-protocol-decision.md)).
+- A change to a **review-package document** — this scope doc
+  ([phase-1-security-review-scope.md](phase-1-security-review-scope.md)), the
+  findings record ([phase-1-security-review.md](phase-1-security-review.md)),
+  or the gate verdict ([phase-1-gate-verdict.md](phase-1-gate-verdict.md)) —
+  that changes the surfaces under review, the evidence list, the reopen rules,
+  or the pin itself. (Editorial fixes that do not change meaning — typos, link
+  repairs — do not reopen.)
 - A version change in `Cargo.lock` to any crypto dependency listed above
-  (`aes-gcm`, `argon2`, `blake3`, `zeroize`, `getrandom`, `hex`).
+  (`aes-gcm`, `argon2`, `zeroize`, `getrandom`, `hex`; and `blake3` for the
+  D5b/D6 gate).
 - A change to the KDF parameters (`ARGON_M_COST`, `ARGON_T_COST`,
   `ARGON_P_COST`) or the envelope format constants (`ENCRYPTED_VERSION`,
   `BUNDLE_VERSION`, `PAYLOAD_VERSION`, `ARGON_SALT_LEN`, `AEAD_NONCE_LEN`).
 - A change to the Rust toolchain that affects codegen of the reviewed files
-  (a rustc version bump; MSRV stays `1.91`).
+  (a rustc version bump in `ci.yml`/`release.yml`; MSRV stays `1.91`).
 
 ### Does not reopen review
 
-- Documentation-only changes to docs not listed as normative ADRs above.
+- Documentation-only changes to docs **not** listed above (i.e., not the
+  normative ADRs and not the review-package documents).
 - UI changes (`ui/`).
 - Changes to other crates (`jeliyad`, `jeliya-control`, `jeliya-core/src/`
-  files other than `identity.rs` / `recovery.rs` / their tests).
-- CI/workflow changes that do not affect the build outputs of the reviewed
-  files.
+  files other than `identity.rs`, `recovery.rs`, `engine.rs`, or their tests).
+- CI/workflow changes that do not affect the toolchain versions or build
+  outputs of the reviewed files.
 - The remediation steps themselves (Steps 3–6) update this pin before the
   Step 7 re-review; those updates are expected, not reopenings.
 
