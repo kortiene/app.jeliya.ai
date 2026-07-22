@@ -1,23 +1,40 @@
-//! Phase 1 D5 — the companion control protocol core (ADR #2): the pairing
-//! transcript + short authentication string, the non-extractable bounded-
-//! lifetime browser control key record, the default-deny scope model
-//! (amendment A1), and the scope/replay/expiry/revocation gateway every scoped
-//! RPC crosses.
+//! Phase 1 D5a — scaffolding toward ADR #2 (the companion control protocol):
+//! the pairing transcript + short authentication string, the bounded-lifetime
+//! browser control key record, the default-deny scope model (amendment A1),
+//! and the scope/replay/expiry/revocation gateway every scoped companion RPC
+//! is intended to cross once the transport exists.
 //!
-//! This crate is the **host-independent, security-reviewable core**. The Noise
-//! wire transport, the browser (Wasm) side, and the daemon wiring are Phase 2
-//! (deliverable D5b); Phase 1 delivers the state machine and the four gate
-//! assertions (`replay`, `wrong-SAS`, `expired-key`, `revoked-key` fail closed)
-//! that the [Phase 1 implementation plan — D5](../../docs/phase-1-plan.md) names.
+//! **This crate is scaffolding, not a security boundary.** It provides the
+//! types and checks a correct host *could* enforce, but nothing in this crate
+//! forces a host to do so: [`ControlGateway::install`] accepts any
+//! [`ControlKeyRecord`] the caller constructs (bypassing SAS, lifetime, and
+//! pairing); [`ControlKeyRecord::new`](ControlKeyRecord::new) accepts any
+//! `Duration` (including `Duration::MAX`); [`ControlGateway::authorize`]
+//! trusts caller-supplied `now_ms`; there is no per-key rate limiting; and
+//! [`Scope::RoomRead`] / [`Scope::MessageSend`] are global, not the per-room
+//! "selected-room" binding ADR #2 decision 6 names. The
+//! [Phase 1 security review](../../docs/phase-1-security-review.md) (finding F3)
+//! recorded these gaps. The crate's conformance to ADR #2 is checked at the
+//! **D5b/D6 review gate**, not at the Phase 1 gate.
 //!
-//! ## Threat model
+//! The Noise wire transport, the browser (Wasm) side, and the daemon wiring
+//! that would bind these checks to a real session are Phase 2 (deliverable
+//! D5b). Phase 1 delivers this state machine and the four gate assertions
+//! (`replay`, `wrong-SAS`, `expired-key`, `revoked-key` fail closed) that the
+//! [Phase 1 implementation plan — D5](../../docs/phase-1-plan.md) names, as
+//! unit-test properties of the state machine — not as enforced properties of
+//! a running system.
+//!
+//! ## Threat model (target)
 //!
 //! A browser reaches a local Jeliya companion through an authenticated relay and
 //! asks it to act with the root identity's authority. A compromised origin must
 //! not become a permanent, off-origin grant. ADR #2 / amendment A1 therefore
 //! require: a non-extractable browser control key; a bounded maximum key
 //! lifetime expressed as a duration; default-deny scopes; per-RPC replay
-//! defense; and immediate revocation. This crate enforces exactly those.
+//! defense; and immediate revocation. This crate implements the data structures
+//! and logic toward that target; the D5b daemon wiring is what will enforce
+//! them at runtime.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
