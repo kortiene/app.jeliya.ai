@@ -766,7 +766,7 @@ Carried notes (no action this gate): the two `to_seed()` call sites in
 tracked for the next zeroize pass / D5b review); the env-var password
 register row is governance recording of an already-countersigned risk, not
 new scope. The pin is
-[re-recorded at `d610076`](phase-1-security-review-scope.md#review-target-pin).
+[re-recorded at the final pin `dcd940e`](phase-1-security-review-scope.md#review-target-pin).
 
 **Reopen note.** Landing ANY of the conditions touches the pin's
 [reopen set](phase-1-security-review-scope.md#reopens-review): conditions
