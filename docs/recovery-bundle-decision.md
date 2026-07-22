@@ -13,9 +13,14 @@ audience: ["contributors", "maintainers", "security-reviewers"]
 
 # Recovery bundle format, custody, and optional opaque hosting — decision record
 
-**Status: ADOPTED for Phase 1 (decisions 1, 2-amended, 4, 5, 6, 7, 8); Phase 2
-remains a target (decision 3's password wrap and the wider payload named in
-decision 5).** This record is ADR #3 from the
+**Status: ADOPTED for Phase 1 (decisions 1, 2-amended, 4, 5, 6, 7).** Decision 8
+(test_restore completes setup) is **not yet wired**: the `recovery.test_restore`
+RPC exists ([`engine.rs` dispatch](../crates/jeliya-core/src/engine.rs)), but
+the shipped onboarding flow in
+[`ui/src/components/Onboarding.tsx`](../ui/src/components/Onboarding.tsx) calls
+only `identity.create` and advances, so normal setup completes without
+exporting a bundle or validating a restore. Decisions 3 (password wrap) and the
+wider payload (decision 5) remain Phase 2. This record is ADR #3 from the
 [production deployment decision](production-deployment-decision.md#decisions-deferred-to-their-own-records).
 It was reconciled with the shipped Phase-1 implementation in
 [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs)
@@ -27,7 +32,7 @@ conditions ("recovery succeeds from a fresh install on every supported OS";
 "native production mode no longer leaves the root secret plaintext") still
 require their own evidence; this record being adopted does not certify the
 [Phase 1 verdict](phase-1-gate-verdict.md) rows, which remain under
-[independent security review](phase-1-security-review.md).
+[Phase 1 security review](phase-1-security-review.md).
 
 The decision is shaped by the
 [Production deployment architecture — Recovery](production-deployment.md#recovery)
@@ -50,7 +55,7 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
    [`RecoveryKey::to_phrase`](../crates/jeliya-core/src/recovery.rs). Hex needs
    no new dependency, is unambiguous (no `0`/`O` or `1`/`I` confusion), and
    matches the surfaces the UI already ships. *(Amendment A, 2026-07-21: the
-   original proposal named grouped-base32. The independent security review
+   original proposal named grouped-base32. The Phase 1 security review
    [finding F9](phase-1-security-review.md#f9--blocker-approval-contract-and-normative-inputs-undefined)
    recorded the base32-vs-hex divergence between this ADR and the shipped code;
    the risk owner chose to amend the ADR to hex rather than change the code,
@@ -202,6 +207,12 @@ deferred to the D5b/D6 review gate (see
 - It does not adopt the wider payload (room membership index,
   device-authorization state, relay config) named in decision 5; that is
   Phase-2 work.
+- It does not certify decision 8 (a successful test restore completes setup).
+  The `recovery.test_restore` RPC exists and its tests pass, but the shipped
+  onboarding flow calls only `identity.create`; normal setup completes without
+  exporting a bundle or validating a restore. This is the same opt-in-not-
+  enforced pattern as [finding F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced)
+  and is tracked there.
 - It does not resolve [finding F6](phase-1-security-review.md#f6--high-kdf-versioningattribution-is-inaccurate)
   (KDF param attribution and migration fixtures) or
   [finding F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)

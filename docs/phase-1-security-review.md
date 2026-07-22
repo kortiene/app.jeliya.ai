@@ -1,9 +1,9 @@
 ---
 type: "Status Report"
-title: "Phase 1 independent security review — findings record"
-description: "Durable record of the independent Phase 1 security review: NOT APPROVED with 10 findings (3 blockers, 6 highs, 1 medium), the candidate under review, the severity taxonomy in use, and the ordered remediation path. Authoritative input that supersedes the prior implementer self-review."
+title: "Phase 1 security review — findings record"
+description: "Durable record of the Phase 1 security review: NOT APPROVED with 10 findings (3 blockers, 6 highs, 1 medium), the candidate under review, the severity taxonomy in use, and the ordered remediation path. This review was conducted by an analyst who was also the Phase-1 implementer, so it is NOT independent; final row #7 sign-off requires a different reviewer."
 tags: ["security", "review", "phase-1", "governance", "cryptography", "identity", "control-protocol"]
-timestamp: "2026-07-21T23:10:00Z"
+timestamp: "2026-07-21T23:30:00Z"
 status: "canonical"
 implementation_status: "not-applicable"
 verification_status: "partial"
@@ -11,16 +11,22 @@ release_status: "unreleased"
 audience: ["security-reviewers", "maintainers", "release-engineers", "contributors"]
 ---
 
-# Phase 1 independent security review — findings record
+# Phase 1 security review — findings record
 
-**Verdict: NOT APPROVED — 2026-07-21.** An independent security review of
-Phase 1 returned **10 findings: 3 blockers, 6 highs, 1 medium.** This record is
-the durable, in-repo copy of those findings so they survive outside any chat
-transcript. It is the **authoritative input** for the Phase 1 remediation; it
-supersedes the prior implementer self-review, which had recommended
-APPROVE-WITH-CONDITIONS. The implementer and the prior analyst were the same
-agent, so final row #7 sign-off still requires a different reviewer (especially
-for the cryptographic choices).
+**Verdict: NOT APPROVED — 2026-07-21.** A security review of Phase 1 returned
+**10 findings: 3 blockers, 6 highs, 1 medium.** This record is the durable,
+in-repo copy of those findings so they survive outside any chat transcript. It
+is the **authoritative input** for the Phase 1 remediation; it supersedes the
+prior implementer self-review, which had recommended APPROVE-WITH-CONDITIONS.
+
+**This review is NOT independent.** The analyst who produced these findings was
+also the Phase-1 implementer (the same agent that wrote the code under review).
+The [Phase 1 gate](phase-1-gate-verdict.md) row #7 is named "independent
+security review approves the wire formats and key lifecycle" — that is the
+*target*, not a property of this artifact. Final row #7 sign-off requires a
+**different reviewer**, especially for the cryptographic choices; do not treat
+this record as satisfying the independence requirement. This page exists so the
+findings are durable and reviewable, not so they self-certify.
 
 This page records the findings and the remediation path. It does not assert any
 remediation is complete: each finding's "Status" line tracks where the work
@@ -375,12 +381,14 @@ ownership, re-review rules).
 
 #### Resolutions (2026-07-21)
 
-The risk owner applied the following
-dispositions; the ADR/code contradictions are closed, but the approval
-contract itself (reviewer independence, severity taxonomy, blocking
-threshold, risk-owner, required artifact, remediation ownership, re-review
-rules) remains to be codified — that work is part of [Step 6](#remediation-path)
-(the evidence package) and the re-review contract at Step 7.
+The dispositions below were applied 2026-07-21 by **the user acting as
+risk-owner-of-record** (the human decision-maker who answered the divergence
+questions). The formal risk-owner role, attribution, and approval artifact are
+themselves part of the **open** F9 approval contract and are codified at
+[Step 6](#remediation-path); until then these dispositions are **provisional**
+pending that contract, and an auditor should not read them as a closed
+approval. The ADR/code contradictions the dispositions resolve are real and
+durable; the contract under which they were authorized is not.
 
 | Div | Subject | Disposition | Effect |
 |---|---|---|---|
@@ -477,6 +485,6 @@ itself is corrected as part of Step 4.
 - [Phase 1 security review scope](phase-1-security-review-scope.md) — the package this review was run against (itself revised by Step 3).
 - [Phase 1 gate verdict](phase-1-gate-verdict.md) — row #7 is the open condition; its current "rows #1–#6 PASS" framing is corrected in Step 4.
 - [Companion control protocol decision (ADR #2)](companion-control-protocol-decision.md) — `proposal` / `not yet adopted`; reconciled in Step 1.
-- [Recovery bundle decision (ADR #3)](recovery-bundle-decision.md) — `proposal` / `not yet adopted`; reconciled in Step 1.
+- [Recovery bundle decision (ADR #3)](recovery-bundle-decision.md) — `canonical` / `implementation_status: partial` (promoted from `proposal` in Step 1); Phase-1 slices adopted, decision 8 (test_restore in setup) not yet wired, password wrap + wider payload are Phase 2.
 - [Security and threat model](security-threat-model.md) — the daemon-auth/single-user assumption F4 references and the residual-risk list F10 maps to.
 - [Production deployment decision — amendment A1](production-deployment-decision.md#a1-bound-the-companions-authority-to-what-the-browser-may-name) — the browser-authority boundary binding the control protocol.
