@@ -43,7 +43,7 @@ archive/sidecar mismatch — not artifact authenticity.
 
 The certifying [direct](evidence/v0.6.0/direct.json) (run `098c4979`) and
 [relay](evidence/v0.6.0/relay.json) (run `8bda01e6`) schema 2 manifests both
-bind the current candidate `922f620…` + Iroh Rooms pin `a5d98b70…`, exercised
+bind the pre-Phase-1 candidate `922f620…` + Iroh Rooms pin `a5d98b70…`, exercised
 from a linux arm64 operator (AS11426) over `demo1`/`demo2` (AS11426 + AS24940);
 the remote role ran the `x86_64-unknown-linux-musl` daemon, and the relay run's
 verifier source-built and self-attested on all three hosts. macOS-specific

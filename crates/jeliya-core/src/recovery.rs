@@ -204,19 +204,29 @@ pub fn open_bundle(bundle: &[u8], key: &RecoveryKey) -> CoreResult<(Profile, Sec
         )
         .with_hint("check the recovery phrase, or obtain a fresh bundle")
     })?;
-    // The decrypted bytes hold both signing seeds as hex; zeroize them as soon
-    // as the payload is parsed (defense-in-depth alongside the SigningKey zeroize).
-    let payload: PayloadV1 = serde_json::from_slice(&plaintext)
-        .map_err(|_| CoreError::invalid("the recovery payload is malformed"))?;
+    // Parse the payload, zeroizing the decrypted plaintext on every path — a
+    // malformed payload's `?` would otherwise skip the wipe.
+    let mut payload: PayloadV1 = match serde_json::from_slice(&plaintext) {
+        Ok(p) => p,
+        Err(_) => {
+            plaintext.zeroize();
+            return Err(CoreError::invalid("the recovery payload is malformed"));
+        }
+    };
     plaintext.zeroize();
+    // Move the seed hex into Zeroizing locals immediately so every later exit
+    // (version check, hex decode, consistency check) wipes them on drop — the
+    // value of zeroize is on the error paths, not the happy path.
+    let identity_hex = Zeroizing::new(std::mem::take(&mut payload.identity_secret));
+    let device_hex = Zeroizing::new(std::mem::take(&mut payload.device_secret));
     if payload.version != PAYLOAD_VERSION {
         return Err(CoreError::invalid(format!(
             "unsupported recovery payload version {} (expected {PAYLOAD_VERSION})",
             payload.version
         )));
     }
-    let identity_key = signing_key_from_seed_hex(&payload.identity_secret)?;
-    let device_key = signing_key_from_seed_hex(&payload.device_secret)?;
+    let identity_key = signing_key_from_seed_hex(identity_hex.as_str())?;
+    let device_key = signing_key_from_seed_hex(device_hex.as_str())?;
     // The seeds must reproduce the bundle's public ids — a bundle whose halves
     // disagree is rejected whole, trusting neither side.
     if identity_key.identity_key().to_string() != payload.identity_id
@@ -262,7 +272,17 @@ pub fn test_restore(data_dir: &Path) -> CoreResult<()> {
         .map_err(|e| CoreError::internal(format!("OS CSPRNG unavailable: {e}")))?;
     let test_dir = data_dir.join(format!(".restore-test-{}", hex::encode(nonce)));
     let _cleanup = CleanUp(&test_dir);
-    restore_to_dir(&test_dir, &bundle, &key)?;
+
+    // Write the restored copy ENCRYPTED under a fresh ephemeral password, so
+    // that a cleanup failure cannot leave a second *plaintext* copy of the
+    // root identity under the data dir. The password is random and discarded.
+    let mut pw_bytes = [0u8; 32];
+    getrandom::fill(&mut pw_bytes)
+        .map_err(|e| CoreError::internal(format!("OS CSPRNG unavailable: {e}")))?;
+    let ephemeral_pw = hex::encode(pw_bytes);
+    pw_bytes.zeroize();
+    let (profile, keys) = open_bundle(&bundle, &key)?;
+    identity::write_existing_with(&test_dir, &profile, &keys, Some(&ephemeral_pw))?;
 
     let src = identity::load_profile(data_dir)?.ok_or_else(|| {
         CoreError::internal("no source identity after export (data dir changed mid-test?)")
@@ -274,7 +294,7 @@ pub fn test_restore(data_dir: &Path) -> CoreResult<()> {
             "test restore: restored profile ids do not match the source",
         ));
     }
-    let restored_keys = SecretKeys::load(&test_dir)?;
+    let restored_keys = SecretKeys::load_with(&test_dir, Some(&ephemeral_pw))?;
     if restored_keys.identity.identity_key().to_string() != src.identity_id
         || restored_keys.device.device_key().to_string() != src.device_id
     {
