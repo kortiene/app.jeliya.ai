@@ -369,7 +369,8 @@ tamper/version/wrong-key fail-closed.
 |---|---|
 | Source SHA | `df28f6a15c6c154c0759eea76b2c164c41c047bc` (`main`; PR #85, Step 6 merge) |
 | `Cargo.lock` SHA-256 | `dda192b513195ca512587d01609aeb5d89447001fc04549aca538a3d0c31b223` |
-| Rust toolchain (CI + release) | `1.91.0` (MSRV; pinned via `dtolnay/rust-toolchain` in `ci.yml` and `release.yml`) |
+| Rust toolchain (CI full gate) | `1.96.0` (stable; `dtolnay/rust-toolchain` in `ci.yml` with `toolchain: 1.96.0`) |
+| Rust MSRV (CI MSRV lane) | `1.91.0` (`dtolnay/rust-toolchain` `1.91.0` in `ci.yml` and `release.yml`) |
 | Node (CI + release) | `22.22.3` (pinned in `ci.yml` and `release.yml` `node-version`) |
 | Local builder (this pin was recorded with) | `rustc 1.97.1`, Node `v24.18.0` — not the release toolchain; recorded for transparency only |
 | Worktree at pin time | clean (`git status --porcelain` empty) |
@@ -382,13 +383,13 @@ tamper/version/wrong-key fail-closed.
 | At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `df28f6a` (PR #85, Step 6) |
 | Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `df28f6a` (PR #85, Step 6) |
 | Authority path (F4) | [`crates/jeliya-core/src/engine.rs`](../crates/jeliya-core/src/engine.rs) | `cdcae83` (PR #78) |
-| Daemon auth (F4) | [`crates/jeliyad/src/serve.rs`](../crates/jeliyad/src/serve.rs) | `922f620` (pre-Phase-1) |
+| Daemon auth (F4) | [`crates/jeliyad/src/serve.rs`](../crates/jeliyad/src/serve.rs) | `922f620` (PR #58; created the file, unchanged since) |
 
 ### Normative ADR revisions
 
 | ADR | Document | Last changed | Status |
 |---|---|---|---|
-| ADR #3 (recovery bundle) | [`docs/recovery-bundle-decision.md`](recovery-bundle-decision.md) | `ce49d73` (PR #80) | `canonical` / `partial` (Amendments A+B) |
+| ADR #3 (recovery bundle) | [`docs/recovery-bundle-decision.md`](recovery-bundle-decision.md) | `b16842e` (PR #83) | `canonical` / `partial` (Amendments A+B; F7 lifecycle fix) |
 | ADR #2 (control protocol) | [`docs/companion-control-protocol-decision.md`](companion-control-protocol-decision.md) | `ce49d73` (PR #80) | `proposal` (D5b/D6 target) |
 
 ### Crypto dependency versions (from `Cargo.lock`)
@@ -435,10 +436,12 @@ re-review (record a new pin before the Step 7 re-review):
 - A change to a **review-package document** — this scope doc
   ([phase-1-security-review-scope.md](phase-1-security-review-scope.md)), the
   findings record ([phase-1-security-review.md](phase-1-security-review.md)),
-  or the gate verdict ([phase-1-gate-verdict.md](phase-1-gate-verdict.md)) —
-  that changes the surfaces under review, the evidence list, the reopen rules,
-  or the pin itself. (Editorial fixes that do not change meaning — typos, link
-  repairs — do not reopen.)
+  the gate verdict ([phase-1-gate-verdict.md](phase-1-gate-verdict.md)), or the
+  evidence package + approval contract
+  ([phase-1-evidence-package.md](phase-1-evidence-package.md))
+  — that changes the surfaces under review, the evidence list, the reopen
+  rules, the approval contract, or the pin itself. (Editorial fixes that do
+  not change meaning — typos, link repairs — do not reopen.)
 - A version change in `Cargo.lock` to any crypto dependency listed above
   (`aes-gcm`, `argon2`, `zeroize`, `getrandom`, `hex`; and `blake3` for the
   D5b/D6 gate).
@@ -470,7 +473,8 @@ against `df28f6a`. A reviewer executing the Step 7 re-review should:
 
 1. `git checkout df28f6a`
 2. Verify `sha256sum Cargo.lock` matches `dda192b5…`
-3. Verify the toolchain matches (Rust `1.91.0`, Node `22.22.3`)
+3. Verify the toolchain matches (CI full-gate Rust `1.96.0`, or MSRV `1.91.0`;
+   Node `22.22.3`)
 4. Run the commands in the [evidence package](phase-1-evidence-package.md#reproduce-the-review)
 5. Verify the pin values above against the tree they checked out
 

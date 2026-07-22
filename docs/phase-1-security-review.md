@@ -515,8 +515,20 @@ implementer cannot self-certify.
 
 ### What to check out
 
+> **The code surfaces (`.rs` files) are identical at `df28f6a` and at the
+> current `main` HEAD** — the Step 7 PR is docs-only. A reviewer may check out
+> either; `main` HEAD includes both the code and the finalized review package.
+
 ```sh
+# Option A: check out main HEAD (code + finalized docs together).
+git checkout main && git pull
+# Verify the code surfaces match the pin:
+git log --oneline -1 -- crates/jeliya-core/src/identity.rs  # Expected: df28f6a
+
+# Option B: check out the exact code pin (docs at this SHA are one step behind).
 git checkout df28f6a15c6c154c0759eea76b2c164c41c047bc
+
+# Either way, verify the lockfile:
 sha256sum Cargo.lock   # Expected: dda192b5...
 ```
 
