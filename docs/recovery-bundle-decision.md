@@ -1,11 +1,11 @@
 ---
 type: "Decision"
 title: "Recovery bundle format, custody, and optional opaque hosting — decision record"
-description: "Adopts a versioned authenticated-encryption recovery bundle keyed by a random 256-bit recovery key, user-held custody, and optional opaque cloud hosting of the encrypted envelope only, as the Phase 1 D1 target that unblocks removing the plaintext root secret."
+description: "Adopts a versioned authenticated-encryption recovery bundle keyed by a random 256-bit recovery key, user-held custody, and optional opaque cloud hosting of the encrypted envelope only, as the Phase 1 D1 target that unblocks removing the plaintext root secret. Amendments A and B (2026-07-21) reconcile the ADR with the shipped Phase-1 code."
 tags: ["identity", "recovery", "security", "decision", "phase-1", "keystore"]
-timestamp: "2026-07-21T16:00:00Z"
-status: "proposal"
-implementation_status: "planned"
+timestamp: "2026-07-21T22:55:00Z"
+status: "canonical"
+implementation_status: "partial"
 verification_status: "not-applicable"
 release_status: "unreleased"
 audience: ["contributors", "maintainers", "security-reviewers"]
@@ -13,16 +13,21 @@ audience: ["contributors", "maintainers", "security-reviewers"]
 
 # Recovery bundle format, custody, and optional opaque hosting — decision record
 
-**Status: PROPOSED — not yet adopted.** This record is ADR #3 from the
-[production deployment decision](production-deployment-decision.md#decisions-deferred-to-their-own-records),
-settling the recovery-bundle format, custody, and hosting question so that
-Phase 1 deliverable D1 (keystore abstraction + recovery bundle, see
-[Phase 1 implementation plan](phase-1-plan.md#d1--recovery-bundle-and-os-keystore-abstraction))
-can be implemented. It discharges no gate by existing; adoption advances D1 from
-"blocked on its ADR" to "implementable", and the D1 gate conditions
-("recovery succeeds from a fresh install on every supported OS"; "native
-production mode no longer leaves the root secret plaintext") still require the
-implementation and its tests.
+**Status: ADOPTED for Phase 1 (decisions 1, 2-amended, 4, 5, 6, 7, 8); Phase 2
+remains a target (decision 3's password wrap and the wider payload named in
+decision 5).** This record is ADR #3 from the
+[production deployment decision](production-deployment-decision.md#decisions-deferred-to-their-own-records).
+It was reconciled with the shipped Phase-1 implementation in
+[`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs)
+on 2026-07-21 by [amendments A and B](#amendments-a-and-b-2026-07-21); the
+implementation_status is `partial` because decision 3's optional-on password
+wrap and decision 5's Phase-2 payload fields (room membership index,
+device-authorization state, relay config) are not yet built. The D1 gate
+conditions ("recovery succeeds from a fresh install on every supported OS";
+"native production mode no longer leaves the root secret plaintext") still
+require their own evidence; this record being adopted does not certify the
+[Phase 1 verdict](phase-1-gate-verdict.md) rows, which remain under
+[independent security review](phase-1-security-review.md).
 
 The decision is shaped by the
 [Production deployment architecture — Recovery](production-deployment.md#recovery)
@@ -40,15 +45,35 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
    [`identity::create`](../crates/jeliya-core/src/identity.rs)). It is the root
    that protects the bundle; it is NOT derived from a user password.
 2. **The recovery key is optionally rendered as a human-transcribable phrase.**
-   The first slice uses a grouped-base32 rendering of the 256 bits (the
-   `qr`/phrase surfaces the UI already has). A BIP-39/SLIP-39 wordlist is a
-   later option, not required for D1.
-3. **An optional user password wraps the recovery key, never replaces it.** When
-   the user sets a password, an Argon2id KDF (memory-hard, versioned parameters)
-   derives a key-encrypting key that encrypts the random recovery key inside the
-   bundle. A stolen bundle without the password then fails closed; a weak
-   password is never the sole secret because the random 256-bit key remains the
-   AEAD root. When no password is set, the recovery key alone seals the bundle.
+   The first slice uses a grouped-**hex** rendering of the 256 bits
+   (4-char groups joined by `-`), as implemented in
+   [`RecoveryKey::to_phrase`](../crates/jeliya-core/src/recovery.rs). Hex needs
+   no new dependency, is unambiguous (no `0`/`O` or `1`/`I` confusion), and
+   matches the surfaces the UI already ships. *(Amendment A, 2026-07-21: the
+   original proposal named grouped-base32. The independent security review
+   [finding F9](phase-1-security-review.md#f9--blocker-approval-contract-and-normative-inputs-undefined)
+   recorded the base32-vs-hex divergence between this ADR and the shipped code;
+   the risk owner chose to amend the ADR to hex rather than change the code,
+   because the bundle is the Phase-1 D1 deliverable under row #7 and hex is
+   already in users' hands.)* A BIP-39/SLIP-39 wordlist remains a later option,
+   not required for D1; if adopted it would be a new payload version, not a
+   silent break.
+3. **An optional user password wraps the recovery key, never replaces it.**
+   This decision names the *target* construction; the **first slice implements
+   only the "no password" branch** — the random recovery key alone seals the
+   bundle, exactly as the shipped
+   [`seal_bundle`](../crates/jeliya-core/src/recovery.rs) does. The optional-on
+   branch (Argon2id KDF → key-encrypting key → encrypt the random recovery key
+   inside the bundle) is a **Phase-2 extension**, not a Phase-1 gap: when no
+   password is set the recovery key alone seals the bundle, which is the only
+   mode the Phase-1 code ships. *(Amendment B, 2026-07-21: the original
+   proposal described the optional-on branch as part of the first slice. The
+   risk owner chose to mark it explicitly as a Phase-2 extension to match the
+   shipped code and the `recovery.rs` module header, which already states
+   "an optional Argon2id password wrap (ADR #3) is a forward extension, not
+   the first slice." A stolen bundle therefore currently fails closed only
+   under the random recovery key; the optional-on password strengthening is
+   Phase-2 work.)*
 4. **The bundle is a versioned AEAD envelope.** AES-256-GCM seals the plaintext
    payload (already a workspace dependency, so no new crypto primitive is
    introduced); the nonce is fresh per seal and stored with the envelope. The
@@ -112,19 +137,19 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
 
 ## Open questions for adoption
 
-These are left for the reviewer to confirm or amend before this proposal
-becomes canonical:
+All three questions are now resolved by the 2026-07-21 reconciliation:
 
-- **Password default on or off?** The proposal defaults to *off* (recovery key
-  alone), so setup friction stays low and the random key is always the root. A
-  stronger default (password required) adds friction for a recovery surface the
-  first slice does not yet expose publicly.
-- **Phrase rendering.** Grouped-base32 for D1 vs. a wordlist. Grouped-base32 is
-  the lower-risk choice (no new dictionary dependency, reuses existing UI
-  primitives).
-- **Where the test-restore target lives.** A second data dir on the same device
-  is sufficient for D1's gate; a cross-device restore is a Phase 2 / Phase 4
-  concern.
+- **Password default on or off?** Resolved: **off**, with the optional-on
+  Argon2id password wrap explicitly marked as a Phase-2 extension
+  ([Amendment B](#amendments-a-and-b-2026-07-21)). The random recovery key is
+  always the AEAD root in Phase 1.
+- **Phrase rendering.** Resolved: **grouped-hex**
+  ([Amendment A](#amendments-a-and-b-2026-07-21)). A wordlist remains a later
+  option.
+- **Where the test-restore target lives.** Resolved: a same-device sibling
+  data dir under the owner-only data directory, written encrypted under a
+  fresh ephemeral password (see [`test_restore`](../crates/jeliya-core/src/recovery.rs)).
+  Cross-device restore is a Phase 2 / Phase 4 concern.
 
 ## Consequences
 
@@ -142,6 +167,46 @@ becomes canonical:
 - Adding Argon2id parameters and the AEAD nonce to the on-disk format means the
   format is versioned from day one; a later change is a migration, not a
   silent break.
+
+## Amendments A and B (2026-07-21)
+
+This ADR was reconciled with the shipped Phase-1 implementation on 2026-07-21
+to close [finding F9](phase-1-security-review.md#f9--blocker-approval-contract-and-normative-inputs-undefined)
+of the independent Phase-1 security review, which had recorded ADR #3
+(`proposal` / `not yet adopted`) contradicting the merged code in
+[`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs).
+The risk owner resolved each divergence with the dispositions below; both are
+**ADR-to-code** amendments (the ADR moves to match the shipped code), not
+code changes, because the bundle is the Phase-1 D1 deliverable already under
+row #7 review.
+
+| Div | Original ADR text | Shipped code | Disposition |
+|---|---|---|---|
+| #1 — phrase encoding | "grouped-base32 rendering of the 256 bits" (decision 2) | grouped-hex (`RecoveryKey::to_phrase`) | **Amendment A:** ADR amended to grouped-hex. Hex needs no new dependency, is unambiguous, and matches the surfaces the UI already ships. |
+| #5 — password wrap | decision 3 describes the optional-on Argon2id password wrap as part of the first slice | no wrap is implemented; only the random-key seal ships | **Amendment B:** ADR marks the optional-on branch explicitly as a Phase-2 extension. The `recovery.rs` module header already states this; the ADR now agrees. |
+
+The four control-protocol divergences recorded under F9 belong to
+[ADR #2](companion-control-protocol-decision.md), not this record, and are
+deferred to the D5b/D6 review gate (see
+[Phase 1 security review — findings record](phase-1-security-review.md)).
+
+### What this ADR does not certify
+
+- It does not certify the [Phase 1 verdict](phase-1-gate-verdict.md) rows.
+  Row #1 (recovery) and row #2 (no plaintext root secret) carry their own
+  evidence and remain under independent review; row #2 in particular is
+  flagged by [finding F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced)
+  because production at-rest encryption is opt-in, not enforced.
+- It does not adopt the optional-on password wrap; that is Phase-2 work, and
+  the recovery bundle in Phase 1 is sealed only under the random recovery key.
+- It does not adopt the wider payload (room membership index,
+  device-authorization state, relay config) named in decision 5; that is
+  Phase-2 work.
+- It does not resolve [finding F6](phase-1-security-review.md#f6--high-kdf-versioningattribution-is-inaccurate)
+  (KDF param attribution and migration fixtures) or
+  [finding F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)
+  (re-export does not rotate). Both are open and tracked under the
+  [remediation path](phase-1-security-review.md#remediation-path).
 
 ## Citations
 

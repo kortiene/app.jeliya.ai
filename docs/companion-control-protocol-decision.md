@@ -137,6 +137,36 @@ subject to the Phase 1 independent security review.
   boundary TB3 already stated in the
   [target system](production-deployment.md#target-system-and-trust-boundaries).
 
+## Relationship to the Phase-1 scaffolding (2026-07-21)
+
+This ADR remains `proposal` / `not yet adopted`. The
+[independent Phase-1 security review](phase-1-security-review.md) found that
+[`crates/jeliya-control/src/lib.rs`](../crates/jeliya-control/src/lib.rs) —
+which exists and is merged on `main` — does not conform to this ADR, and
+**must not be cited as if it did**. The crate is **scaffolding** toward the
+construction this ADR specifies; its conformance is checked at the **D5b/D6
+review gate**, not at the Phase-1 gate. Specifically:
+
+- **[F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve):
+  no wire format exists to approve.** The crate exposes a Rust API
+  (`Pairing`, `ControlGateway`, `authorize`, `install`, `revoke`) but no byte
+  serialization, no transport, no handshake, and no daemon binding. There is
+  nothing byte-level for a Phase-1 reviewer to approve on the control side.
+- **[F3](phase-1-security-review.md#f3--high-jeliya-control-core-does-not-enforce-the-attributed-properties):
+  the core does not enforce the attributed properties.** The public
+  `install`/`ControlKeyRecord::new` API can bypass SAS, accept any
+  `Duration` lifetime, and trusts caller-supplied `now_ms`; there is no
+  per-key rate limiting; `Scope::RoomRead` / `Scope::MessageSend` are global,
+  not the "selected-room" binding decision 6 names.
+
+The four F9 divergences that touch this ADR (SAS derivation, rate limiting,
+lifetime default, selected-room scope binding) are all deferred by the risk
+owner's 2026-07-21 dispositions: **this ADR is the canonical Phase-2 target**,
+and the Phase-1 code's gaps against it are not defects to fix in Phase 1 —
+they are work that lands with the D5b transport. Until D5b/D6 review closes,
+the [Phase 1 verdict](phase-1-gate-verdict.md) row #7 must be scoped to the
+two D1 envelopes only (see [finding F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve)).
+
 ## Citations
 
 - [Production deployment architecture — Browser-to-companion pairing](production-deployment.md#browser-to-companion-pairing) - the pairing design this ADR instantiates.
