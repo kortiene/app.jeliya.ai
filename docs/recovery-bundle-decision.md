@@ -123,6 +123,16 @@ stored plaintext under owner-only permissions (the SDK MVP threat model)"
   revocation, not this ADR. It also cannot recall material already received by
   an authorized peer (trust boundary TB4 in
   [Production deployment architecture](production-deployment.md#target-system-and-trust-boundaries)).
+- **Re-export does not rotate ([finding F7](phase-1-security-review.md#f7--high-rotate-by-re-exporting-is-false)):**
+  calling `recovery.export` a second time mints a fresh random recovery key and
+  a fresh valid bundle — it does not revoke, invalidate, or retire the prior
+  key or bundle. `open_bundle` accepts any valid bundle; AEAD cannot detect
+  rollback of an older-but-valid bundle. Every prior recovery key and bundle
+  remains valid indefinitely until root authority itself rotates (Phase 4).
+  Residual risks: (a) a duplicated device seed in a prior bundle stays valid;
+  (b) a lost device whose authority was backed up retains authority until root
+  rotation; (c) an attacker who obtained an old bundle+key has permanent
+  identity authority that cannot be revoked short of Phase 4 root rotation.
 
 ## Threat model and boundaries
 

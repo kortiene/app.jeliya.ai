@@ -1,9 +1,9 @@
 ---
 type: "Decision"
 title: "Phase 1 go/no-go gate verdict"
-description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions. Row #7 re-scoped to the two D1 wire envelopes (F2) and returned NOT APPROVED with 10 findings (2026-07-21); remediation in progress, blocking Phase 2. Rows #1-#6 recorded PASS but row #2 is overclaimed (F5, corrected in Step 4)."
+description: "Dated verdict against each of the seven Phase 1 go/no-go gate conditions. Row #7 re-scoped to the two D1 wire envelopes (F2) and returned NOT APPROVED with 10 findings (2026-07-21); remediation in progress, blocking Phase 2. Row #2 relabeled OPEN (opt-in encryption, F5). Rows #1/#3-#6 recorded PASS with scope limits."
 tags: ["phase-1", "decision", "release", "verification", "governance"]
-timestamp: "2026-07-22T00:45:00Z"
+timestamp: "2026-07-22T02:30:00Z"
 status: "canonical"
 implementation_status: "not-applicable"
 verification_status: "partial"
@@ -27,13 +27,11 @@ because it does not exist yet ([finding F2](phase-1-security-review.md#f2--block
 **Phase 2 may not begin** until the remediation path completes and a re-review
 by a different reviewer lands.
 
-Rows #1–#6 were recorded PASS with linked test evidence, but that framing is
-**known to be partially wrong**: row #2 ("native production mode no longer
-leaves the root secret plaintext") overclaims because production encryption is
-opt-in, not enforced ([finding F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced));
-its correction is [Step 4](phase-1-security-review.md#remediation-path) of the
-remediation path. The other rows' PASS claims have not been individually
-re-examined against the findings record and may carry similar caveats.
+Rows #1–#6 were recorded PASS with linked test evidence, but **row #2 is now
+relabeled OPEN** (opt-in encryption is not enforced — see
+[finding F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced)
+below). The other rows' PASS claims have not been individually re-examined
+against the findings record and may carry similar caveats.
 
 Two rows pass with a stated scope limit rather than blanket: row #1 (recovery)
 is verified on Linux with the OS-keystore breadth deferred to D1c, and row #5
@@ -76,16 +74,26 @@ supported-OS breadth is the OS-keystore lane (D1c, deferred): the
 password-hardened encrypted-file backend runs everywhere and is verified here on
 Linux; Keychain / DPAPI / Secret Service land in their hosted lanes.
 
-### 2. Native production mode no longer leaves the root secret plaintext — PASS
+### 2. Native production mode no longer leaves the root secret plaintext — OPEN (opt-in, not enforced)
 
+**Relabeled from PASS per [finding F5](phase-1-security-review.md#f5--high-production-encryption-is-opt-in-not-enforced).**
+The at-rest encryption exists and works:
 `create_with_password_seals_the_secret_not_plaintext`
 ([identity.rs](../crates/jeliya-core/src/identity.rs)) asserts an identity
-created under `JELIYA_IDENTITY_PASSWORD` writes a file that is not the plaintext
-JSON; `load_with_a_wrong_password_fails_closed` and
-`load_an_encrypted_secret_without_a_password_fails_closed` confirm it fails
-closed. Plaintext remains the explicit dev default (omitted password), with
-auto-detect on load so a plaintext identity still loads after a password is
-introduced.
+created under `JELIYA_IDENTITY_PASSWORD` writes a sealed file, and
+`load_with_a_wrong_password_fails_closed` /
+`load_an_encrypted_secret_without_a_password_fails_closed` confirm fail-closed
+behavior. **But encryption is opt-in, not enforced.** Unset or empty
+`JELIYA_IDENTITY_PASSWORD` → plaintext `0600` with only `tracing::warn!`. No
+packaging, systemd unit, launchd plist, or startup path sets or requires the
+variable. The onboarding flow
+([`ui/src/components/Onboarding.tsx`](../ui/src/components/Onboarding.tsx))
+calls `identity.create` with no password, so a production deployment following
+the docs as written ships plaintext root seeds. The gate condition is **not
+met**. To close it: either (a) define an enforced production invariant (refuse
+`identity.create` / `recovery.restore` without protected storage, with a
+documented dev override), or (b) accept encryption as opt-in and keep this row
+open until the OS-keystore backends (D1c) provide the enforced path.
 
 ### 3. 10,000 injected lost-response retries produce no duplicate message — PASS
 
