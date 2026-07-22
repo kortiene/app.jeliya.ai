@@ -657,7 +657,13 @@ none blocks approval; all become conditions.
    bundle has both); the evidence row "Covered (implicit in the parse)" cites
    code, not a test. Add the two tests or relabel the row.
 5. **(low)** Append the missing CI rows to the evidence-package table:
-   PR #85 → run `29925118834`, PR #86 → run `29932744561` (both verified green).
+   PR #85 tree `df28f6a` → push run `29922951249`, PR #86 tree `5fa0bae` →
+   push run `29928189003` (both verified green). *(Erratum, corrected
+   2026-07-22: this condition originally dictated run IDs `29925118834` /
+   `29932744561`, which do not exist — the
+   [conditions delta review](#conditions-delta-review-2026-07-22) caught the
+   error and independently verified the correct runs above; the underlying
+   green-CI claim was always true.)*
 6. **(low/info)** Amend two stale ADR #3 passages: the Consequences bullet
    claiming Argon2id parameters live in the on-disk format (they do not, in
    either envelope), and the "does not certify" text still calling F6/F7 open.
@@ -676,11 +682,56 @@ evidence (2); `from_phrase` pre-sizing, `Zeroizing` ephemeral password, and
 the export-side wipe-before-error fix (3); identity-envelope
 truncation/tamper tests + corrected evidence rows (4); the PR #85/#86 CI rows
 (5); the two stale ADR #3 passages amended (6); unknown-envelope-version now
-`InvalidParams` (7 — its AAD half remains a v2 design note). **Pending: the
-re-pin and a scoped delta review of the conditions diff** (see the reopen note
-below and the
-[pin status update](phase-1-security-review-scope.md#pin-status-finalized-for-step-7-re-review));
-the conditions implementer cannot self-certify that delta.
+`InvalidParams` (7 — its AAD half remains a v2 design note). The conditions
+merged as `d610076` (PR #89). The re-pin and the scoped delta review are
+**complete** — see [Conditions delta review](#conditions-delta-review-2026-07-22).
+
+#### Conditions delta review (2026-07-22)
+
+**Verdict: APPROVE-WITH-CONDITIONS — the `df28f6a` approval extends to the
+conditions tree `d610076c05f0f29cb8f87c7dbe805a5f603ecc89`.** The scoped delta
+review required by the reopen rules was executed by an **independent
+delta-review session** (fresh agent contexts, Claude Fable 5, distinct from
+the conditions implementer; the same model-family independence caveat as the
+Step 7 verdict applies, and the risk-owner's merge of the recording PR serves
+as countersignature). Two adversarial challengers (refutation lens on the
+security-relevant claims; scope-creep lens on the full diff) upheld the
+verdict with zero objections.
+
+The delta reviewer's statement, verbatim:
+
+> I independently verified the pin (Cargo.lock sha256 dda192b5…, per-surface
+> last-change SHAs, toolchain and all five crypto dependency versions
+> unchanged) and walked the entire df28f6a..d610076 diff: every code hunk maps
+> to one of the seven Step 7 conditions, all seven are correctly and
+> completely implemented in the post-state, nothing changed outside crates/,
+> docs/, and tools/, and I reproduced the gates locally (fmt clean, clippy
+> clean, 127 passed / 0 failed / 1 ignored including the new envelope tests
+> and the 5 ms KDF floor). I found one evidence defect: the two CI run IDs
+> condition 5 dictated (29925118834, 29932744561) do not exist on GitHub,
+> though the underlying claim is true — I verified the actual green runs
+> 29922951249 (df28f6a) and 29928189003 (5fa0bae) myself. The df28f6a
+> approval therefore extends to d610076 with two conditions: a docs-only
+> erratum correcting those run IDs wherever they appear, and confirmation
+> that the in-progress d610076 push run 29951799090 concludes green.
+
+**Disposition of the delta review's two conditions (2026-07-22):**
+
+1. **Run-ID erratum — applied.** All eight occurrences across the evidence
+   package, gate verdict, capability status, release-vs-main, and this
+   record's condition 5 were corrected to the verified push runs
+   (`29922951249` at `df28f6a`, `29928189003` at `5fa0bae`), each
+   independently re-verified against the GitHub API before recording.
+2. **`d610076` push run — confirmed.** Run `29951799090` completed with
+   conclusion `success` (all six jobs) after the review; verified directly.
+
+Carried notes (no action this gate): the two `to_seed()` call sites in
+`supervisor.rs` outside row #7's surfaces (disclosed in the
+[zeroize inventory](phase-1-security-review-scope.md#zeroization-recast-per-f8),
+tracked for the next zeroize pass / D5b review); the env-var password
+register row is governance recording of an already-countersigned risk, not
+new scope. The pin is
+[re-recorded at `d610076`](phase-1-security-review-scope.md#review-target-pin).
 
 **Reopen note.** Landing ANY of the conditions touches the pin's
 [reopen set](phase-1-security-review-scope.md#reopens-review): conditions
