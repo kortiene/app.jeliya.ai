@@ -218,30 +218,134 @@ describe('control (reconnect) session end-to-end', () => {
   });
 });
 
+/** A control-session companion that completes the handshake, sends
+ *  SessionAccept, and answers `answerCount` requests with an ok Response. */
+async function runControlCompanion(
+  ch: FrameChannel,
+  companionStatic: Keypair,
+  answerCount: number,
+): Promise<void> {
+  const clientHelloFrame = await ch.readFrame();
+  ClientHello.decodeBody(clientHelloFrame.body);
+  const serverHello = new ServerHello(1, 1);
+  await ch.writeFrame(serverHello.toFrame());
+  const prologue = concat(clientHelloFrame.encode(), serverHello.toFrame().encode());
+  const resp = await HandshakeState.newResponder(companionStatic, prologue);
+  await resp.readMessage1((await ch.readFrame()).body);
+  await ch.writeFrame(new Frame(FrameType.Handshake2, await resp.writeMessage2()));
+  const { transport } = await resp.readMessage3((await ch.readFrame()).body);
+  const accept: Msg = { type: 'session_accept', methods: [...ALL_METHODS], expiresAtMs: 1n };
+  await ch.writeFrame(new Frame(FrameType.Transport, await transport.encrypt(encodeMsg(accept))));
+  for (let i = 0; i < answerCount; i++) {
+    const req = decodeMsg(await transport.decrypt((await ch.readFrame()).body));
+    if (req.type !== 'request') throw new Error('expected a request');
+    const response: Msg = { type: 'response', nonce: req.nonce, ok: true, body: new Uint8Array() };
+    await ch.writeFrame(new Frame(FrameType.Transport, await transport.encrypt(encodeMsg(response))));
+  }
+}
+
 describe('version negotiation', () => {
-  it('aborts when the companion offers no compatible version (ServerHello v0)', async () => {
+  const dummyPin = new Uint8Array(32);
+
+  it('aborts on version 0, an un-offered version, and a below-floor selection', async () => {
     const controlKey = await ControlKey.generate();
-    const { initiator, clientHello } = Initiator.create({
-      staticKey: controlKey.keypair,
-      kind: SessionKind.Control,
-    });
-    void clientHello;
-    const incompatible = new ServerHello(0, 2).toFrame();
-    await expect(initiator.onServerHello(incompatible)).rejects.toMatchObject({
-      kind: 'incompatible',
-    });
+    for (const sh of [new ServerHello(0, 2), new ServerHello(2, 1), new ServerHello(1, 2)]) {
+      const { initiator } = Initiator.create({
+        staticKey: controlKey.keypair,
+        kind: SessionKind.Control,
+        expectedCompanionKey: dummyPin,
+      });
+      await expect(initiator.onServerHello(sh.toFrame())).rejects.toMatchObject({
+        kind: 'incompatible',
+      });
+    }
   });
 
-  it('rejects a wrong frame type at each step', async () => {
+  it('rejects a wrong frame type', async () => {
     const controlKey = await ControlKey.generate();
     const { initiator } = Initiator.create({
       staticKey: controlKey.keypair,
       kind: SessionKind.Control,
+      expectedCompanionKey: dummyPin,
     });
-    // onServerHello expects a ServerHello, not a Handshake2.
     await expect(
       initiator.onServerHello(new Frame(FrameType.Handshake2, new Uint8Array())),
     ).rejects.toMatchObject({ kind: 'unexpected' });
+  });
+
+  it('refuses to build a control session with no pinned companion key', async () => {
+    const controlKey = await ControlKey.generate();
+    expect(() =>
+      Initiator.create({ staticKey: controlKey.keypair, kind: SessionKind.Control }),
+    ).toThrow(/missing_pin/);
+  });
+});
+
+describe('transport-phase guards', () => {
+  const sendCall = (body: string): MethodCall => ({
+    type: 'message_send',
+    roomId: 'r',
+    body,
+    clientMsgId: body,
+  });
+
+  it('enforces single-in-flight requests', async () => {
+    const companionStatic = await Keypair.generate(true);
+    const [browser, companion] = createDuplexPair();
+    const controlKey = await ControlKey.generate();
+    const { initiator, clientHello } = Initiator.create({
+      staticKey: controlKey.keypair,
+      kind: SessionKind.Control,
+      expectedCompanionKey: companionStatic.publicRaw,
+    });
+    const companionTask = runControlCompanion(companion, companionStatic, 2);
+    await driveHandshake(browser, initiator, clientHello);
+    expect((await initiator.read(await browser.readFrame())).type).toBe('session_accept');
+
+    await browser.writeFrame(await initiator.request(sendCall('a')));
+    // A second request before the first response is refused client-side, rather
+    // than emitting a frame the companion would answer by tearing the session
+    // down.
+    await expect(initiator.request(sendCall('b'))).rejects.toMatchObject({
+      kind: 'request_in_flight',
+    });
+    // Reading the response clears the marker, freeing the next request.
+    expect((await initiator.read(await browser.readFrame())).type).toBe('response');
+    await browser.writeFrame(await initiator.request(sendCall('b')));
+    expect((await initiator.read(await browser.readFrame())).type).toBe('response');
+    await companionTask;
+  });
+
+  it('rejects an oversized transport record before the nonce advances', async () => {
+    const companionStatic = await Keypair.generate(true);
+    const [browser, companion] = createDuplexPair();
+    const controlKey = await ControlKey.generate();
+    const { initiator, clientHello } = Initiator.create({
+      staticKey: controlKey.keypair,
+      kind: SessionKind.Control,
+      expectedCompanionKey: companionStatic.publicRaw,
+    });
+    const companionTask = runControlCompanion(companion, companionStatic, 1);
+    await driveHandshake(browser, initiator, clientHello);
+    expect((await initiator.read(await browser.readFrame())).type).toBe('session_accept');
+
+    // A body whose params blob still fits the u16 length prefix, but whose
+    // sealed record (plaintext + 16-byte tag) exceeds MAX_FRAME_LEN — refused
+    // before the send nonce advances. (short roomId/clientMsgId so the single
+    // large field is the body, not the whole params blob overflowing u16.)
+    const oversized: MethodCall = {
+      type: 'message_send',
+      roomId: 'r',
+      body: 'x'.repeat(65_520),
+      clientMsgId: 'c',
+    };
+    await expect(initiator.request(oversized)).rejects.toMatchObject({ kind: 'frame_too_large' });
+
+    // The session is still usable: a normal request goes through, proving the
+    // nonce was not consumed by the rejected oversized attempt.
+    await browser.writeFrame(await initiator.request(sendCall('hi')));
+    expect((await initiator.read(await browser.readFrame())).type).toBe('response');
+    await companionTask;
   });
 });
 

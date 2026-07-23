@@ -10,9 +10,9 @@
  *  stored key, so a substituted companion aborts the handshake. */
 
 import { bytesEqual } from './codec';
-import { Keypair, companionFingerprint, sasFromHandshakeHash } from './crypto';
+import { Keypair, TAGLEN, companionFingerprint, sasFromHandshakeHash } from './crypto';
 import { HandshakeState, TransportState } from './noise';
-import { Frame, FrameType } from './frame';
+import { Frame, FrameType, MAX_FRAME_LEN } from './frame';
 import { ClientHello, ServerHello, SessionKind, ZERO_NONCE } from './hello';
 import {
   clampCall,
@@ -30,6 +30,9 @@ export type SessionErrorKind =
   | 'incompatible'
   | 'fingerprint_mismatch'
   | 'pin_mismatch'
+  | 'missing_pin'
+  | 'request_in_flight'
+  | 'frame_too_large'
   | 'no_transport'
   | 'no_companion_key';
 
@@ -68,6 +71,11 @@ export class Initiator {
   private transport: TransportState | null = null;
   private sasValue: string | null = null;
   private nextNonce = 1n;
+  /** The nonce of the request awaiting its response, or `null` when none is
+   *  outstanding. The v1 wire is single-in-flight (a companion tears the session
+   *  down if a second request arrives before the first is answered), so the
+   *  browser enforces it too. */
+  private pendingNonce: bigint | null = null;
 
   private constructor(opts: InitiatorOptions, clientHelloBytes: Uint8Array) {
     this.staticKey = opts.staticKey;
@@ -77,8 +85,15 @@ export class Initiator {
     this.clientHelloBytes = clientHelloBytes;
   }
 
-  /** Build the initiator and its opening `ClientHello` frame. */
+  /** Build the initiator and its opening `ClientHello` frame. A control
+   *  (reconnect) session MUST carry the companion key pinned at pairing — it has
+   *  no SAS ceremony, so the full-key pin is its only companion authentication;
+   *  constructing one without a pin is a fail-closed error, never a silent
+   *  first-pairing fallback. */
   static create(opts: InitiatorOptions): { initiator: Initiator; clientHello: Frame } {
+    if (opts.kind === SessionKind.Control && opts.expectedCompanionKey === undefined) {
+      throw new SessionError('missing_pin', 'a control session requires the pinned companion key');
+    }
     const nonce =
       opts.kind === SessionKind.Pairing ? (opts.pairingNonce ?? ZERO_NONCE) : ZERO_NONCE;
     const hello = new ClientHello([PROTOCOL_VERSION_V1], opts.kind, nonce);
@@ -105,7 +120,18 @@ export class Initiator {
       throw new SessionError('unexpected', 'expected ServerHello');
     }
     const sh = ServerHello.decodeBody(frame.body);
-    if (sh.isIncompatible()) throw new SessionError('incompatible');
+    // v1 is the only defined version and the only one the browser offered. Reject
+    // a version 0 ("no compatible version"), any other selection the browser did
+    // not offer (e.g. a companion claiming v2), and a below-floor pair where the
+    // companion's own minimum exceeds the selected version — before building the
+    // prologue and entering Noise.
+    if (
+      sh.isIncompatible() ||
+      sh.version !== PROTOCOL_VERSION_V1 ||
+      sh.version < sh.minVersion
+    ) {
+      throw new SessionError('incompatible', `version ${sh.version}, min ${sh.minVersion}`);
+    }
     // Prologue = the exact ClientHello frame bytes ‖ the exact ServerHello frame
     // bytes (a canonical re-encode), so any middle-party edit breaks the DH.
     const shFrame = new ServerHello(sh.version, sh.minVersion).toFrame();
@@ -162,32 +188,56 @@ export class Initiator {
 
   /** Build a scoped `Request` transport frame with the next session nonce. The
    *  call's wire-bounded fields are clamped (a `room.timeline` limit) before
-   *  encoding, matching what the companion would clamp on receipt. */
-  request(call: MethodCall): Promise<Frame> {
+   *  encoding, matching what the companion would clamp on receipt.
+   *
+   *  Single-in-flight: throws `request_in_flight` if a prior request has not yet
+   *  been answered by {@link read}, rather than emitting a second request the
+   *  companion would reject by tearing down the session. The caller awaits each
+   *  response before the next request (or serializes its own queue). The nonce
+   *  and the outstanding marker advance only once the frame is actually sealed,
+   *  so a failed seal (e.g. an oversized record) leaves the session reusable. */
+  async request(call: MethodCall): Promise<Frame> {
+    if (this.pendingNonce !== null) {
+      throw new SessionError('request_in_flight', 'await the previous response first');
+    }
     const nonce = this.nextNonce;
-    this.nextNonce += 1n;
     const clamped = clampCall(call);
-    return this.seal({
+    const frame = await this.seal({
       type: 'request',
       nonce,
       method: methodIdFor(clamped),
       params: encodeMethodCall(clamped),
     });
+    this.nextNonce += 1n;
+    this.pendingNonce = nonce;
+    return frame;
   }
 
-  /** Decrypt and decode a transport frame from the companion. */
+  /** Decrypt and decode a transport frame from the companion. A `Response`
+   *  clears the outstanding-request marker, freeing the next {@link request}. */
   async read(frame: Frame): Promise<Msg> {
     if (frame.frameType !== FrameType.Transport) {
       throw new SessionError('unexpected', 'expected Transport');
     }
     if (this.transport === null) throw new SessionError('no_transport');
     const pt = await this.transport.decrypt(frame.body);
-    return decodeMsg(pt);
+    const msg = decodeMsg(pt);
+    if (msg.type === 'response') this.pendingNonce = null;
+    return msg;
   }
 
   private async seal(msg: Msg): Promise<Frame> {
     if (this.transport === null) throw new SessionError('no_transport');
-    const ct = await this.transport.encrypt(encodeMsg(msg));
+    const plaintext = encodeMsg(msg);
+    // Preflight the sealed size BEFORE encrypting: the AEAD adds a 16-byte tag,
+    // so a plaintext near the u16 blob limit would seal into a frame body larger
+    // than MAX_FRAME_LEN. Rejecting here — before the send cipher's nonce
+    // advances — keeps the session usable, instead of producing an unencodable
+    // frame that fails later with the counter already consumed.
+    if (plaintext.length + TAGLEN > MAX_FRAME_LEN) {
+      throw new SessionError('frame_too_large', `record ${plaintext.length + TAGLEN} > ${MAX_FRAME_LEN}`);
+    }
+    const ct = await this.transport.encrypt(plaintext);
     return new Frame(FrameType.Transport, ct);
   }
 }
