@@ -27,8 +27,6 @@ function expiryLabel(s: Catalog, key: string): string {
       return s.inviteExpiry24h;
     case '7d':
       return s.inviteExpiry7d;
-    case 'never':
-      return s.inviteExpiryNever;
     default:
       return key;
   }

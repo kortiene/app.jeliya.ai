@@ -320,7 +320,6 @@ export interface Catalog {
   inviteExpiry1h: Message;
   inviteExpiry24h: Message;
   inviteExpiry7d: Message;
-  inviteExpiryNever: Message;
   inviteLifecycleJoined: Message;
   inviteLifecycleExpired: Message;
   inviteLifecycleWaiting: Message;

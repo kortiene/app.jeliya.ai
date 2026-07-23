@@ -8,8 +8,10 @@ export function isIdentityId(value: string): boolean {
 }
 
 /** A friendly expiry choice: a stable [key] the UI labels via l10n, and the
- *  [seconds] passed to `invite.create` (null = no expiry / single-use, not
- *  time-boxed). An "advanced custom" option lives outside this table. */
+ *  [seconds] passed to `invite.create`. Every invite is time-boxed: when the
+ *  expiry is omitted the daemon applies its own 24-hour default (Phase 1 D4),
+ *  so no preset may claim "no expiry". An "advanced custom" option lives
+ *  outside this table. */
 export interface ExpiryPreset {
   key: string;
   seconds: number | null;
@@ -21,7 +23,6 @@ export const EXPIRY_PRESETS: readonly ExpiryPreset[] = [
   { key: '1h', seconds: 60 * 60 },
   { key: '24h', seconds: 24 * 60 * 60 },
   { key: '7d', seconds: 7 * 24 * 60 * 60 },
-  { key: 'never', seconds: null },
 ];
 
 /** Build a combined invite (`<ticket>#<peer addr>`) — the inverse of

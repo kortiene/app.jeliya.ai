@@ -17,9 +17,12 @@ describe('splitInvite', () => {
 });
 
 describe('EXPIRY_PRESETS', () => {
-  it('offers 1h/24h/7d/never with the right seconds', () => {
-    expect(EXPIRY_PRESETS.map((p) => p.key)).toEqual(['1h', '24h', '7d', 'never']);
-    expect(EXPIRY_PRESETS.map((p) => p.seconds)).toEqual([3600, 86400, 604800, null]);
+  it('offers only time-boxed presets with the right seconds', () => {
+    // No "never" preset: every invite is time-boxed — an omitted expiry gets
+    // the daemon's 24-hour default (Phase 1 D4), so a no-expiry label would lie.
+    expect(EXPIRY_PRESETS.map((p) => p.key)).toEqual(['1h', '24h', '7d']);
+    expect(EXPIRY_PRESETS.map((p) => p.seconds)).toEqual([3600, 86400, 604800]);
+    expect(EXPIRY_PRESETS.every((p) => p.seconds !== null)).toBe(true);
   });
 });
 

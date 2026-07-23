@@ -371,7 +371,6 @@ export const en: LocaleCatalog = {
   inviteExpiry1h: '1 hour',
   inviteExpiry24h: '24 hours',
   inviteExpiry7d: '7 days',
-  inviteExpiryNever: 'No expiry',
   inviteLifecycleJoined: 'Joined',
   inviteLifecycleExpired: 'Expired',
   inviteLifecycleWaiting: 'Waiting',
@@ -393,8 +392,9 @@ export const en: LocaleCatalog = {
   inviteNoDialableAddressCopy:
     'Keep this room open. The joiner may still connect via discovery or relay, but a fresh room address is more reliable.',
   inviteCombinedCopy:
-    'Send this one paste to the invitee — it is the ticket and your dialable address together. They paste it into “Join with a ticket” and the address fills in automatically.',
-  inviteTicketOnlyCopy: 'Send this ticket to the invitee. They join with it (room.join).',
+    'Send this one paste to the invitee — it is the ticket and your dialable address together. They paste it into “Join with a ticket” and the address fills in automatically. Each invite is single-use — once redeemed it is spent. If it may have been seen by anyone else, cancel it and mint a fresh one.',
+  inviteTicketOnlyCopy:
+    'Send this ticket to the invitee. They join with it (room.join). Each invite is single-use — once redeemed it is spent. If it may have been seen by anyone else, cancel it and mint a fresh one.',
   inviteCombinedInviteLabel: 'Combined invite (ticket and peer address)',
   inviteInviteTicketLabel: 'Invite ticket',
   inviteCopyInvite: 'Copy invite',
