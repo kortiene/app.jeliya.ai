@@ -405,7 +405,7 @@ tamper/version/wrong-key fail-closed.
 | ADR | Document | Last changed | Status |
 |---|---|---|---|
 | ADR #3 (recovery bundle) | [`docs/recovery-bundle-decision.md`](recovery-bundle-decision.md) | `d610076` (PR #89; condition-6 corrections, delta-reviewed) | `canonical` / `partial` (Amendments A+B; F7 lifecycle fix; condition-6 corrections) |
-| ADR #2 (control protocol) | [`docs/companion-control-protocol-decision.md`](companion-control-protocol-decision.md) | `ce49d73` (PR #80) | `proposal` (D5b/D6 target) |
+| ADR #2 (control protocol) | [`docs/companion-control-protocol-decision.md`](companion-control-protocol-decision.md) | adoption PR, 2026-07-23 — the adopted file is pinned immutably by content: `sha256 fafb15c06b313a662ad77b0fa95ab492c9fbc82f085989b629d84754b3588703` (verify with `sha256sum`; any mismatch is a post-adoption edit and reopens review). Merge SHA recorded at the next re-pin; prior `ce49d73`, PR #80 | `canonical` — adopted 2026-07-23, control-key lifetime default fixed at 30 days ([micro-delta note](phase-1-security-review.md#adr-2-adoption-micro-delta-note-2026-07-23)); D5b conformance still checked at the D5b/D6 gate |
 
 ### Crypto dependency versions (from `Cargo.lock`)
 

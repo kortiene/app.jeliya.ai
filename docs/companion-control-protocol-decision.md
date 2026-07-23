@@ -1,10 +1,10 @@
 ---
 type: "Decision"
 title: "Companion control protocol and pairing transcript — decision record"
-description: "Proposes the mutually-authenticated, end-to-end-encrypted browser-to-companion control protocol (Noise XX-equivalent over the Iroh control ALPN), the SAS-confirmed pairing transcript, the non-extractable bounded-lifetime browser control key, the default-deny scope model, replay defense, and revocation, so Phase 1 deliverable D5 can be implemented under amendment A1."
+description: "Adopts (2026-07-23) the mutually-authenticated, end-to-end-encrypted browser-to-companion control protocol (Noise XX-equivalent over the Iroh control ALPN), the SAS-confirmed pairing transcript, the non-extractable bounded-lifetime browser control key, the default-deny scope model, replay defense, and revocation, so Phase 1 deliverable D5 can be implemented under amendment A1."
 tags: ["protocol", "pairing", "companion", "security", "decision", "phase-1", "amendment-a1"]
-timestamp: "2026-07-21T17:00:00Z"
-status: "proposal"
+timestamp: "2026-07-23T00:00:00Z"
+status: "canonical"
 implementation_status: "planned"
 verification_status: "not-applicable"
 release_status: "unreleased"
@@ -13,7 +13,13 @@ audience: ["contributors", "maintainers", "security-reviewers"]
 
 # Companion control protocol and pairing transcript — decision record
 
-**Status: PROPOSED — not yet adopted.** This record is ADR #2 from the
+**Status: ADOPTED 2026-07-23** — ratified by the risk-owner of record (the
+merge of the adoption PR is the countersignature, per the recording-PR
+pattern), with the [open questions resolved as recorded below](#open-questions-for-adoption).
+Adoption fixes the control-key lifetime default at **30 days**; the Phase-1
+scaffolding non-conformance note below stands unchanged, and conformance of
+the D5b implementation is checked at the D5b/D6 review gate. This record is
+ADR #2 from the
 [production deployment decision](production-deployment-decision.md#decisions-deferred-to-their-own-records),
 settling the companion control protocol and pairing transcript so that Phase 1
 deliverable D5 (see
@@ -27,7 +33,10 @@ which fixes the browser-control-key authority boundary this protocol must enforc
 Adoption advances D5 from "blocked on its ADR" to "implementable". The D5 gate
 ("replay, wrong-SAS, expired-key, and revoked-key pairing tests fail closed")
 still requires the implementation and its tests, and the wire formats here are
-subject to the Phase 1 independent security review.
+subject to the **D5b/D6 independent review gate** — Phase 1 gate row #7 was
+[re-scoped by finding F2](phase-1-security-review-scope.md) to the two D1
+envelopes, so the control wire's approval routes through the D5b/D6 gate, not
+the already-closed Phase 1 review.
 
 ## Decision
 
@@ -112,16 +121,24 @@ subject to the Phase 1 independent security review.
 
 ## Open questions for adoption
 
-- **Control-key lifetime default.** 30 days is proposed (recoverable by waiting,
-  short enough to bound a stale key). A shorter default (e.g. 7 days) raises
-  re-pair friction; a longer one weakens the bound. Left for the reviewer.
-- **`room.join` confirmation surface.** Whether the human confirmation is a
-  companion-side prompt (native dialog) or a browser-side confirmation that the
-  companion double-checks. A1 requires the confirmation; this ADR leaves the UX
-  surface to D5, subject to the accessibility gate (amendment A5, Phase 2).
-- **Replay window size.** Bounded (e.g. 64 frames) for out-of-order delivery; the
-  exact bound is an implementation parameter, not a security property, as long as
-  it is bounded.
+Resolved at adoption (2026-07-23):
+
+- **Control-key lifetime default — FIXED at 30 days** (recoverable by waiting,
+  short enough to bound a stale key; decision 5's "default 30 days,
+  configurable" is confirmed as written). A shorter default (e.g. 7 days) was
+  considered and declined for re-pair friction; the bound stays configurable
+  and every key remains immediately revocable.
+- **`room.join` confirmation surface — trusted channel required; presentation
+  deferred to D5b.** A1 requires the confirmation, and under A1's threat model
+  the hostile party is the browser origin itself — so a browser-rendered
+  approval prompt proves nothing (the attacker can render or forge it). The
+  confirmation MUST present and verify the room identity on a surface the
+  browser origin cannot render or forge: the companion's native UI, or an
+  equivalent trusted local channel. Only the presentation details land with
+  D5b, under the accessibility gate (amendment A5, Phase 2).
+- **Replay window size — implementation parameter.** Any bounded window
+  satisfies the security property; the exact bound is fixed by the D5b
+  implementation and checked at the D5b/D6 review gate.
 
 ## Consequences
 
@@ -139,7 +156,8 @@ subject to the Phase 1 independent security review.
 
 ## Relationship to the Phase-1 scaffolding (2026-07-21)
 
-This ADR remains `proposal` / `not yet adopted`. The
+This ADR is adopted (2026-07-23); the scaffolding relationship below is
+unchanged by adoption. The
 [independent Phase-1 security review](phase-1-security-review.md) found that
 [`crates/jeliya-control/src/lib.rs`](../crates/jeliya-control/src/lib.rs) —
 which exists and is merged on `main` — does not conform to this ADR, and

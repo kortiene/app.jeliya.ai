@@ -234,8 +234,10 @@ replay protection, and revocation.
 - Record the browser public key, granted scopes, expiry, creation time, and last
   use on the companion.
 - Default scopes cover selected-room reads and idempotent chat sends only;
-  invite creation, file access, pipes, identity operations, and agents require
-  separate approval.
+  invite creation, `room.join` redemption (with human confirmation of the room
+  being joined on a surface the browser origin cannot forge, per amendment A1
+  and adopted ADR #2), file access, pipes, identity operations, and agents
+  require separate approval.
 - Rate-limit, expire, and allow immediate revocation of control keys.
 - Enforce nonce/counter replay protection on every scoped RPC.
 - Add the negative suite: replay, wrong-SAS, expired-key, and revoked-key
