@@ -909,13 +909,48 @@ verbatim), records the other two open questions as deferred by design
 (`room.join` confirmation UX lands with D5b under amendment A5; the replay
 window is a bounded implementation parameter checked at the D5b/D6 gate), and
 lands amendment A1's doc half from issue #32 (`room.join` redemption added to
-the plan's separate-approval list). **No pinned code surface changes; the ten
-protocol decisions, the F2/F3 scaffolding non-conformance note, and the
-D5b/D6 gate scoping are unchanged** — verified by an independent micro-review
-(fresh context, distinct from the implementer), whose first pass REJECTED the
-staged diff over a broken record anchor and a mis-cited decision number (both
-fixed), and whose second pass approved. D5 is now implementable; the D5b/D6
-review gate remains the conformance authority for the wire.
+the plan's separate-approval list). The adopted ADR file is pinned immutably
+by content hash in the
+[Normative ADR revisions table](phase-1-security-review-scope.md#normative-adr-revisions),
+so any post-adoption edit is detectable before the merge SHA is recorded at
+the next re-pin. **No pinned code surface changes; the ten protocol
+decisions, the F2/F3 scaffolding non-conformance note, and the D5b/D6 gate
+scoping are unchanged.**
+
+**Micro-delta reviewer and verdict (per the approval contract's artifact
+requirements).** The micro-review was executed 2026-07-23 by an
+**independent micro-review session** (a fresh agent context, Claude Fable 5,
+distinct from the adoption's implementer; the same model-family independence
+caveat as the Step 7 verdict applies, and the risk-owner's merge of the
+adoption PR serves as countersignature). Its **first pass REJECTED** the
+staged diff over two findings — a broken record anchor (the scope-doc row
+cited this note before it existed) and a mis-cited decision number (the
+30-day text lives in decision 5, not 3) — both fixed; its **second pass
+returned APPROVE**, statement verbatim:
+
+> I re-walked every hunk of the uncommitted working-tree diff on branch
+> `docs/33-adopt-adr2` (now 5 files, +52/−19) as an independent micro-delta
+> reviewer in a fresh context, having REJECTED the first pass over two
+> findings. Both are fixed, and nothing else moved: the adoption bullet now
+> cites decision 5, whose "default 30 days, configurable" string I
+> re-verified verbatim as the only 30-day text in the decision block, with
+> the ADR diff otherwise byte-identical to my first pass; the micro-delta
+> note now exists, its heading slug matches the scope-doc anchor, and its
+> content is accurate, faithfully disclosing my first-pass REJECT and both
+> findings. `node scripts/check-docs.mjs` passes; `git status` is clean
+> beyond the five named docs. The claim's core holds, re-confirmed: the ten
+> protocol decisions (transport, handshake, bootstrap, SAS, control key,
+> scopes, replay, rate limiting, revocation, wire-format deferral) are
+> untouched by any hunk; the F2/F3 scaffolding non-conformance note ("must
+> not be cited as if it did") stands unchanged; the D5b/D6 review-gate
+> scoping (verdict row #7 limited to the two D1 envelopes) is unchanged. The
+> change is exactly the pure governance-status ratification claimed — a
+> status change plus deferred-question recording, with no technical protocol
+> decision altered, weakened, added, or removed — and it now passes its own
+> documentation gate. I approve it for merge as the adoption PR.
+
+D5 is now implementable; the D5b/D6 review gate remains the conformance
+authority for the wire.
 
 **Accepted risks reaffirmed** (unchanged owners and exit criteria, per the
 [accepted-risk register](phase-1-evidence-package.md#accepted-risks)): opt-in
