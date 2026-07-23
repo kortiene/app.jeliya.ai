@@ -436,9 +436,9 @@ export const fr: LocaleCatalog = {
   inviteNoDialableAddressCopy:
     'Gardez ce salon ouvert. La personne qui rejoint peut encore se connecter via discovery ou relay, mais une adresse de salon récente est plus fiable.',
   inviteCombinedCopy:
-    'Envoyez ce bloc unique à la personne invitée — il réunit le ticket et votre adresse joignable. Elle le colle dans «\u202fRejoindre avec un ticket\u202f» et l’adresse se remplit automatiquement. Une invitation ouverte est consommée\u00a0: si elle a pu être vue ailleurs, générez-en une nouvelle.',
+    'Envoyez ce bloc unique à la personne invitée — il réunit le ticket et votre adresse joignable. Elle le colle dans «\u202fRejoindre avec un ticket\u202f» et l’adresse se remplit automatiquement. Chaque invitation est à usage unique\u00a0: une fois utilisée pour rejoindre, elle est consommée. Si elle a pu être vue par quelqu\u2019un d\u2019autre, annulez-la et générez-en une nouvelle.',
   inviteTicketOnlyCopy:
-    'Envoyez ce ticket à la personne invitée. Elle l’utilise pour rejoindre le salon (room.join). Une invitation ouverte est consommée\u00a0: si elle a pu être vue ailleurs, générez-en une nouvelle.',
+    'Envoyez ce ticket à la personne invitée. Elle l’utilise pour rejoindre le salon (room.join). Chaque invitation est à usage unique\u00a0: une fois utilisée pour rejoindre, elle est consommée. Si elle a pu être vue par quelqu\u2019un d\u2019autre, annulez-la et générez-en une nouvelle.',
   inviteCombinedInviteLabel: 'Invitation combinée (ticket et adresse du pair)',
   inviteInviteTicketLabel: 'Ticket d’invitation',
   inviteCopyInvite: 'Copier l’invitation',

@@ -428,8 +428,12 @@ of the Phase 3 gate** "invitations appear in no CDN, Worker, relay, or client
 diagnostic log" — that gate covers infrastructure and diagnostic surfaces the
 project operates, not the browser's own databases; the structural mitigations
 are the fragment-only URL, the short single-use expiry, and terminal
-redemption (an invite link that has been opened is spent — product copy must
-say so).
+redemption (each invite is single-use: once redeemed it is spent). Opening or
+viewing an invite does not consume it — only redemption, cancellation, or
+expiry does — so the product instruction for a possibly-disclosed link is to
+treat it as compromised: cancel it and reissue, because a recorded URL cannot
+be retracted. Product copy must state both halves (single-use redemption;
+cancel-and-reissue on possible disclosure).
 
 ## Browser persistence, PWA, and offline behavior
 
@@ -967,7 +971,7 @@ Go/no-go gate:
 - cursor resync matches full-log materialization;
 - expired, cancelled, and already-redeemed tickets fail on every transport
   (redemption is terminal: the membership fold consumes the invite on every
-  peer, so an opened invite is spent);
+  peer, so a redeemed invite is spent);
 - replay, wrong-SAS, expired-key, and revoked-key pairing tests fail closed;
 - independent security review approves the wire formats and key lifecycle.
 
