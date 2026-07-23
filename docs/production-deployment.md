@@ -343,8 +343,9 @@ identity.
 - The companion records the browser public key, granted scopes, expiry,
   creation time, and last use.
 - Default scopes cover selected-room reads and idempotent chat sends only.
-- Invite creation, file access, pipes, identity operations, and agents require
-  separate approval.
+- Invite creation, `room.join` redemption (with human confirmation of the
+  room being joined, per amendment A1), file access, pipes, identity
+  operations, and agents require separate approval.
 - Control keys are rate-limited, expire, and can be revoked immediately.
 
 ### Recovery

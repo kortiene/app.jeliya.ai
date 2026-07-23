@@ -896,6 +896,27 @@ recording PR):**
 This is a docs-only recording; no pinned code surface changes after
 `4206984`, which remains the current pin.
 
+#### ADR #2 adoption micro-delta note (2026-07-23)
+
+ADR #2 ([companion-control-protocol-decision.md](companion-control-protocol-decision.md))
+is in the pin's [reopen set](phase-1-security-review-scope.md#reopens-review),
+so its adoption — a governance-status change, not an editorial fix — is
+recorded here as a micro-delta. The change ratifies the ADR (PROPOSED →
+ADOPTED 2026-07-23, the risk-owner's merge of the adoption PR serving as
+countersignature), fixes the control-key lifetime default at **30 days**
+(confirming decision 5's existing "default 30 days, configurable" text
+verbatim), records the other two open questions as deferred by design
+(`room.join` confirmation UX lands with D5b under amendment A5; the replay
+window is a bounded implementation parameter checked at the D5b/D6 gate), and
+lands amendment A1's doc half from issue #32 (`room.join` redemption added to
+the plan's separate-approval list). **No pinned code surface changes; the ten
+protocol decisions, the F2/F3 scaffolding non-conformance note, and the
+D5b/D6 gate scoping are unchanged** — verified by an independent micro-review
+(fresh context, distinct from the implementer), whose first pass REJECTED the
+staged diff over a broken record anchor and a mis-cited decision number (both
+fixed), and whose second pass approved. D5 is now implementable; the D5b/D6
+review gate remains the conformance authority for the wire.
+
 **Accepted risks reaffirmed** (unchanged owners and exit criteria, per the
 [accepted-risk register](phase-1-evidence-package.md#accepted-risks)): opt-in
 at-rest encryption (F5, row #2 stays OPEN), `jeliya-control` scaffolding (F3),
