@@ -1,0 +1,41 @@
+[package]
+name = "jeliya-companion"
+version = "0.6.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The companion control-session runtime (D5b): the async transport that drives the jeliya-control Responder over a connection — frame codec, pairing-offer registry, revocation teardown, and the Iroh control-ALPN binding. No public HTTP/WS listener; never holds a daemon token."
+
+[dependencies]
+# The sans-I/O protocol core this runtime drives, and the shared wire types.
+jeliya-control = { path = "../jeliya-control" }
+jeliya-protocol = { path = "../jeliya-protocol" }
+
+# Async runtime for the per-connection frame loop and revocation teardown.
+tokio = { version = "1", features = ["rt", "sync", "io-util", "time", "macros"] }
+
+# CSPRNG for pairing-offer rendezvous nonces (workspace-standard major).
+getrandom = "0.4"
+
+# SHA-256 for the companion static-key fingerprint in the QR/link (spec:
+# SHA-256(static)[0..8]). Same version the workspace already resolves.
+sha2 = "0.11"
+
+# Wrap the companion's Noise static secret when building a per-connection
+# keypair.
+zeroize = "1"
+
+# The dedicated control Iroh endpoint + ALPN. Pinned exact to the version the
+# workspace already resolves (via iroh-rooms and jeliya-core), default-features
+# off + `tls-ring` matching the workspace crypto provider, so no second iroh
+# build or crypto provider enters the graph. Only the transport binding
+# (src/transport.rs) uses it; the protocol runtime is transport-agnostic.
+iroh = { version = "=1.0.1", default-features = false, features = ["tls-ring"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "io-util"] }
+# The reference Initiator's KeyPair::from_secret takes a Zeroizing secret.
+zeroize = "1"
+
+[lints]
+workspace = true
