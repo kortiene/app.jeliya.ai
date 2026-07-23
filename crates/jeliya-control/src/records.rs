@@ -123,12 +123,14 @@ pub fn load_records(json: &str) -> Result<Vec<ControlKeyRecord>, RecordError> {
         }
         let rooms: BTreeSet<String> = pk.rooms.into_iter().collect();
         // Clamp the stored expiry so a corrupt/hand-edited store cannot mint an
-        // unbounded key: no loaded key outlives `created_at + MAX_LIFETIME`. This
-        // keeps the "no path to an unbounded key" invariant true on the load
-        // path as well as the pairing path.
+        // unbounded key: no loaded key outlives `created_at + MAX_LIFETIME`. Use
+        // a *checked* add — a `created_at_ms` so large that `created + MAX`
+        // overflows is itself malformed and fails closed, rather than saturating
+        // to `u64::MAX` and re-admitting an effectively unbounded key.
         let max_expiry = pk
             .created_at_ms
-            .saturating_add(MAX_LIFETIME.as_millis() as u64);
+            .checked_add(MAX_LIFETIME.as_millis() as u64)
+            .ok_or(RecordError::Malformed("created_at_ms out of range"))?;
         let expires_at_ms = pk.expires_at_ms.min(max_expiry);
         out.push(ControlKeyRecord::from_persisted(
             key,
@@ -229,6 +231,21 @@ mod tests {
             cap,
             "no loaded key may outlive created_at + MAX_LIFETIME"
         );
+    }
+
+    #[test]
+    fn overflowing_created_at_fails_closed() {
+        // created_at_ms so large that created_at + MAX_LIFETIME overflows must
+        // be rejected, not saturated to u64::MAX (which would re-admit an
+        // effectively unbounded key).
+        let key = to_hex(&[3u8; 32]);
+        let json = format!(
+            r#"{{"version":1,"keys":[{{"key_hex":"{key}","scopes":[1],"rooms":["r"],"created_at_ms":18446744073709551615,"expires_at_ms":18446744073709551615,"last_used_ms":0,"revoked":false}}]}}"#
+        );
+        assert!(matches!(
+            load_records(&json),
+            Err(RecordError::Malformed(_))
+        ));
     }
 
     #[test]

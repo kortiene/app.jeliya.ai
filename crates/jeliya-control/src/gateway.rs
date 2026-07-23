@@ -357,13 +357,14 @@ impl TokenBucket {
     }
 }
 
-/// Per-key rate-limit state: an RPC-rate bucket, a request-bytes bucket, and a
-/// rolling strike counter. Sustained violation (3 strikes in 60 s) signals a
-/// session teardown, not just a dropped frame.
+/// Per-key rate-limit state: an RPC-rate bucket and a request-bytes bucket. The
+/// buckets are per control key (the resource an origin compromise shares across
+/// its tabs/reconnects), while the strike-to-teardown counter that decides
+/// whether to *drop a session* is per session ([`SessionStrikes`]) — one abusive
+/// session must not tear down a sibling session sharing the same key.
 struct KeyRateLimiter {
     rpc: TokenBucket,
     bytes: TokenBucket,
-    strikes: Vec<u64>,
 }
 
 /// v1 rate parameters (D5b/D6 gate to confirm).
@@ -379,27 +380,48 @@ impl KeyRateLimiter {
         Self {
             rpc: TokenBucket::new(RPC_BURST, RPC_PER_MS, now_ms),
             bytes: TokenBucket::new(BYTES_BURST, BYTES_PER_MS, now_ms),
-            strikes: Vec::new(),
         }
     }
 
-    /// Returns `Ok(())` if allowed, or `Err(teardown)` where `teardown` is true
-    /// once the strike threshold in the rolling window is reached. All-or-
+    /// Whether one request of `request_bytes` bytes is allowed now. All-or-
     /// nothing: a request denied by either bucket consumes tokens from neither,
     /// so a byte-limited client is not additionally drained of RPC tokens.
-    fn allow(&mut self, now_ms: u64, request_bytes: u32) -> Result<(), bool> {
+    fn allow(&mut self, now_ms: u64, request_bytes: u32) -> bool {
         let bytes = f64::from(request_bytes);
         let has_rpc = self.rpc.refill_and_has(now_ms, 1.0);
         let has_bytes = self.bytes.refill_and_has(now_ms, bytes);
         if has_rpc && has_bytes {
             self.rpc.commit(1.0);
             self.bytes.commit(bytes);
-            return Ok(());
+            true
+        } else {
+            false
         }
-        self.strikes
+    }
+}
+
+/// A per-session rolling strike counter. The session records a strike on each
+/// rate denial; `record` returns `true` once [`STRIKE_TEARDOWN`] strikes fall
+/// inside the [`STRIKE_WINDOW_MS`] window, telling the session to tear down.
+/// Per-session so one abusive session cannot tear down a sibling on the same key.
+#[derive(Default)]
+pub struct SessionStrikes {
+    hits: Vec<u64>,
+}
+
+impl SessionStrikes {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record a rate-limit violation at `now_ms`; return whether the session
+    /// should be torn down.
+    pub fn record(&mut self, now_ms: u64) -> bool {
+        self.hits
             .retain(|t| now_ms.saturating_sub(*t) < STRIKE_WINDOW_MS);
-        self.strikes.push(now_ms);
-        Err(self.strikes.len() >= STRIKE_TEARDOWN)
+        self.hits.push(now_ms);
+        self.hits.len() >= STRIKE_TEARDOWN
     }
 }
 
@@ -483,23 +505,6 @@ pub struct ControlGateway {
     clock: Box<dyn Clock>,
 }
 
-/// The outcome of a rate check that also says whether to tear the session down.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct AuthzError {
-    pub denial: Denial,
-    /// Set when a rate-limit violation crossed the teardown threshold.
-    pub teardown: bool,
-}
-
-impl From<Denial> for AuthzError {
-    fn from(denial: Denial) -> Self {
-        Self {
-            denial,
-            teardown: false,
-        }
-    }
-}
-
 impl ControlGateway {
     /// A gateway on the wall clock.
     #[must_use]
@@ -544,49 +549,55 @@ impl ControlGateway {
         Ok(record)
     }
 
-    /// Authorize one scoped RPC. Order: identity → revocation → expiry → scope →
-    /// room → rate limit → replay. On success advances `last_used` and records
-    /// the nonce in the caller's session window; on any denial nothing
-    /// grant-relevant changes. `replay` is the caller's per-session window.
-    #[allow(clippy::too_many_arguments)]
+    /// Charge the per-key rate limiter for one request of `request_bytes` bytes.
+    /// Called for *every* request from an admitted key — before method and param
+    /// validation — so a compromised origin cannot spend unbounded
+    /// decrypt/parse work by sending well-keyed but malformed requests without
+    /// hitting the rate limit. Returns `Err(Denial::RateLimited)` when denied;
+    /// the per-session strike-to-teardown decision is the caller's
+    /// ([`SessionStrikes`]).
+    pub fn charge_rate(&mut self, key: &ControlKey, request_bytes: u32) -> Result<(), Denial> {
+        let now = self.clock.now_ms();
+        let limiter = self
+            .limiters
+            .entry(*key)
+            .or_insert_with(|| KeyRateLimiter::new(now));
+        if limiter.allow(now, request_bytes) {
+            Ok(())
+        } else {
+            Err(Denial::RateLimited)
+        }
+    }
+
+    /// Authorize one scoped, well-formed RPC. Order: identity → revocation →
+    /// expiry → scope → room → replay. Rate limiting is charged separately and
+    /// earlier via [`ControlGateway::charge_rate`]. On success advances
+    /// `last_used` and records the nonce in the caller's session window; on any
+    /// denial nothing grant-relevant changes. `replay` is the per-session window.
     pub fn authorize(
         &mut self,
         key: &ControlKey,
         scope: Scope,
         room_id: &str,
-        request_bytes: u32,
         nonce: u64,
         replay: &mut ReplayWindow,
-    ) -> Result<(), AuthzError> {
+    ) -> Result<(), Denial> {
         let now = self.clock.now_ms();
         let record = self.keys.get_mut(key).ok_or(Denial::UnknownKey)?;
         if record.revoked {
-            return Err(Denial::Revoked.into());
+            return Err(Denial::Revoked);
         }
         if record.expired(now) {
-            return Err(Denial::Expired.into());
+            return Err(Denial::Expired);
         }
         if !record.scopes.contains(&scope) {
-            return Err(Denial::ScopeDenied.into());
+            return Err(Denial::ScopeDenied);
         }
         if !record.rooms.contains(room_id) {
-            return Err(Denial::RoomDenied.into());
-        }
-        let limiter = self
-            .limiters
-            .entry(*key)
-            .or_insert_with(|| KeyRateLimiter::new(now));
-        if let Err(teardown) = limiter.allow(now, request_bytes) {
-            return Err(AuthzError {
-                denial: Denial::RateLimited,
-                teardown,
-            });
+            return Err(Denial::RoomDenied);
         }
         replay.check_and_record(nonce)?;
-        // Re-borrow to advance last_used only on full success.
-        if let Some(record) = self.keys.get_mut(key) {
-            record.last_used_ms = now;
-        }
+        record.last_used_ms = now;
         Ok(())
     }
 
@@ -735,38 +746,35 @@ mod tests {
         let mut rl = KeyRateLimiter::new(0);
         // Drain the burst (40) at t=0 with tiny requests.
         for _ in 0..40 {
-            assert!(rl.allow(0, 1).is_ok());
+            assert!(rl.allow(0, 1));
         }
         // The 41st in the same instant is denied.
-        assert!(rl.allow(0, 1).is_err());
+        assert!(!rl.allow(0, 1));
         // After 1s (10 rpc/s refill) at least one token is back.
-        assert!(rl.allow(1_000, 1).is_ok());
+        assert!(rl.allow(1_000, 1));
     }
 
     #[test]
     fn byte_limit_denies_without_draining_rpc_tokens() {
         let mut rl = KeyRateLimiter::new(0);
         // A request larger than the 1 MiB byte burst is denied…
-        assert!(rl.allow(0, 2 * 1024 * 1024).is_err());
+        assert!(!rl.allow(0, 2 * 1024 * 1024));
         // …and it did not consume an RPC token (all-or-nothing): a normal
         // request still succeeds immediately.
-        assert!(rl.allow(0, 1).is_ok());
+        assert!(rl.allow(0, 1));
     }
 
     #[test]
-    fn sustained_violation_signals_teardown() {
-        let mut rl = KeyRateLimiter::new(0);
-        for _ in 0..40 {
-            rl.allow(0, 1).unwrap();
-        }
-        // Three denials inside the strike window escalate to teardown.
-        assert_eq!(rl.allow(0, 1), Err(false));
-        assert_eq!(rl.allow(0, 1), Err(false));
-        assert_eq!(
-            rl.allow(0, 1),
-            Err(true),
-            "third strike tears the session down"
-        );
+    fn session_strikes_escalate_to_teardown_per_session() {
+        // The strike counter is per session, not per key: two independent
+        // sessions each take their own strikes.
+        let mut a = SessionStrikes::new();
+        let mut b = SessionStrikes::new();
+        assert!(!a.record(0));
+        assert!(!a.record(0));
+        assert!(a.record(0), "session A's third strike tears A down");
+        // Session B is unaffected by A's strikes.
+        assert!(!b.record(0), "session B still on its first strike");
     }
 
     // ---- Handshake-tier rate limiting ----------------------------------
@@ -815,21 +823,39 @@ mod tests {
         let mut replay = ReplayWindow::new();
         // Scope denied (MessageSend not granted).
         assert_eq!(
-            gw.authorize(&key, Scope::MessageSend, "room-1", 1, 1, &mut replay)
-                .unwrap_err()
-                .denial,
+            gw.authorize(&key, Scope::MessageSend, "room-1", 1, &mut replay)
+                .unwrap_err(),
             Denial::ScopeDenied
         );
         // Room denied (room-2 not granted).
         assert_eq!(
-            gw.authorize(&key, Scope::RoomRead, "room-2", 1, 1, &mut replay)
-                .unwrap_err()
-                .denial,
+            gw.authorize(&key, Scope::RoomRead, "room-2", 1, &mut replay)
+                .unwrap_err(),
             Denial::RoomDenied
         );
         // A denial advanced no replay state: nonce 1 is still usable.
         assert!(gw
-            .authorize(&key, Scope::RoomRead, "room-1", 1, 1, &mut replay)
+            .authorize(&key, Scope::RoomRead, "room-1", 1, &mut replay)
             .is_ok());
+    }
+
+    #[test]
+    fn charge_rate_is_independent_of_authorize() {
+        let mut gw = ControlGateway::new();
+        let key = ControlKey([3; 32]);
+        gw.install(ControlKeyRecord::new(
+            key,
+            [Scope::RoomRead].into_iter().collect(),
+            ["r".to_string()].into_iter().collect(),
+            gw.now_ms(),
+            DEFAULT_LIFETIME,
+        ));
+        // A giant request is rate-denied by charge_rate regardless of scope.
+        assert_eq!(
+            gw.charge_rate(&key, 2 * 1024 * 1024).unwrap_err(),
+            Denial::RateLimited
+        );
+        // A small one is charged fine.
+        assert!(gw.charge_rate(&key, 16).is_ok());
     }
 }

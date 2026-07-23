@@ -348,14 +348,26 @@ u8       ok               // 1 ok, 0 error
 [u8]     body             // result on ok; else: u16 error code + string message
 ```
 
-Requests MAY be pipelined; responses arrive in request order (v1 processes
-serially). The application nonce is per-session (fresh session keys make
+v1 is **single-in-flight**: the companion processes one request at a time and
+produces its `Response` before accepting the next, so responses are always in
+request order. A request that arrives while the previous one's response has not
+been produced is a protocol error (close). Pipelining is reserved for a later
+version. The application nonce is per-session (fresh session keys make
 cross-session replay cryptographically impossible; persisting per-key nonce
 state would add a rollback-on-crash acceptance window, so v1 deliberately
 scopes the window to the session). The companion tracks the highest nonce
 plus a sliding window of 64 (out-of-order acceptance within the window,
 exact replays and below-floor nonces rejected) — the same tested window
 semantics as the Phase-1 state machine, now keyed by session.
+
+**Rate limiting precedes validation.** The per-key RPC and byte limits are
+charged on *every* request from an admitted key, before method and parameter
+validation, so a compromised origin cannot spend unbounded
+decrypt/parse/encrypt work by sending well-keyed but malformed requests (an
+unknown method or invalid params) without hitting the limits. The
+strike-to-teardown counter that drops a session on sustained violation is
+**per session**, so one abusive session cannot tear down a sibling session
+sharing the same control key.
 
 **Method registry v1** — the complete list; anything else fails closed with
 `method_unknown` before any scope evaluation:
@@ -386,6 +398,11 @@ express. In particular:
   address, hint, or peer list.
 - `client_msg_id` is **required** on `message.send` (D2 idempotency is the
   duplication bound the rate limiter leans on).
+- `room.timeline`'s `limit` is **capped at 500** (`MAX_TIMELINE_LIMIT`): a
+  tiny request must not be able to force an unbounded timeline read or
+  materialization, which the request-byte limiter does not bound. An explicit
+  larger limit is clamped; an absent limit leaves the daemon's own small
+  default in force.
 
 The companion constructs the daemon dispatch params **itself** from the
 parsed, validated wire fields — browser bytes are never forwarded as JSON to

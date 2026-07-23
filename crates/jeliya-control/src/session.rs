@@ -18,6 +18,7 @@ use jeliya_protocol::{
 use crate::crypto::KeyPair;
 use crate::gateway::{
     Clock, ControlGateway, ControlKey, ControlKeyRecord, Denial, ReplayWindow, Scope, SessionId,
+    SessionStrikes,
 };
 use crate::noise::{HandshakeState, NoiseError, TransportState};
 use crate::sas::sas_from_handshake_hash;
@@ -111,6 +112,11 @@ pub struct Responder {
     // companion-local grant, set by confirm_pairing:
     local_grant: Option<Grant>,
     replay: ReplayWindow,
+    /// The per-session rate-strike counter (teardown on sustained violation).
+    rate_strikes: SessionStrikes,
+    /// The nonce of the dispatch awaiting `complete_dispatch`, if any. v1 is
+    /// single-in-flight, so at most one is outstanding.
+    pending_nonce: Option<u64>,
 }
 
 struct Grant {
@@ -146,6 +152,8 @@ impl Responder {
             browser_confirmed: false,
             local_grant: None,
             replay: ReplayWindow::new(),
+            rate_strikes: SessionStrikes::new(),
+            pending_nonce: None,
         }
     }
 
@@ -383,7 +391,16 @@ impl Responder {
         frame: &Frame,
         gateway: &mut ControlGateway,
     ) -> Result<Vec<Out>, SessionError> {
-        let request_bytes = frame.body.len();
+        // v1 is single-in-flight: the companion processes one request at a time
+        // and produces its Response before accepting the next, so responses are
+        // in request order. A frame arriving while a dispatch is still pending
+        // is a transport misuse — fail closed.
+        if self.pending_nonce.is_some() {
+            return Err(SessionError::Unexpected(
+                "request while a dispatch is pending",
+            ));
+        }
+        let request_bytes = u32::try_from(frame.body.len()).unwrap_or(u32::MAX);
         let msg = self.open(frame)?;
         let Msg::Request {
             nonce,
@@ -395,6 +412,24 @@ impl Responder {
         };
         let key = self.authed_key.ok_or(SessionError::Unexpected("no key"))?;
 
+        // Rate-limit FIRST, for every request from an admitted key — before
+        // method/param validation — so a compromised origin cannot spend
+        // unbounded decrypt/parse work on well-keyed but malformed requests
+        // without hitting the byte/RPC limits. A rate denial records a
+        // per-session strike and tears the session down on sustained violation.
+        if gateway.charge_rate(&key, request_bytes).is_err() {
+            let mut outs = vec![self.error(
+                nonce,
+                jeliya_protocol::error::DENIED_RATE_LIMITED,
+                "rate limited",
+            )?];
+            if self.rate_strikes.record(gateway.now_ms()) {
+                self.state = State::Closed;
+                outs.push(Out::Close);
+            }
+            return Ok(outs);
+        }
+
         // Method must be in the v1 registry (fails closed before scope eval).
         let Some(scope) = Scope::for_method_id(method) else {
             return Ok(vec![self.error(
@@ -404,7 +439,7 @@ impl Responder {
             )?]);
         };
         let call = match MethodCall::decode(method, &params) {
-            Ok(c) => c,
+            Ok(c) => c.clamped(),
             Err(_) => {
                 return Ok(vec![self.error(
                     nonce,
@@ -414,13 +449,17 @@ impl Responder {
             }
         };
         let room = call.room_id().to_string();
-        let bytes = u32::try_from(request_bytes).unwrap_or(u32::MAX);
-        match gateway.authorize(&key, scope, &room, bytes, nonce, &mut self.replay) {
-            Ok(()) => Ok(vec![Out::Dispatch { nonce, call }]),
-            Err(err) => {
-                let mut outs =
-                    vec![self.error(nonce, err.denial.registry_code(), deny_msg(err.denial))?];
-                if err.teardown {
+        match gateway.authorize(&key, scope, &room, nonce, &mut self.replay) {
+            Ok(()) => {
+                self.pending_nonce = Some(nonce);
+                Ok(vec![Out::Dispatch { nonce, call }])
+            }
+            Err(denial) => {
+                let mut outs = vec![self.error(nonce, denial.registry_code(), deny_msg(denial))?];
+                // Key expiry or revocation mid-session tears the session down
+                // (the wire spec: the next RPC fails closed and the session
+                // closes), not just this one frame.
+                if matches!(denial, Denial::Expired | Denial::Revoked) {
                     self.state = State::Closed;
                     outs.push(Out::Close);
                 }
@@ -429,14 +468,20 @@ impl Responder {
         }
     }
 
-    /// Supply the engine result for a previously-emitted [`Out::Dispatch`]. On
-    /// `Ok` the bytes are the daemon result JSON; on `Err` they are an engine
-    /// error kind + message passed through.
+    /// Supply the engine result for the outstanding [`Out::Dispatch`]. On `Ok`
+    /// the bytes are the daemon result JSON; on `Err` they are an engine error
+    /// message passed through. The `nonce` must match the pending dispatch (v1
+    /// is single-in-flight), so a mismatched or spurious completion fails closed.
     pub fn complete_dispatch(
         &mut self,
         nonce: u64,
         result: Result<Vec<u8>, String>,
     ) -> Result<Vec<Out>, SessionError> {
+        match self.pending_nonce {
+            Some(pending) if pending == nonce => {}
+            _ => return Err(SessionError::Unexpected("no matching pending dispatch")),
+        }
+        self.pending_nonce = None;
         let msg = match result {
             Ok(body) => Msg::Response {
                 nonce,
@@ -866,19 +911,123 @@ mod tests {
         let req = init
             .request_with_nonce(1, jeliya_protocol::method::ROOM_MEMBERS, &call)
             .unwrap();
-        // First use authorizes (Dispatch).
-        assert!(matches!(
-            resp.on_frame(&req, &mut gw).unwrap()[0],
-            Out::Dispatch { .. }
-        ));
-        // Encrypting the same nonce again requires a fresh transport frame (the
-        // Noise counter differs); build a new frame with nonce 1 reused.
+        // First use authorizes (Dispatch); complete it (v1 is single-in-flight).
+        let outs = resp.on_frame(&req, &mut gw).unwrap();
+        let nonce = match outs[0] {
+            Out::Dispatch { nonce, .. } => nonce,
+            ref other => panic!("expected Dispatch, got {other:?}"),
+        };
+        let done = resp.complete_dispatch(nonce, Ok(b"[]".to_vec())).unwrap();
+        init.read(&only_send(&done)).unwrap(); // keep transport nonces in lockstep
+                                               // Reusing nonce 1 on a fresh transport frame is a replay.
         let replay = init
             .request_with_nonce(1, jeliya_protocol::method::ROOM_MEMBERS, &call)
             .unwrap();
         let outs = resp.on_frame(&replay, &mut gw).unwrap();
         let msg = init.read(&only_send(&outs)).unwrap();
         assert_error(&msg, jeliya_protocol::error::DENIED_REPLAY);
+    }
+
+    #[test]
+    fn malformed_and_unknown_requests_are_rate_limited() {
+        // Rate limiting is charged before method/param validation, so an
+        // admitted key cannot spend unbounded work on well-keyed but invalid
+        // requests. Drain the RPC burst (40) with unknown-method requests, each
+        // of which returns method_unknown, then the 41st is rate-denied.
+        let clock = Arc::new(ManualClock::new(1_000));
+        let mut gw = gateway(&clock);
+        pair(&mut gw);
+        let (mut init, mut resp, _accept) = control(&mut gw, 2);
+        let call = MethodCall::RoomMembers {
+            room_id: "room-1".into(),
+        };
+        for _ in 0..40 {
+            let req = init.request(0xFFFF, &call).unwrap(); // unknown method id
+            let msg = init
+                .read(&only_send(&resp.on_frame(&req, &mut gw).unwrap()))
+                .unwrap();
+            assert_error(&msg, jeliya_protocol::error::METHOD_UNKNOWN);
+        }
+        let req = init.request(0xFFFF, &call).unwrap();
+        let msg = init
+            .read(&only_send(&resp.on_frame(&req, &mut gw).unwrap()))
+            .unwrap();
+        assert_error(&msg, jeliya_protocol::error::DENIED_RATE_LIMITED);
+    }
+
+    #[test]
+    fn expiry_mid_session_tears_the_session_down() {
+        let clock = Arc::new(ManualClock::new(1_000));
+        let mut gw = gateway(&clock);
+        pair(&mut gw);
+        let (mut init, mut resp, _accept) = control(&mut gw, 2);
+        // The key expires while the session is live.
+        clock.advance(31 * 24 * 3600 * 1000);
+        let call = MethodCall::RoomMembers {
+            room_id: "room-1".into(),
+        };
+        let req = init
+            .request(jeliya_protocol::method::ROOM_MEMBERS, &call)
+            .unwrap();
+        let outs = resp.on_frame(&req, &mut gw).unwrap();
+        assert_error(
+            &init.read(&only_send(&outs)).unwrap(),
+            jeliya_protocol::error::DENIED_EXPIRED,
+        );
+        assert!(
+            outs.iter().any(|o| matches!(o, Out::Close)),
+            "expiry closes the session, not just the frame"
+        );
+    }
+
+    #[test]
+    fn a_second_request_before_completion_fails_closed() {
+        let clock = Arc::new(ManualClock::new(1_000));
+        let mut gw = gateway(&clock);
+        pair(&mut gw);
+        let (mut init, mut resp, _accept) = control(&mut gw, 2);
+        let call = MethodCall::RoomMembers {
+            room_id: "room-1".into(),
+        };
+        let req1 = init
+            .request(jeliya_protocol::method::ROOM_MEMBERS, &call)
+            .unwrap();
+        assert!(matches!(
+            resp.on_frame(&req1, &mut gw).unwrap()[0],
+            Out::Dispatch { .. }
+        ));
+        // v1 is single-in-flight: a second request before complete_dispatch is
+        // a protocol error (the transport must serialize).
+        let req2 = init
+            .request(jeliya_protocol::method::ROOM_MEMBERS, &call)
+            .unwrap();
+        assert!(resp.on_frame(&req2, &mut gw).is_err());
+    }
+
+    #[test]
+    fn oversized_timeline_limit_is_clamped_before_dispatch() {
+        let clock = Arc::new(ManualClock::new(1_000));
+        let mut gw = gateway(&clock);
+        pair(&mut gw);
+        let (mut init, mut resp, _accept) = control(&mut gw, 2);
+        let call = MethodCall::RoomTimeline {
+            room_id: "room-1".into(),
+            limit: Some(u32::MAX),
+            after: None,
+        };
+        let req = init
+            .request(jeliya_protocol::method::ROOM_TIMELINE, &call)
+            .unwrap();
+        let outs = resp.on_frame(&req, &mut gw).unwrap();
+        match &outs[0] {
+            Out::Dispatch { call, .. } => match call {
+                MethodCall::RoomTimeline { limit, .. } => {
+                    assert_eq!(*limit, Some(jeliya_protocol::MAX_TIMELINE_LIMIT));
+                }
+                other => panic!("expected RoomTimeline, got {other:?}"),
+            },
+            other => panic!("expected Dispatch, got {other:?}"),
+        }
     }
 
     #[test]

@@ -316,6 +316,29 @@ impl MethodCall {
             | MethodCall::MessageSend { room_id, .. } => room_id,
         }
     }
+
+    /// Return the call with any wire-bounded field clamped to its v1 maximum.
+    /// A `room.timeline` `limit` is capped at [`crate::MAX_TIMELINE_LIMIT`] so a
+    /// controller cannot request an unbounded timeline read/materialization
+    /// (which the request-byte rate limiter does not bound — the request is
+    /// tiny, the work it triggers is not).
+    #[must_use]
+    pub fn clamped(self) -> Self {
+        match self {
+            MethodCall::RoomTimeline {
+                room_id,
+                limit,
+                after,
+            } => MethodCall::RoomTimeline {
+                room_id,
+                // Cap an explicit limit; leave `None` so the daemon applies its
+                // own (small) default.
+                limit: limit.map(|l| l.min(crate::MAX_TIMELINE_LIMIT)),
+                after,
+            },
+            other => other,
+        }
+    }
 }
 
 /// The registry error name for a `Response` error code, for logging/tests.

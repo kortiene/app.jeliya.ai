@@ -50,6 +50,11 @@ pub const MIN_SAFE_VERSION: u16 = 1;
 /// length is rejected before allocation.
 pub const MAX_FRAME_LEN: usize = 65_536;
 
+/// The maximum `room.timeline` `limit` a control-wire request may effect. A
+/// tiny request must not be able to force an unbounded timeline read; an
+/// explicit larger limit is clamped to this ([`MethodCall::clamped`]).
+pub const MAX_TIMELINE_LIMIT: u32 = 500;
+
 /// The Noise protocol name this wire's handshake instantiates (informational
 /// here; realized in `jeliya-control`). Kept beside the wire constants so the
 /// two never drift.

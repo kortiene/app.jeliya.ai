@@ -45,8 +45,8 @@ mod sas;
 mod session;
 
 pub use gateway::{
-    clamp_lifetime, AuthzError, Clock, ControlGateway, ControlKey, ControlKeyRecord, Denial,
-    HandshakeLimiter, RejectReason, ReplayWindow, Scope, SessionId, SystemClock, DEFAULT_LIFETIME,
+    clamp_lifetime, Clock, ControlGateway, ControlKey, ControlKeyRecord, Denial, HandshakeLimiter,
+    RejectReason, ReplayWindow, Scope, SessionId, SessionStrikes, SystemClock, DEFAULT_LIFETIME,
     MAX_LIFETIME, MIN_LIFETIME, REPLAY_WINDOW,
 };
 pub use noise::{HandshakeState, NoiseError, TransportState};

@@ -262,6 +262,31 @@ fn unknown_msg_type_is_rejected() {
 }
 
 #[test]
+fn timeline_limit_is_clamped_but_none_is_left_for_the_daemon_default() {
+    let clamped = MethodCall::RoomTimeline {
+        room_id: "r".into(),
+        limit: Some(u32::MAX),
+        after: None,
+    }
+    .clamped();
+    match clamped {
+        MethodCall::RoomTimeline { limit, .. } => assert_eq!(limit, Some(MAX_TIMELINE_LIMIT)),
+        other => panic!("expected RoomTimeline, got {other:?}"),
+    }
+    // A None limit stays None (the daemon applies its own small default).
+    let untouched = MethodCall::RoomTimeline {
+        room_id: "r".into(),
+        limit: None,
+        after: None,
+    }
+    .clamped();
+    match untouched {
+        MethodCall::RoomTimeline { limit, .. } => assert_eq!(limit, None),
+        other => panic!("expected RoomTimeline, got {other:?}"),
+    }
+}
+
+#[test]
 fn unknown_method_scope_lookup_fails_closed() {
     assert_eq!(scope_for_method(0xFFFF), Err(ProtoError::BadEnum("method")));
     assert_eq!(
