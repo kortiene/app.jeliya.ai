@@ -755,10 +755,10 @@ verdict **APPROVE**, statement verbatim:
 > binary confirmed built from the amended source, including the new
 > overlong-paste and é-input assertions; I have no remaining issues.
 
-This changes `recovery.rs` after `d610076`; the pin's final SHA is therefore
-the PR #90 merge commit (recorded in the
-[pin history](phase-1-security-review-scope.md#review-target-pin) after
-merge), with this note as the micro-delta record.
+This changes `recovery.rs` after `d610076`; the pin's final SHA is the PR #90
+merge commit `dcd940e`, recorded in the
+[pin history](phase-1-security-review-scope.md#review-target-pin), with this
+note as the micro-delta record.
 
 Carried notes (no action this gate): the two `to_seed()` call sites in
 `supervisor.rs` outside row #7's surfaces (disclosed in the
@@ -766,7 +766,7 @@ Carried notes (no action this gate): the two `to_seed()` call sites in
 tracked for the next zeroize pass / D5b review); the env-var password
 register row is governance recording of an already-countersigned risk, not
 new scope. The pin is
-[re-recorded at `d610076`](phase-1-security-review-scope.md#review-target-pin).
+[re-recorded at the final pin `dcd940e`](phase-1-security-review-scope.md#review-target-pin).
 
 **Reopen note.** Landing ANY of the conditions touches the pin's
 [reopen set](phase-1-security-review-scope.md#reopens-review): conditions

@@ -20,17 +20,18 @@ closure and the gaps that carry forward to the current post-release source
 candidate on `main`: the pre-Phase-1 candidate `922f620…` (which repins
 `iroh-rooms` to the untagged upstream revision `a5d98b70...` and earned signed
 direct/relay evidence at that pair) plus merged PR #78 (Phase 1 protocol
-primitives), the Phase 1 remediation (PRs #80–#85), and the delta-reviewed
-verdict-conditions PR #89, bringing the reviewed code surfaces to `d610076…`
-(interleaved `main` commits are docs-only governance records). Phase 1 is
-implemented, CI-green, and **its gate is closed**: see the
+primitives), the Phase 1 remediation (PRs #80–#85), the delta-reviewed
+verdict-conditions PR #89, and the micro-delta-reviewed hardening PR #90,
+bringing the reviewed code surfaces to `dcd940e…` (interleaved `main` commits
+are docs-only governance records). Phase 1 is implemented, CI-green, and
+**its gate is closed**: see the
 [Phase 1 go/no-go gate verdict](phase-1-gate-verdict.md) — rows #1–#6 pass by
 tests; row #7's independent re-review returned APPROVE-WITH-CONDITIONS, the
 risk-owner recorded GO (2026-07-22), and the approval was
-[extended to `d610076`](phase-1-security-review.md#conditions-delta-review-2026-07-22)
-by the conditions delta review. `d610076` is past the network-qualified
-`922f620…` pair, so a release at `d610076` still needs fresh signed
-direct/relay evidence.
+[extended to `d610076` and `dcd940e`](phase-1-security-review.md#conditions-delta-review-2026-07-22)
+by the delta reviews. `dcd940e` is past the network-qualified `922f620…`
+pair, so a release at `dcd940e` still needs fresh signed direct/relay
+evidence.
 
 ## NOW — closure status
 

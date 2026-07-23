@@ -56,7 +56,7 @@ green) and at the delta-reviewed conditions tree `d610076` (push run
 `29951799090`, all green — see the candidate table below). They are **local/unit evidence**, not
 the network qualification a *release* requires: these SHAs are past the
 network-qualified pre-Phase-1 pair `922f620…` + `a5d98b70…`, so a release at
-the current `d610076` candidate additionally needs fresh signed direct/relay
+the current `dcd940e` candidate additionally needs fresh signed direct/relay
 runs. This record advances no release status.
 
 ## Candidate under verdict
@@ -68,6 +68,7 @@ runs. This record advances no release status.
 | Pre-Phase-1 network-qualified candidate | `922f620b30ee95c82426a7d4404b1f73a70c0958` (signed direct `098c4979` + relay `8bda01e6` bind this pair; does not transfer to later SHAs) |
 | Iroh Rooms pin | `a5d98b70d717f35d3ce60953a88e12e646f2e871` (unchanged from the pre-Phase-1 candidate) |
 | Conditions tree (delta-reviewed) | `d610076c05f0f29cb8f87c7dbe805a5f603ecc89` (`main`; PR #89 — the [Step 7 verdict conditions](phase-1-security-review.md#step-7-re-review-verdict-2026-07-22); the `df28f6a` approval [extends to it](phase-1-security-review.md#conditions-delta-review-2026-07-22)) |
+| Final pin (micro-delta-reviewed) | `dcd940e65a74b3596a9d8defacfc4946aedabd7d` (`main`; PR #90 — the `from_phrase` fixed-buffer hardening; the approval [extends to it](phase-1-security-review.md#conditions-delta-review-2026-07-22)) |
 | Verdict dates (UTC) | rows #1–#6: 2026-07-21 (at `cdcae83`; test evidence re-verified green at `df28f6a`, push run `29922951249`); row #7: 2026-07-22 (at `df28f6a`; extended to `d610076` by the conditions delta review the same day) |
 
 **Single candidate for the GO decision: `df28f6a`.** The reviewed crypto
@@ -81,7 +82,8 @@ matrix running green there (push run `29922951249`; also at the docs-only
 countersigning this record countersigns `df28f6a`; the approval was
 subsequently extended to the conditions tree `d610076` by the
 [conditions delta review](phase-1-security-review.md#conditions-delta-review-2026-07-22)
-(push run `29951799090` green there).
+(push run `29951799090` green there) and to the final pin `dcd940e` by the
+PR #90 micro-delta review.
 
 ## GO decision — risk-owner countersignature (2026-07-22)
 

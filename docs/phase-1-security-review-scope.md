@@ -372,13 +372,13 @@ tamper/version/wrong-key fail-closed.
 > Pin history: `35b1c5e` (Step 3) → `df28f6a` (Step 6; the Step 7 verdict and
 > GO were recorded against it) → `d610076` (verdict conditions, PR #89; the
 > approval [extends to it](phase-1-security-review.md#conditions-delta-review-2026-07-22))
-> → the PR #90 merge SHA (the `from_phrase` fixed-buffer hardening,
+> → `dcd940e` (PR #90 — the `from_phrase` fixed-buffer hardening,
 > [micro-delta-reviewed](phase-1-security-review.md#conditions-delta-review-2026-07-22);
-> record the final SHA here after merge).
+> **the current pin**).
 
 | Field | Value |
 |---|---|
-| Source SHA | `d610076c05f0f29cb8f87c7dbe805a5f603ecc89` (`main`; PR #89, verdict-conditions merge) |
+| Source SHA | `dcd940e65a74b3596a9d8defacfc4946aedabd7d` (`main`; PR #90, final-pin merge — `d610076` plus the `from_phrase` hardening) |
 | `Cargo.lock` SHA-256 | `dda192b513195ca512587d01609aeb5d89447001fc04549aca538a3d0c31b223` |
 | Rust toolchain (CI full gate) | `1.96.0` (stable; `dtolnay/rust-toolchain` in `ci.yml` with `toolchain: 1.96.0`) |
 | Rust MSRV (CI MSRV lane) | `1.91.0` (`dtolnay/rust-toolchain` `1.91.0` in `ci.yml` and `release.yml`) |
@@ -392,7 +392,7 @@ tamper/version/wrong-key fail-closed.
 | Surface | File | Last changed |
 |---|---|---|
 | At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `d610076` (PR #89, verdict conditions) |
-| Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `d610076` (PR #89, verdict conditions) |
+| Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `dcd940e` (PR #90, `from_phrase` fixed-buffer hardening) |
 | Authority path (F4) | [`crates/jeliya-core/src/engine.rs`](../crates/jeliya-core/src/engine.rs) | `cdcae83` (PR #78) |
 | Daemon auth (F4) | [`crates/jeliyad/src/serve.rs`](../crates/jeliyad/src/serve.rs) | `922f620` (PR #58; created the file, unchanged since) |
 
@@ -476,24 +476,32 @@ re-review (record a new pin before the Step 7 re-review):
 - The remediation steps themselves (Steps 3–6) update this pin before the
   Step 7 re-review; those updates are expected, not reopenings.
 
-### Pin status: re-recorded at `d610076` (conditions delta review complete)
+### Pin status: re-recorded at `dcd940e` (delta reviews complete)
 
 The Step 7 re-review approved `df28f6a` (2026-07-22, APPROVE-WITH-CONDITIONS,
-GO countersigned); the verdict conditions then merged as `d610076` and the
-required **scoped delta review** was executed by an independent delta-review
-session, extending the approval to `d610076` — see the
+GO countersigned); the verdict conditions merged as `d610076` and the required
+**scoped delta review** extended the approval there; the PR #90
+**micro-delta review** then extended it to the current pin `dcd940e` (the
+`from_phrase` fixed-buffer hardening) — see the
 [delta-review record](phase-1-security-review.md#conditions-delta-review-2026-07-22)
-for the verdict, the reviewer's statement, and the run-ID erratum it caught.
+for both verdicts, the reviewers' statements, and the run-ID erratum.
 A reviewer reproducing the current pin should:
 
-1. `git checkout d610076`
-2. Verify `sha256sum Cargo.lock` matches `dda192b5…` (unchanged across all
-   three pins)
+1. `git checkout dcd940e` for the pinned code tree — or check out current
+   `main` to have this pin record and the finalized review package alongside
+   the code (recording a pin necessarily post-dates the pinned commit, so at
+   `dcd940e` itself the package docs are one step behind; confirm code
+   equivalence with `git diff dcd940e..main -- crates/ tools/`, which must be
+   empty)
+2. Verify `sha256sum Cargo.lock` matches `dda192b5…` (shared by the
+   `df28f6a`, `d610076`, and `dcd940e` pins; the initial `35b1c5e` pin
+   predates the Step 6 zeroize-feature dependency change and recorded a
+   different lockfile, `f0baf2f1…`)
 3. Verify the toolchain matches (CI full-gate Rust `1.96.0`, or MSRV `1.91.0`;
    Node `22.22.3`)
 4. Run the commands in the [evidence package](phase-1-evidence-package.md#reproduce-the-review)
-   (expected: 127 passed / 0 failed / 1 ignored at `d610076`; 128 at the
-   PR #90 tree, which adds the overlong-paste rejection test)
+   (expected: 128 passed / 0 failed / 1 ignored; 127 at the prior `d610076`
+   pin, which lacked the overlong-paste rejection test)
 5. Verify the pin values above against the tree they checked out
 
 If any value does not match, the pin is stale and the review cannot proceed
