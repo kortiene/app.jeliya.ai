@@ -4,13 +4,51 @@ version = "0.6.0"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
-description = "The host-independent core of the companion control protocol: pairing transcript, SAS, the non-extractable bounded-lifetime control key, and the scope/replay/expiry/revocation gateway (Phase 1 D5, ADR #2)."
+description = "The host-independent companion control protocol (ADR #2, D5b/D6): the Noise_XX_25519_AESGCM_SHA256 handshake, the transcript-derived SAS, and the bounded-lifetime scope/room/replay/rate-limit/revocation gateway with its versioned wire framing and persistence."
 
 [dependencies]
-# BLAKE3 is the project's hasher of choice (content ids, file verification);
-# used for the pairing SAS derivation. Already in the dependency tree
-# transitively (via iroh); pinned direct.
-blake3 = "1"
+# The versioned wire framing, hellos, and method/scope/error registries. Pure
+# encoding; the security logic here binds to it so the browser controller can
+# reuse the same wire from the shared conformance corpus.
+jeliya-protocol = { path = "../jeliya-protocol" }
+
+# AEAD for the Noise handshake and transport. The exact crate and version the
+# Phase-1-reviewed recovery envelope uses (identity.rs / recovery.rs), pinned
+# direct so a security-sensitive dependency does not lean on a transitive path.
+aes-gcm = "0.10"
+
+# X25519 Diffie-Hellman via the Montgomery ladder. Pinned to the exact
+# pre-release the iroh-base build already resolves (every iroh EndpointId
+# depends on it) so no second curve25519 implementation enters the graph.
+# default-features off drops std/alloc bloat; `zeroize` wipes internal scalars.
+curve25519-dalek = { version = "=5.0.0-rc.0", default-features = false, features = ["alloc", "zeroize"] }
+
+# SHA-256, the hash under the Noise HKDF/HMAC chains and the SAS. HMAC-SHA-256
+# and HKDF are built over this directly (see src/crypto.rs) and pinned to
+# published RFC test vectors, rather than adding the hmac/hkdf crates.
+sha2 = "0.11"
+
+# CSPRNG for ephemeral handshake keys; the workspace-standard major.
+getrandom = "0.4"
+
+# Wipe secret material (DH outputs, HKDF/HMAC keys, ephemeral scalars) on drop.
+zeroize = "1"
+
+# Constant-time equality for tag/key comparisons and the non-contributory-key
+# check.
+subtle = "2"
+
+# Versioned JSON persistence of control-key records (format owned here; file
+# I/O owned by the host, following the localstate.rs discipline).
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+# Reference Noise implementation, used ONLY to cross-validate our hand-written
+# Noise_XX_25519_AESGCM_SHA256 handshake (interop + handshake-hash agreement).
+# Dev-only: it never enters the runtime graph, and it reuses the same aes-gcm
+# 0.10 the runtime already resolves, so it moves no reviewed crypto version.
+snow = "0.10"
 
 [lints]
 workspace = true
