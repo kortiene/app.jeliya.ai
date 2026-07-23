@@ -131,10 +131,13 @@ node scripts/check-ui-i18n.mjs
 # 6. Expected results (gate).
 # cargo fmt: no output (clean).
 # cargo clippy: no warnings.
-# cargo test: 128 passed, 0 failed, 1 ignored at the dcd940e pin.
-#   (127 at the prior d610076 pin — the PR #90 from_phrase hardening added
-#    the overlong-paste rejection test; 125 at df28f6a — verdict condition 4
-#    added the two identity-envelope tamper/truncation tests.)
+# cargo test: 136 passed, 0 failed, 1 ignored at the 4206984 pin.
+#   (128 at the prior dcd940e pin — the issue #91 fix (PR #94) added eight
+#    tests: two identity.rs room-device KDF tests, one recovery.rs
+#    room-device derivation test, five supervisor.rs multi-room/legacy
+#    regression tests; 127 at d610076 — the PR #90 from_phrase hardening
+#    added the overlong-paste rejection test; 125 at df28f6a — verdict
+#    condition 4 added the two identity-envelope tamper/truncation tests.)
 # check-docs: OK.
 # check-ui-i18n: OK.
 ```
@@ -165,7 +168,8 @@ CI artifact links for the remediation PRs (all six jobs green):
 | [#85](https://github.com/kortiene/app.jeliya.ai/pull/85) (Step 6 — the `df28f6a` tree) | push run `29922951249` at merge SHA `df28f6a` (ID corrected per the [delta-review erratum](phase-1-security-review.md#conditions-delta-review-2026-07-22)) |
 | [#86](https://github.com/kortiene/app.jeliya.ai/pull/86) (Step 7 handoff) | push run `29928189003` at merge SHA `5fa0bae` (ID corrected per the same erratum) |
 | [#89](https://github.com/kortiene/app.jeliya.ai/pull/89) (verdict conditions — the `d610076` tree) | push run `29951799090` at merge SHA `d610076` |
-| [#90](https://github.com/kortiene/app.jeliya.ai/pull/90) (delta-review record + `from_phrase` hardening — the current `dcd940e` pin) | push run `29957825701` at merge SHA `dcd940e` |
+| [#90](https://github.com/kortiene/app.jeliya.ai/pull/90) (delta-review record + `from_phrase` hardening — the `dcd940e` pin) | push run `29957825701` at merge SHA `dcd940e` |
+| [#94](https://github.com/kortiene/app.jeliya.ai/pull/94) (issue #91 room-scoped device keys — the current `4206984` pin, [delta-reviewed](phase-1-security-review.md#issue-91-delta-review-2026-07-23)) | push run `29997137062` at merge SHA `4206984` |
 
 ### Test-to-finding mapping
 
