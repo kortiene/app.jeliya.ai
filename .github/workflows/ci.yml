@@ -51,12 +51,6 @@ jobs:
           node --test scripts/check-secret-storage.test.mjs
           node scripts/check-secret-storage.mjs
 
-      - name: Verify workspace-lints inheritance
-        run: |
-          set -euo pipefail
-          node --test scripts/check-workspace-lints.test.mjs
-          node scripts/check-workspace-lints.mjs
-
       - name: Verify release and installer contracts
         run: |
           set -euo pipefail
@@ -183,6 +177,14 @@ jobs:
 
       - name: Rust tests
         run: cargo test --locked --workspace
+
+      # Membership is enumerated via `cargo metadata` (in-tree path deps are
+      # auto-members), so this gate lives in the job that has a Rust toolchain.
+      - name: Verify workspace-lints inheritance
+        run: |
+          set -euo pipefail
+          node --test scripts/check-workspace-lints.test.mjs
+          node scripts/check-workspace-lints.mjs
 
       - name: Build required live-test binaries
         run: |

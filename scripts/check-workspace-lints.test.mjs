@@ -9,35 +9,35 @@ import { checkWorkspaceLints } from "./check-workspace-lints.mjs";
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
-const ROOT_MANIFEST = `[workspace]
-members = ["crates/good", "crates/bad", "crates/exempt"]
-resolver = "2"
+const GOOD_LINTS = "[lints]\nworkspace = true\n";
+const ROOT_LINTS = '[workspace.lints.rust]\nunsafe_code = "forbid"\n';
 
-[workspace.lints.rust]
-unsafe_code = "forbid"
-`;
+/** Write a minimal REAL crate `cargo metadata` can resolve: a manifest plus an
+ *  empty `src/lib.rs` (metadata needs target discovery, not compilation). */
+function writeCrate(root, dir, name, { lints = "", deps = "", exemption = "" } = {}) {
+  mkdirSync(join(root, dir, "src"), { recursive: true });
+  writeFileSync(join(root, dir, "src", "lib.rs"), "");
+  writeFileSync(
+    join(root, dir, "Cargo.toml"),
+    `${exemption}[package]\nname = "${name}"\nversion = "0.0.0"\nedition = "2021"\n\n${deps}${lints}`,
+  );
+}
 
-function fixtureWorkspace({ badManifest, exemptManifest }) {
+/** A temp workspace whose root lists only the crates in `members`. */
+function fixtureRoot(members, rootLints = ROOT_LINTS) {
   const root = mkdtempSync(join(tmpdir(), "lints-check-"));
-  writeFileSync(join(root, "Cargo.toml"), ROOT_MANIFEST);
-  for (const [name, body] of [
-    ["good", '[package]\nname = "good"\n\n[lints]\nworkspace = true\n'],
-    ["bad", badManifest],
-    ["exempt", exemptManifest],
-  ]) {
-    mkdirSync(join(root, "crates", name), { recursive: true });
-    writeFileSync(join(root, "crates", name, "Cargo.toml"), body);
-  }
+  writeFileSync(
+    join(root, "Cargo.toml"),
+    `[workspace]\nmembers = [${members.map((m) => `"${m}"`).join(", ")}]\nresolver = "2"\n\n${rootLints}`,
+  );
   return root;
 }
 
-test("a member with neither the opt-in nor an exemption fails the check", () => {
-  const root = fixtureWorkspace({
-    badManifest: '[package]\nname = "bad"\n',
-    exemptManifest:
-      '# workspace-lints-exemption: wasm-bindgen FFI boundary requires unsafe in generated glue\n[package]\nname = "exempt"\n',
-  });
+test("a listed member with neither the opt-in nor an exemption fails the check", () => {
+  const root = fixtureRoot(["crates/good", "crates/bad"]);
   try {
+    writeCrate(root, "crates/good", "good", { lints: GOOD_LINTS });
+    writeCrate(root, "crates/bad", "bad");
     const failures = checkWorkspaceLints(root);
     assert.equal(failures.length, 1, failures.join("\n"));
     assert.match(failures[0], /crates\/bad\/Cargo\.toml/);
@@ -47,45 +47,71 @@ test("a member with neither the opt-in nor an exemption fails the check", () => 
   }
 });
 
-test("a reasoned exemption passes; a bare or empty one fails", () => {
-  const root = fixtureWorkspace({
-    badManifest: '# workspace-lints-exemption: because\n[package]\nname = "bad"\n',
-    exemptManifest:
-      '# workspace-lints-exemption: wasm-bindgen FFI boundary requires unsafe in generated glue\n[package]\nname = "exempt"\n',
-  });
+test("an in-tree path dependency is a resolved member and cannot escape the gate", () => {
+  // Cargo admits path dependencies inside the workspace directory as members
+  // automatically — they never appear in the root `members` array, which is
+  // exactly why the check enumerates via `cargo metadata`, not the manifest.
+  const root = fixtureRoot(["crates/good"]);
   try {
+    writeCrate(root, "crates/good", "good", {
+      lints: GOOD_LINTS,
+      deps: '[dependencies]\nsneaky = { path = "../sneaky" }\n\n',
+    });
+    writeCrate(root, "crates/sneaky", "sneaky");
     const failures = checkWorkspaceLints(root);
     assert.equal(failures.length, 1, failures.join("\n"));
-    assert.match(failures[0], /crates\/bad\/Cargo\.toml/);
+    assert.match(failures[0], /crates\/sneaky\/Cargo\.toml/);
+    assert.match(failures[0], /neither opts in/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a reasoned exemption passes; a bare one fails", () => {
+  const root = fixtureRoot(["crates/bare", "crates/exempt"]);
+  try {
+    writeCrate(root, "crates/bare", "bare", {
+      exemption: "# workspace-lints-exemption: because\n",
+    });
+    writeCrate(root, "crates/exempt", "exempt", {
+      exemption:
+        "# workspace-lints-exemption: wasm-bindgen FFI boundary requires unsafe in generated glue\n",
+    });
+    const failures = checkWorkspaceLints(root);
+    assert.equal(failures.length, 1, failures.join("\n"));
+    assert.match(failures[0], /crates\/bare\/Cargo\.toml/);
     assert.match(failures[0], /must name the boundary/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("a missing member manifest and a lint-less root both fail closed", () => {
-  const root = mkdtempSync(join(tmpdir(), "lints-check-"));
+test("unsafe_code = forbid in the wrong table does not satisfy the root gate", () => {
+  // The value must live in [workspace.lints.rust] — the table members inherit
+  // from — not merely appear somewhere in the root manifest.
+  const root = fixtureRoot(
+    ["crates/good"],
+    '[workspace.metadata]\nunsafe_code = "forbid"\n\n[workspace.lints.rust]\nrust_2018_idioms = "warn"\n',
+  );
   try {
-    writeFileSync(
-      join(root, "Cargo.toml"),
-      '[workspace]\nmembers = ["crates/ghost"]\nresolver = "2"\n',
-    );
+    writeCrate(root, "crates/good", "good", { lints: GOOD_LINTS });
     const failures = checkWorkspaceLints(root);
-    assert.equal(failures.length, 2, failures.join("\n"));
-    assert.match(failures[0], /unsafe_code = "forbid"/);
-    assert.match(failures[1], /crates\/ghost\/Cargo\.toml: could not read/);
+    assert.equal(failures.length, 1, failures.join("\n"));
+    assert.match(failures[0], /\[workspace\.lints\.rust\] table must declare unsafe_code = "forbid"/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("a root manifest without [workspace] members fails closed", () => {
-  const root = mkdtempSync(join(tmpdir(), "lints-check-"));
+test("a root manifest cargo cannot resolve fails closed", () => {
+  const root = fixtureRoot(["crates/ghost"]); // listed member has no manifest
   try {
-    writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "solo"\n');
     const failures = checkWorkspaceLints(root);
-    assert.equal(failures.length, 1, failures.join("\n"));
-    assert.match(failures[0], /could not find \[workspace\] members/);
+    assert.ok(failures.length >= 1, failures.join("\n"));
+    assert.ok(
+      failures.some((f) => f.includes("cargo metadata failed")),
+      failures.join("\n"),
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
