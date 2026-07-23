@@ -905,11 +905,17 @@ recorded here as a micro-delta. The change ratifies the ADR (PROPOSED →
 ADOPTED 2026-07-23, the risk-owner's merge of the adoption PR serving as
 countersignature), fixes the control-key lifetime default at **30 days**
 (confirming decision 5's existing "default 30 days, configurable" text
-verbatim), records the other two open questions as deferred by design
-(`room.join` confirmation UX lands with D5b under amendment A5; the replay
-window is a bounded implementation parameter checked at the D5b/D6 gate), and
-lands amendment A1's doc half from issue #32 (`room.join` redemption added to
-the plan's separate-approval list). The adopted ADR file is pinned immutably
+verbatim), resolves the other two open questions (`room.join` confirmation
+MUST present and verify the room identity on a surface the browser origin
+cannot render or forge — companion native UI or an equivalent trusted local
+channel, per amendment A1's threat model, with only presentation details
+deferred to D5b under amendment A5; the replay window is a bounded
+implementation parameter checked at the D5b/D6 gate), corrects the ADR's
+stale routing sentence so the control wire's approval goes through the
+D5b/D6 gate rather than the closed Phase 1 review (finding F2's
+re-scoping), and lands amendment A1's doc half from issue #32 (`room.join`
+redemption added to the separate-approval lists in both the deployment
+architecture and the D5 plan checklist). The adopted ADR file is pinned immutably
 by content hash in the
 [Normative ADR revisions table](phase-1-security-review-scope.md#normative-adr-revisions),
 so any post-adoption edit is detectable before the merge SHA is recorded at
@@ -926,7 +932,10 @@ adoption PR serves as countersignature). Its **first pass REJECTED** the
 staged diff over two findings — a broken record anchor (the scope-doc row
 cited this note before it existed) and a mis-cited decision number (the
 30-day text lives in decision 5, not 3) — both fixed; its **second pass
-returned APPROVE**, statement verbatim:
+returned APPROVE**, statement condensed from the reviewer's second-pass
+record (per the reviewer's own third-pass quote-fidelity correction, this
+quote is a faithful condensation, not verbatim; the third-pass statement
+below is quoted verbatim in full):
 
 > I re-walked every hunk of the uncommitted working-tree diff on branch
 > `docs/33-adopt-adr2` (now 5 files, +52/−19) as an independent micro-delta
@@ -948,6 +957,114 @@ returned APPROVE**, statement verbatim:
 > status change plus deferred-question recording, with no technical protocol
 > decision altered, weakened, added, or removed — and it now passes its own
 > documentation gate. I approve it for merge as the adoption PR.
+
+**Third pass (2026-07-23, same independent reviewer session).** After the
+second-pass APPROVE, the adoption PR received three external (Codex) review
+comments; the resulting fixes — the D5b/D6 routing correction, the
+`room.join` trusted-confirmation-channel requirement (a security-relevant
+tightening: under amendment A1's threat model a browser-rendered approval
+prompt is attacker-forgeable), and the D5 plan-checklist alignment — were
+re-reviewed by the same independent session to the same standard. Verdict
+**APPROVE with three record corrections** (the content-hash pin refreshed to
+the post-fix ADR, this note updated to describe the trusted-channel
+resolution, and the second-pass quote relabeled as condensed) — all three
+applied in the recording commit. Statement verbatim:
+
+> **VERDICT: APPROVE — with three required record corrections in the
+> recording commit, none touching the reviewed security content.**
+>
+> I performed a third-pass review on branch `docs/33-adopt-adr2` against its
+> merge-base `d8680e8` (which contains the #96 recording content), covering
+> the two branch commits (`9245716` adoption, `eb59dc4` hash pin + verdict
+> record) plus the uncommitted working-tree fixes for the three Codex
+> comments. What I verified:
+>
+> 1. **The previously approved surface is intact.** The committed diffs for
+>    `docs/index.md`, `docs/production-deployment.md`, the scope-doc ADR row
+>    (now extended with the content-hash pin), and the ADR itself are
+>    byte-identical to the diff I approved on second pass, apart from the
+>    three Codex-fix areas. The cumulative ADR diff has exactly five hunks
+>    (frontmatter, status header, intro sentence, open-questions block,
+>    scaffolding intro); the ten numbered decisions (lines 43–110:
+>    transport, handshake, bootstrap, SAS, control key, scopes, replay, rate
+>    limiting, revocation, wire-format deferral) are untouched by any hunk;
+>    the F2/F3 note ("must not be cited as if it did") and the D5b/D6 gate
+>    scoping ("two D1 envelopes only") stand unchanged.
+> 2. **Codex fix 1 (intro re-route) is correct, not a weakening.** The stale
+>    claim that the wire formats "are subject to the Phase 1 independent
+>    security review" contradicted F2's resolution (row #7 re-scoped to the
+>    two D1 envelopes; control wire deferred). The new text routes the
+>    wire's approval through the D5b/D6 independent review gate — the gate
+>    that actually owns it. Independent review is still required; only the
+>    venue is corrected.
+> 3. **Codex fix 2 (room.join trusted channel) is a genuine tightening and
+>    contradicts nothing.** I checked it against amendment A1's threat model
+>    in `docs/production-deployment-decision.md`, which is explicit that the
+>    hostile party is the compromised browser origin redeeming an
+>    attacker-chosen ticket with the root identity's authority. The
+>    previously deferred option of "a browser-side confirmation the
+>    companion double-checks" would have placed the confirmation UI in the
+>    attacker's hands — an ambiguity that could have defeated A1's purpose.
+>    The new resolution requires the room identity to be presented and
+>    verified on a surface the browser origin cannot render or forge
+>    (companion native UI or equivalent trusted local channel), deferring
+>    only presentation details to D5b under A5. This strictly narrows the
+>    open UX space; decision 6 ("requires human confirmation of the room
+>    being joined, not just a granted scope") is untouched and fully
+>    compatible; no other decision or doc contradicts it. I note for the
+>    record that this makes the adoption slightly more than the originally
+>    claimed "pure governance-status ratification": it resolves an open
+>    question by imposing a normative requirement — but resolving open
+>    questions is precisely what adoption is for, the resolution only
+>    strengthens, and it is disclosed.
+> 4. **Codex fix 3** adds `room.join` redemption (with the trusted-surface
+>    confirmation phrasing, per A1 and adopted ADR #2) to
+>    `docs/phase-1-plan.md`'s D5 separate-approval checklist — a single
+>    hunk, consistent with `docs/production-deployment.md` and decision 6.
+>    This also retroactively makes the micro-delta note's phrase "the plan's
+>    separate-approval list" accurate.
+> 5. **`node scripts/check-docs.mjs` passes** (exit 0) on the working tree;
+>    **`git status`** shows only the two expected uncommitted files (ADR,
+>    plan), and the branch commits touch only the five previously reviewed
+>    docs — six docs total, nothing else. (Origin/main has advanced two
+>    commits past the branch base — #95, #98; #98 touches
+>    `docs/production-deployment.md` in non-overlapping regions, so a clean
+>    rebase is expected, but the branch must be rebased/re-checked before
+>    merge.)
+>
+> The three required corrections, to land in the same commit that records
+> this verdict:
+>
+> - **C1 — stale content-hash pin.** I computed `sha256sum` of the
+>   working-tree ADR:
+>   `fafb15c06b313a662ad77b0fa95ab492c9fbc82f085989b629d84754b3588703`. The
+>   scope-doc row pins `5357a747…`, which matches HEAD's (pre-Codex-fix)
+>   ADR. By the pin's own rule — "any mismatch is a post-adoption edit and
+>   reopens review" — merging without updating the pin to `fafb15c0…` would
+>   trip its own tripwire. Note `check-docs.mjs` does not verify this hash;
+>   it must be corrected manually.
+> - **C2 — stale micro-delta note.** The committed note in
+>   `docs/phase-1-security-review.md` still describes the room.join
+>   resolution as a pure deferral ("confirmation UX lands with D5b under
+>   amendment A5") and does not cover the three Codex fixes or this third
+>   pass. It must be updated to state the trusted-channel requirement and
+>   record the third-pass review, or it will misdescribe the adopted text it
+>   exists to witness.
+> - **C3 — quote fidelity.** The note labels its block quote of my
+>   second-pass verdict "statement verbatim," but the quote is a condensed
+>   reflow: my numbered findings were merged into prose, my two disclosed
+>   immaterial wording notes were omitted, and minor rewording was
+>   introduced. The substance is preserved, but a review record must not
+>   label an edited quote verbatim — either quote exactly or relabel it
+>   (e.g. "condensed from the reviewer's statement"). This present
+>   third-pass statement, if recorded, must be quoted verbatim or labeled as
+>   excerpted.
+>
+> Subject to C1–C3, I approve the diff as it stands in the working tree —
+> the adoption plus the three Codex fixes weakens nothing, alters no
+> protocol decision, tightens the one ambiguity Codex correctly identified
+> as security-relevant, and passes its documentation gate — for merge as
+> adoption PR #99.
 
 D5 is now implementable; the D5b/D6 review gate remains the conformance
 authority for the wire.

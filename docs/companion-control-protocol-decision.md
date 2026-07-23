@@ -33,7 +33,10 @@ which fixes the browser-control-key authority boundary this protocol must enforc
 Adoption advances D5 from "blocked on its ADR" to "implementable". The D5 gate
 ("replay, wrong-SAS, expired-key, and revoked-key pairing tests fail closed")
 still requires the implementation and its tests, and the wire formats here are
-subject to the Phase 1 independent security review.
+subject to the **D5b/D6 independent review gate** — Phase 1 gate row #7 was
+[re-scoped by finding F2](phase-1-security-review-scope.md) to the two D1
+envelopes, so the control wire's approval routes through the D5b/D6 gate, not
+the already-closed Phase 1 review.
 
 ## Decision
 
@@ -125,10 +128,14 @@ Resolved at adoption (2026-07-23):
   configurable" is confirmed as written). A shorter default (e.g. 7 days) was
   considered and declined for re-pair friction; the bound stays configurable
   and every key remains immediately revocable.
-- **`room.join` confirmation surface — deferred to D5 by design.** A1 requires
-  the confirmation; whether it is a companion-side native prompt or a
-  browser-side confirmation the companion double-checks is a UX decision that
-  lands with D5b under the accessibility gate (amendment A5, Phase 2).
+- **`room.join` confirmation surface — trusted channel required; presentation
+  deferred to D5b.** A1 requires the confirmation, and under A1's threat model
+  the hostile party is the browser origin itself — so a browser-rendered
+  approval prompt proves nothing (the attacker can render or forge it). The
+  confirmation MUST present and verify the room identity on a surface the
+  browser origin cannot render or forge: the companion's native UI, or an
+  equivalent trusted local channel. Only the presentation details land with
+  D5b, under the accessibility gate (amendment A5, Phase 2).
 - **Replay window size — implementation parameter.** Any bounded window
   satisfies the security property; the exact bound is fixed by the D5b
   implementation and checked at the D5b/D6 review gate.
