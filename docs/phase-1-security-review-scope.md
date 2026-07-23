@@ -492,16 +492,17 @@ GO countersigned); the verdict conditions merged as `d610076` and the required
 for both verdicts, the reviewers' statements, and the run-ID erratum.
 A reviewer reproducing the current pin should:
 
-1. `git checkout dcd940e` for the pinned code tree — or check out current
+1. `git checkout 4206984` for the pinned code tree — or check out current
    `main` to have this pin record and the finalized review package alongside
    the code (recording a pin necessarily post-dates the pinned commit, so at
-   `dcd940e` itself the package docs are one step behind; confirm code
-   equivalence with `git diff dcd940e..main -- crates/ tools/`, which must be
+   `4206984` itself the package docs are one step behind; confirm code
+   equivalence with `git diff 4206984..main -- crates/ tools/`, which must be
    empty)
-2. Verify `sha256sum Cargo.lock` matches `dda192b5…` (shared by the
-   `df28f6a`, `d610076`, and `dcd940e` pins; the initial `35b1c5e` pin
-   predates the Step 6 zeroize-feature dependency change and recorded a
-   different lockfile, `f0baf2f1…`)
+2. Verify `sha256sum Cargo.lock` matches `0645dea7…` (the `4206984` pin —
+   changed from the `dda192b5…` shared by the `df28f6a`/`d610076`/`dcd940e`
+   pins solely by the blake3 direct-dependency addition; the initial
+   `35b1c5e` pin predates the Step 6 zeroize-feature dependency change and
+   recorded a different lockfile, `f0baf2f1…`)
 3. Verify the toolchain matches (CI full-gate Rust `1.96.0`, or MSRV `1.91.0`;
    Node `22.22.3`)
 4. Run the commands in the [evidence package](phase-1-evidence-package.md#reproduce-the-review)
