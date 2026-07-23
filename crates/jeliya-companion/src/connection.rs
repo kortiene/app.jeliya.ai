@@ -71,61 +71,69 @@ impl Revocations {
 /// The v1 pairing-session deadline (spec: 120 s). A pairing connection that has
 /// not installed within this window is torn down.
 const PAIRING_DEADLINE: Duration = Duration::from_secs(120);
+/// The v1 control-session age cap (spec: 24 h). A control session older than
+/// this is torn down regardless of the key's remaining lifetime.
+const CONTROL_DEADLINE: Duration = Duration::from_secs(24 * 60 * 60);
+/// The maximum time a peer may take, after a handshake-rate token is spent, to
+/// open the stream and send its first frame before the connection is dropped.
+/// Bounds stuck connections that never speak.
+const FIRST_FRAME_TIMEOUT: Duration = Duration::from_secs(10);
+/// The largest engine-result body that fits a single transport frame after the
+/// message framing, the Noise tag, and the frame header. A larger result is
+/// turned into a bounded engine error rather than a `FrameTooLarge` write drop.
+const MAX_RESULT_LEN: usize = jeliya_protocol::MAX_FRAME_LEN - 256;
 
 /// Drive one control connection to completion. `static_key` is a fresh keypair
 /// built from the companion's long-lived static secret; `session_id` identifies
 /// this connection for revocation; `offers` is the companion's pairing-offer
 /// registry, against which a pairing `ClientHello`'s nonce is **atomically
-/// spent** (single-use) before the ceremony runs — so a concurrent second
-/// connection presenting the same nonce is refused, preventing interleaved-
-/// ceremony SAS confusion. Non-fatal: a protocol error closes the connection but
-/// is the expected fail-closed outcome, not an error to propagate.
+/// claimed** (single-use, and the slot stays busy for the whole ceremony) so a
+/// concurrent second connection is refused; `clock` is sampled at ClientHello
+/// time so a stale offer cannot be claimed after its TTL. Non-fatal: a protocol
+/// error closes the connection but is the expected fail-closed outcome.
 #[allow(clippy::too_many_arguments)]
 pub async fn serve_connection<C: FrameChannel>(
     mut chan: C,
     static_key: KeyPair,
     session_id: SessionId,
     offers: Arc<Mutex<PairingOffers>>,
-    now_ms: u64,
+    clock: Arc<dyn jeliya_control::Clock>,
     gateway: Arc<Mutex<ControlGateway>>,
     dispatch: Arc<dyn ControlDispatch>,
     policy: Arc<dyn ControlPolicy>,
     revoked: Arc<Notify>,
 ) {
-    // Read the first frame; if it is a pairing ClientHello, atomically claim its
-    // offer nonce under the offers lock (single-use). The resolved
-    // `expected_pairing_nonce` is what the Responder validates against.
-    let first = match chan.read_frame().await {
-        Ok(f) => f,
-        Err(_) => return,
+    // Read the first frame under a bound: a peer that opens a connection but
+    // never speaks is dropped rather than leaking a task.
+    let first = match tokio::time::timeout(FIRST_FRAME_TIMEOUT, chan.read_frame()).await {
+        Ok(Ok(f)) => f,
+        _ => return,
     };
-    let expected = claim_pairing_offer(&first, &offers, now_ms).await;
-    let is_pairing = expected.is_some();
-    let mut resp = Responder::new(static_key, session_id, expected);
+    // If the first frame is a pairing ClientHello, atomically claim its offer
+    // nonce, sampling the clock *now* (at ClientHello time) so a peer cannot sit
+    // on a live connection until the offer expires and then claim a stale nonce.
+    let claimed = claim_pairing_offer(&first, &offers, clock.now_ms()).await;
+    let is_pairing = claimed.is_some();
+    let mut resp = Responder::new(static_key, session_id, claimed);
 
-    // A pairing session is bounded by the deadline; a control session is not
-    // (its lifetime is bounded by the key expiry and the session-age cap).
-    let deadline = if is_pairing {
-        Some(tokio::time::Instant::now() + PAIRING_DEADLINE)
-    } else {
-        None
-    };
+    // Deadlines: a pairing session is bounded by the 120 s ceremony window; a
+    // control session by the 24 h age cap.
+    let deadline = tokio::time::Instant::now()
+        + if is_pairing {
+            PAIRING_DEADLINE
+        } else {
+            CONTROL_DEADLINE
+        };
 
     let mut pending = Some(first);
     loop {
         let frame = match pending.take() {
             Some(f) => f,
             None => {
-                let timer = async {
-                    match deadline {
-                        Some(at) => tokio::time::sleep_until(at).await,
-                        None => std::future::pending::<()>().await,
-                    }
-                };
                 tokio::select! {
                     biased;
                     () = revoked.notified() => break,
-                    () = timer => break, // pairing deadline elapsed
+                    () = tokio::time::sleep_until(deadline) => break, // session deadline
                     read = chan.read_frame() => match read {
                         Ok(f) => f,
                         Err(_) => break, // stream closed or errored → session ends
@@ -142,23 +150,30 @@ pub async fn serve_connection<C: FrameChannel>(
             }
         };
 
-        match run_outs(outs, &mut chan, &mut resp, &gateway, &*dispatch, &*policy).await {
+        match run_outs(
+            outs, &mut chan, &mut resp, &gateway, &*dispatch, &*policy, &revoked, deadline,
+        )
+        .await
+        {
             Ok(false) => {}
-            Ok(true) | Err(_) => break, // close requested or write failed
+            Ok(true) | Err(_) => break, // close requested / cancelled / write failed
         }
     }
 
-    // Cleanup: drop this session from the gateway's live set and the registry.
+    // Cleanup: release a claimed pairing offer (freeing the busy slot), drop this
+    // session from the gateway's live set, and close the channel.
+    if is_pairing {
+        offers.lock().await.release();
+    }
     if let Some(key) = resp.authenticated_key() {
         gateway.lock().await.close_session(&key, session_id);
     }
     chan.close().await;
 }
 
-/// If `frame` is a pairing `ClientHello`, atomically spend its offer nonce and
-/// return it (so the Responder accepts the pairing); otherwise return `None`.
-/// The spend is single-use under the offers lock, so at most one connection ever
-/// resolves a given offer nonce.
+/// If `frame` is a pairing `ClientHello`, atomically claim its offer nonce
+/// (keeping the offer slot busy for the whole ceremony) and return it; otherwise
+/// return `None`. At most one connection ever claims a given offer.
 async fn claim_pairing_offer(
     frame: &jeliya_protocol::Frame,
     offers: &Mutex<PairingOffers>,
@@ -172,17 +187,30 @@ async fn claim_pairing_offer(
     if hello.session_kind != SessionKind::Pairing {
         return None;
     }
-    let mut off = offers.lock().await;
-    let _ = off.live_nonce(now_ms); // expire a stale offer before the claim
-    if off.spend(&hello.pairing_nonce) {
+    if offers.lock().await.claim(&hello.pairing_nonce, now_ms) {
         Some(hello.pairing_nonce)
     } else {
         None
     }
 }
 
+/// Await revocation or the session deadline — the cancellation signal raced
+/// against the policy and engine awaits below, so a revoke or a blown deadline
+/// tears the session down even mid-dispatch.
+async fn cancelled(revoked: &Notify, deadline: tokio::time::Instant) {
+    tokio::select! {
+        () = revoked.notified() => (),
+        () = tokio::time::sleep_until(deadline) => (),
+    }
+}
+
 /// Carry out a list of responder actions. Returns `Ok(true)` when the session
-/// should close, `Ok(false)` to keep serving, `Err` on a write failure.
+/// should close, `Ok(false)` to keep serving, `Err` on a write failure. The two
+/// awaits that can block on an external party — the policy's SAS confirmation
+/// and the engine dispatch — are raced against `cancelled`, so a revocation or a
+/// blown deadline tears the session down *without* installing a key or sealing a
+/// response after it should have closed.
+#[allow(clippy::too_many_arguments)]
 async fn run_outs<C: FrameChannel>(
     initial: Vec<Out>,
     chan: &mut C,
@@ -190,6 +218,8 @@ async fn run_outs<C: FrameChannel>(
     gateway: &Arc<Mutex<ControlGateway>>,
     dispatch: &dyn ControlDispatch,
     policy: &dyn ControlPolicy,
+    revoked: &Notify,
+    deadline: tokio::time::Instant,
 ) -> Result<bool, ChannelError> {
     let mut queue: VecDeque<Out> = initial.into();
     while let Some(out) = queue.pop_front() {
@@ -201,7 +231,10 @@ async fn run_outs<C: FrameChannel>(
                 // registers itself as live at admission. Nothing to do here.
             }
             Out::SasReady(sas) => {
-                let decision = policy.confirm_pairing(&sas).await;
+                let decision = tokio::select! {
+                    d = policy.confirm_pairing(&sas) => d,
+                    () = cancelled(revoked, deadline) => return Ok(true), // no install
+                };
                 let follow = {
                     let mut gw = gateway.lock().await;
                     match decision {
@@ -219,9 +252,19 @@ async fn run_outs<C: FrameChannel>(
                 }
             }
             Out::Dispatch { nonce, call } => {
-                // The engine call runs lock-free; sealing the response needs no
-                // gateway access.
-                let result = dispatch.dispatch(call).await;
+                // The engine call runs lock-free, raced against revocation/the
+                // deadline: if either wins, close without sealing a response.
+                let result = tokio::select! {
+                    r = dispatch.dispatch(call) => r,
+                    () = cancelled(revoked, deadline) => return Ok(true),
+                };
+                // Guard an oversized engine result: turn it into a bounded engine
+                // error rather than a frame that would exceed MAX_FRAME_LEN and
+                // drop the session on write.
+                let result = match result {
+                    Ok(body) if body.len() > MAX_RESULT_LEN => Err("result too large".to_string()),
+                    other => other,
+                };
                 match resp.complete_dispatch(nonce, result) {
                     Ok(more) => queue.extend(more),
                     Err(_) => return Ok(true),

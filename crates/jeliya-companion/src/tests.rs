@@ -46,6 +46,11 @@ fn empty_offers() -> Offers {
 fn notify() -> Arc<tokio::sync::Notify> {
     Arc::new(tokio::sync::Notify::new())
 }
+fn test_clock() -> Arc<dyn jeliya_control::Clock> {
+    // `Clock` is implemented for `Arc<ManualClock>`, so wrap once more to get an
+    // `Arc<dyn Clock>` fixed at NOW (matching the offers' created_at).
+    Arc::new(Arc::new(ManualClock::new(NOW)))
+}
 
 /// A dispatch that echoes a fixed result and records the calls it received.
 struct FakeDispatch {
@@ -155,7 +160,7 @@ async fn pair_into(gw: &Arc<Mutex<ControlGateway>>, dispatch: Arc<dyn ControlDis
         companion_key(),
         1,
         offers,
-        NOW,
+        test_clock(),
         gw.clone(),
         dispatch,
         policy as Arc<dyn ControlPolicy>,
@@ -193,7 +198,7 @@ async fn pairing_installs_the_key_over_a_duplex() {
         companion_key(),
         1,
         offers.clone(),
-        NOW,
+        test_clock(),
         gw.clone(),
         dispatch as Arc<dyn ControlDispatch>,
         policy as Arc<dyn ControlPolicy>,
@@ -211,7 +216,10 @@ async fn pairing_installs_the_key_over_a_duplex() {
     assert!(gw.lock().await.contains(&browser_control_key()));
     assert_eq!(seen.lock().await.len(), 1, "the policy saw one SAS");
     // The single-use offer was spent by the ceremony.
-    assert!(offers.lock().await.live_nonce(NOW).is_none());
+    assert!(
+        !offers.lock().await.is_busy(NOW),
+        "the offer slot is released after the ceremony"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -226,7 +234,7 @@ async fn control_session_dispatches_a_scoped_send() {
         companion_key(),
         2,
         empty_offers(),
-        NOW,
+        test_clock(),
         gw.clone(),
         dispatch as Arc<dyn ControlDispatch>,
         Arc::new(RejectPolicy) as Arc<dyn ControlPolicy>,
@@ -263,6 +271,63 @@ async fn control_session_dispatches_a_scoped_send() {
     assert!(matches!(&seen[0], MethodCall::MessageSend { room_id, .. } if room_id == "room-1"));
 }
 
+/// A dispatch that returns an oversized result body.
+struct HugeDispatch;
+impl ControlDispatch for HugeDispatch {
+    fn dispatch(
+        &self,
+        _call: MethodCall,
+    ) -> crate::channel::BoxFuture<'_, Result<Vec<u8>, String>> {
+        Box::pin(async move { Ok(vec![b'x'; jeliya_protocol::MAX_FRAME_LEN]) })
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn oversized_dispatch_result_becomes_an_engine_error_not_a_drop() {
+    let (_clock, gw) = gateway_with_clock();
+    let (dispatch, _calls) = fake_dispatch();
+    pair_into(&gw, dispatch as Arc<dyn ControlDispatch>).await;
+
+    let (c_io, b_io) = tokio::io::duplex(256 * 1024);
+    let companion = tokio::spawn(serve_connection(
+        DuplexChannel::new(c_io),
+        companion_key(),
+        2,
+        empty_offers(),
+        test_clock(),
+        gw.clone(),
+        Arc::new(HugeDispatch) as Arc<dyn ControlDispatch>,
+        Arc::new(RejectPolicy) as Arc<dyn ControlPolicy>,
+        notify(),
+    ));
+    let mut browser = DuplexChannel::new(b_io);
+    let (mut init, ch) = Initiator::new(
+        browser_key(),
+        SessionKind::Control,
+        [0; 16],
+        Some(companion_key().public()),
+    );
+    browser.write_frame(ch).await.unwrap();
+    open_control_session(&mut browser, &mut init).await;
+    let call = MethodCall::RoomMembers {
+        room_id: "room-1".into(),
+    };
+    let req = init.request(method::ROOM_MEMBERS, &call).unwrap();
+    browser.write_frame(req).await.unwrap();
+    // The huge result is turned into a bounded engine error, delivered as a
+    // Response — the browser gets an answer, not a silent connection drop.
+    match init.read(&browser.read_frame().await.unwrap()).unwrap() {
+        Msg::Response { ok, body, .. } => {
+            assert!(!ok, "oversized result → error response");
+            let (code, _) = Msg::decode_error_body(&body).unwrap();
+            assert_eq!(code, jeliya_protocol::error::ENGINE_ERROR);
+        }
+        other => panic!("expected error Response, got {other:?}"),
+    }
+    drop(browser);
+    companion.await.unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rejected_pairing_installs_nothing() {
     let (_clock, gw) = gateway_with_clock();
@@ -274,7 +339,7 @@ async fn rejected_pairing_installs_nothing() {
         companion_key(),
         1,
         offers,
-        NOW,
+        test_clock(),
         gw.clone(),
         dispatch as Arc<dyn ControlDispatch>,
         Arc::new(RejectPolicy) as Arc<dyn ControlPolicy>,
@@ -305,7 +370,7 @@ async fn a_stale_or_missing_offer_rejects_pairing() {
         companion_key(),
         1,
         empty_offers(), // no live offer
-        NOW,
+        test_clock(),
         gw.clone(),
         dispatch as Arc<dyn ControlDispatch>,
         policy as Arc<dyn ControlPolicy>,
@@ -345,7 +410,7 @@ async fn single_use_offer_admits_only_the_first_presenter() {
             companion_key(),
             1,
             offers.clone(),
-            NOW,
+            test_clock(),
             gw.clone(),
             dispatch.clone() as Arc<dyn ControlDispatch>,
             policy.clone() as Arc<dyn ControlPolicy>,
@@ -373,7 +438,7 @@ async fn single_use_offer_admits_only_the_first_presenter() {
             companion_key(),
             2,
             offers.clone(),
-            NOW,
+            test_clock(),
             gw.clone(),
             dispatch as Arc<dyn ControlDispatch>,
             policy as Arc<dyn ControlPolicy>,
@@ -416,7 +481,7 @@ async fn revocation_tears_down_a_live_control_session() {
         companion_key(),
         2,
         empty_offers(),
-        NOW,
+        test_clock(),
         gw.clone(),
         dispatch as Arc<dyn ControlDispatch>,
         Arc::new(RejectPolicy) as Arc<dyn ControlPolicy>,

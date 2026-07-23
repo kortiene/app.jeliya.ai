@@ -18,6 +18,7 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use iroh::endpoint::{presets, Connection, RecvStream, SendStream};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
@@ -90,7 +91,11 @@ impl FrameChannel for IrohChannel {
 
     fn close(&mut self) -> BoxFuture<'_, ()> {
         Box::pin(async move {
+            // Finish the send stream (FIN + flush the final frame), then wait
+            // (bounded) for the peer to stop it — the delivery barrier — before
+            // the Connection drops and would reset an unacknowledged stream.
             let _ = self.send.finish();
+            let _ = tokio::time::timeout(Duration::from_secs(3), self.send.stopped()).await;
         })
     }
 }
@@ -133,20 +138,27 @@ impl ProtocolHandler for ControlProtocol {
             return Ok(());
         }
 
-        let (send, recv) = conn.accept_bi().await?;
+        // Bound the wait for the first stream: a peer that consumes a handshake
+        // token but never opens a stream is dropped, not leaked.
+        let (send, recv) =
+            match tokio::time::timeout(Duration::from_secs(10), conn.accept_bi()).await {
+                Ok(Ok(streams)) => streams,
+                _ => return Ok(()),
+            };
         let chan = IrohChannel { send, recv };
         let session_id = st.next_session_id.fetch_add(1, Ordering::SeqCst);
-        let static_key = KeyPair::from_secret(Zeroizing::new(*st.noise_static_secret));
+        // Clone the Zeroizing secret directly (no plain [u8;32] stack temporary).
+        let static_key = KeyPair::from_secret(st.noise_static_secret.clone());
         let notify = st.revocations.register(session_id).await;
 
         // The driver atomically claims the pairing offer at the first
-        // ClientHello (single-use); the transport no longer pre-reads or spends.
+        // ClientHello (single-use), sampling the clock then.
         serve_connection(
             chan,
             static_key,
             session_id,
             st.offers.clone(),
-            now,
+            st.clock.clone(),
             st.gateway.clone(),
             st.dispatch.clone(),
             st.policy.clone(),
@@ -155,11 +167,6 @@ impl ProtocolHandler for ControlProtocol {
         .await;
 
         st.revocations.deregister(session_id).await;
-
-        // Graceful close: the driver finished the send stream (FIN); give the
-        // peer a bounded moment to receive the final frame before the Connection
-        // drops and resets in-flight streams.
-        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), conn.closed()).await;
         Ok(())
     }
 }
@@ -194,6 +201,11 @@ impl ControlEndpoint {
             .relay_mode(relay.to_mode())
             .bind()
             .await?;
+        // Wait until the endpoint has advertised its reachable paths, so a QR /
+        // link built from `addr()` right after `bind` is actually dialable
+        // (otherwise the first pairing attempt can fail to connect, especially
+        // with a relay).
+        endpoint.online().await;
 
         let state = Arc::new(ControlState {
             noise_static_secret: Zeroizing::new(noise_secret),
@@ -320,7 +332,6 @@ mod tests {
         )
         .await
         .expect("bind companion");
-        companion.endpoint.online().await;
         let offer = companion.open_offer().await.expect("offer opens");
         let addr = companion.addr();
 
