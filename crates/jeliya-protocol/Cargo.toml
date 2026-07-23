@@ -1,0 +1,17 @@
+[package]
+name = "jeliya-protocol"
+version = "0.6.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Host-independent control-wire protocol v1 (D5b/D6): the /jeliya/control/1 framing, version/capability hellos, transport-message encoding, and the method/scope/error registries, with a committed conformance corpus. Pure encoding — no crypto, no I/O, no iroh."
+
+[dependencies]
+# Intentionally none. This crate is pure byte-level encoding so the exact same
+# wire types can be reused by the native companion, the browser controller
+# (compiled to Wasm or re-implemented in TypeScript against the shared corpus),
+# and the conformance harness. Adding a serialization framework here would make
+# the wire an artifact of a dependency's version rather than of this spec.
+
+[lints]
+workspace = true
