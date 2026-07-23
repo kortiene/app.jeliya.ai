@@ -5,8 +5,8 @@ description: "Adopts deterministic per-room device keys derived from the profile
 tags: ["identity", "rooms", "transport", "security", "decision", "issue-91"]
 timestamp: "2026-07-22T00:00:00Z"
 status: "canonical"
-implementation_status: "complete"
-verification_status: "tested"
+implementation_status: "implemented"
+verification_status: "verified"
 release_status: "unreleased"
 audience: ["contributors", "maintainers", "security-reviewers"]
 ---
