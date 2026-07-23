@@ -101,7 +101,10 @@ const BIND_TIMEOUT: Duration = Duration::from_secs(30);
 /// domain-separate the two secrets from each other and from every room-device
 /// key.
 fn derive_companion_secret(keys: &SecretKeys, context: &str) -> Zeroizing<[u8; 32]> {
-    let device_seed = keys.device.to_seed();
+    // Wrap the extracted device seed immediately, as identity/recovery do: on a
+    // password-protected profile this is decrypted long-term key material, and
+    // it must not linger on the stack after derivation.
+    let device_seed = Zeroizing::new(keys.device.to_seed());
     Zeroizing::new(blake3::derive_key(context, device_seed.as_slice()))
 }
 
@@ -139,13 +142,25 @@ impl ControlDispatch for EngineDispatch {
     fn dispatch(&self, call: MethodCall) -> BoxFuture<'_, Result<Vec<u8>, String>> {
         Box::pin(async move {
             let (method, params) = match call {
+                // The cursor (`after`) form routes to the engine's
+                // `timeline_after`, which materializes the whole settled tail
+                // (`room_tail(u32::MAX)`) before paging — unbounded work a
+                // paired browser could amplify with tiny cursor requests. The
+                // engine path is in the Phase-1 reopen set, so rather than
+                // change it here we withhold the cursor form over the companion:
+                // clients use the bounded newest-`limit` snapshot (`after` =
+                // None, capped by the wire's MAX_TIMELINE_LIMIT). Lift this once
+                // the engine gains a bounded cursor query.
+                MethodCall::RoomTimeline { after: Some(_), .. } => {
+                    return Err("unsupported".to_owned())
+                }
                 MethodCall::RoomTimeline {
                     room_id,
                     limit,
-                    after,
+                    after: None,
                 } => (
                     "room.timeline",
-                    json!({ "room_id": room_id, "limit": limit, "after_event_id": after }),
+                    json!({ "room_id": room_id, "limit": limit }),
                 ),
                 MethodCall::RoomMembers { room_id } => {
                     ("room.members", json!({ "room_id": room_id }))
@@ -216,11 +231,14 @@ struct TtyPolicy {
 }
 
 impl TtyPolicy {
-    /// The rooms the grant would cover: every room this identity belongs to
-    /// right now, enumerated at confirmation time. Conservative on purpose —
-    /// rooms joined after pairing are NOT covered until a future re-pair or a
-    /// native grant-management UI widens them. Names are sanitized for display
-    /// but the *ids* (never remote-chosen) are what the grant binds.
+    /// The rooms the grant would cover: only the rooms this identity has
+    /// **currently open**, enumerated at confirmation time. Closed and archived
+    /// (left/removed) rooms that `room.list` also returns are deliberately
+    /// excluded — the wire spec binds the readable set to the rooms explicitly
+    /// opened through the companion, so a pairing must not silently grant every
+    /// room the profile has ever touched. Rooms opened after pairing are NOT
+    /// covered until a future re-pair or a native grant-management UI. Names are
+    /// sanitized for display; the *ids* (never remote-chosen) are what binds.
     async fn current_rooms(&self) -> Vec<(String, String)> {
         let listed = match self.engine.dispatch("room.list", json!({})).await {
             Ok(value) => value,
@@ -234,6 +252,7 @@ impl TtyPolicy {
             .map(|rooms| {
                 rooms
                     .iter()
+                    .filter(|room| room["open"] == json!(true))
                     .filter_map(|room| {
                         let id = room["room_id"].as_str()?.to_owned();
                         let name = room["name"].as_str().unwrap_or("unnamed").to_owned();
@@ -265,10 +284,11 @@ impl ControlPolicy for TtyPolicy {
             let rooms = self.current_rooms().await;
             println!("\n── Companion pairing request ─────────────────────────");
             if rooms.is_empty() {
-                println!("   NOTE: this identity is in no rooms yet; the grant");
-                println!("   would authorize nothing until you re-pair later.");
+                println!("   NOTE: no rooms are open; the grant would authorize");
+                println!("   nothing. Open the rooms to share first, then re-pair.");
             } else {
-                println!("   If approved, the browser may read and send in:");
+                println!("   If approved, the browser may read and send in these");
+                println!("   currently-open rooms:");
                 for (id, name) in &rooms {
                     println!(
                         "     - {}  ({})",
@@ -395,8 +415,9 @@ struct Persister {
 }
 
 enum PersistMsg {
-    /// Write now if the store changed; ack when the write (if any) is durable.
-    Flush(oneshot::Sender<()>),
+    /// Write now if the store changed; ack `Ok(())` once the current state is
+    /// durable on disk, or `Err` with why the write failed.
+    Flush(oneshot::Sender<Result<(), String>>),
     /// Evict expired keys, write a final snapshot, ack, and exit.
     Shutdown(oneshot::Sender<()>),
 }
@@ -411,13 +432,17 @@ impl Persister {
             // Skip the immediate first tick; baseline already matches disk.
             tick.tick().await;
 
-            let write_if_changed = |last: &mut String, gw_snapshot: String| {
-                if gw_snapshot != *last {
-                    match persist_snapshot(&keys_path, &gw_snapshot) {
-                        Ok(()) => *last = gw_snapshot,
-                        Err(err) => error!("control-key persistence failed: {err}"),
-                    }
+            // Write the snapshot if it differs from what is on disk. Returns
+            // whether the current state is durable: `Ok(())` on a successful
+            // write OR when there was nothing to write (last_written already
+            // reflects a prior successful write); `Err` when the write failed,
+            // in which case `last_written` is NOT advanced so the next tick or
+            // flush retries.
+            let write_if_changed = |last: &mut String, gw_snapshot: String| -> Result<(), String> {
+                if gw_snapshot == *last {
+                    return Ok(());
                 }
+                persist_snapshot(&keys_path, &gw_snapshot).inspect(|()| *last = gw_snapshot)
             };
 
             loop {
@@ -428,13 +453,18 @@ impl Persister {
                             gw.evict_expired();
                             gw.snapshot_json()
                         };
-                        write_if_changed(&mut last_written, snapshot);
+                        if let Err(err) = write_if_changed(&mut last_written, snapshot) {
+                            error!("control-key persistence failed: {err}");
+                        }
                     }
                     msg = rx.recv() => match msg {
                         Some(PersistMsg::Flush(ack)) => {
                             let snapshot = gateway.lock().await.snapshot_json();
-                            write_if_changed(&mut last_written, snapshot);
-                            let _ = ack.send(());
+                            let result = write_if_changed(&mut last_written, snapshot);
+                            if let Err(err) = &result {
+                                error!("control-key persistence failed: {err}");
+                            }
+                            let _ = ack.send(result);
                         }
                         Some(PersistMsg::Shutdown(ack)) => {
                             let snapshot = {
@@ -442,7 +472,9 @@ impl Persister {
                                 gw.evict_expired();
                                 gw.snapshot_json()
                             };
-                            write_if_changed(&mut last_written, snapshot);
+                            if let Err(err) = write_if_changed(&mut last_written, snapshot) {
+                                error!("final control-key persistence failed: {err}");
+                            }
                             let _ = ack.send(());
                             return;
                         }
@@ -455,14 +487,18 @@ impl Persister {
     }
 }
 
-/// Flush now and wait until the write (if any) is durable. Used on a successful
-/// pairing so a hard kill right after "Pairing complete" cannot lose the
-/// just-installed grant.
-async fn flush_now(tx: &mpsc::Sender<PersistMsg>) {
+/// Flush now and wait until the current state is durable, returning whether it
+/// is. Used on a successful pairing so the loop only announces success once the
+/// grant has actually reached disk. `Err` if the write failed or the writer is
+/// gone — in either case the just-installed key is not durable.
+async fn flush_now(tx: &mpsc::Sender<PersistMsg>) -> Result<(), String> {
     let (ack_tx, ack_rx) = oneshot::channel();
-    if tx.send(PersistMsg::Flush(ack_tx)).await.is_ok() {
-        let _ = ack_rx.await;
+    if tx.send(PersistMsg::Flush(ack_tx)).await.is_err() {
+        return Err("persistence task is gone".to_owned());
     }
+    ack_rx
+        .await
+        .map_err(|_| "persistence task dropped the flush".to_owned())?
 }
 
 /// Options `main` resolves from flags before spawning the companion.
@@ -729,11 +765,26 @@ async fn install_detected(
     install_since(baseline, &current)
 }
 
-/// Flush the new grant durably, then tell the operator.
+/// Flush the new grant durably, then tell the operator — truthfully. The
+/// browser was already told `installed=true` by the runtime, so if persistence
+/// failed we cannot un-say that; we surface the durability failure loudly
+/// instead of the reassuring "complete" line, so the operator knows the grant
+/// will not survive a restart and can fix the data dir and re-pair.
 async fn announce_success(persist_tx: &mpsc::Sender<PersistMsg>) {
-    flush_now(persist_tx).await;
-    println!("   Pairing complete: the browser now holds a control key.");
-    info!("companion pairing complete; offer loop stopped");
+    match flush_now(persist_tx).await {
+        Ok(()) => {
+            println!("   Pairing complete: the browser now holds a control key.");
+            info!("companion pairing complete; offer loop stopped");
+        }
+        Err(err) => {
+            println!(
+                "   WARNING: pairing was accepted but the key could NOT be saved\n\
+                             ({err}). It will be LOST on the next restart — fix the\n\
+                             data dir and re-pair the browser."
+            );
+            error!("companion pairing installed but not persisted: {err}");
+        }
+    }
 }
 
 /// Print a pairing offer's surface (endpoint id, reachable addresses, static
@@ -990,6 +1041,56 @@ mod tests {
             .expect_err("unknown room denied");
         assert!(!denied.contains('/'), "no filesystem path leaks: {denied}");
         assert!(!denied.contains(' '), "code only, got: {denied}");
+
+        // The unbounded cursor form is withheld at the companion boundary — it
+        // never reaches the engine's whole-tail materialization.
+        let cursor = dispatch
+            .dispatch(MethodCall::RoomTimeline {
+                room_id: room_id.clone(),
+                limit: Some(10),
+                after: Some("some-event-id".to_owned()),
+            })
+            .await
+            .expect_err("cursor form withheld");
+        assert_eq!(cursor, "unsupported");
+    }
+
+    #[tokio::test]
+    async fn pairing_grant_covers_only_open_rooms() {
+        let dir = TempDir::new().expect("tempdir");
+        let engine = test_engine(&dir);
+        engine
+            .dispatch("identity.create", json!({}))
+            .await
+            .expect("identity.create");
+        let open = engine
+            .dispatch("room.create", json!({ "name": "open-room" }))
+            .await
+            .expect("room.create open");
+        let open_id = open["room_id"].as_str().expect("room_id").to_owned();
+        let closed = engine
+            .dispatch("room.create", json!({ "name": "closed-room" }))
+            .await
+            .expect("room.create closed");
+        let closed_id = closed["room_id"].as_str().expect("room_id").to_owned();
+        // Open only the first room; the second stays closed.
+        engine
+            .dispatch("room.open", json!({ "room_id": open_id }))
+            .await
+            .expect("room.open");
+
+        let policy = TtyPolicy {
+            engine,
+            supervised: false,
+            lines: None,
+        };
+        let rooms = policy.current_rooms().await;
+        let ids: BTreeSet<String> = rooms.into_iter().map(|(id, _)| id).collect();
+        assert!(ids.contains(&open_id), "the open room is grantable");
+        assert!(
+            !ids.contains(&closed_id),
+            "a closed room must never be silently granted at pairing"
+        );
     }
 
     #[test]
@@ -1155,7 +1256,7 @@ mod tests {
         served.await.expect("companion task");
 
         // ---- Persist through the single writer, then reload (a restart) ---
-        flush_now(&persister.tx).await;
+        flush_now(&persister.tx).await.expect("durable flush");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
