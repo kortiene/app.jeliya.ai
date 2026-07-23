@@ -779,6 +779,123 @@ lands with a re-pin and a scoped delta review of those diffs — none of it is
 "editorial" under the reopen rules' exception. This approval holds for the
 pinned tree as reviewed, with the conditions tracked.
 
+#### Issue #91 delta review (2026-07-23)
+
+**Trigger.** PR #94 (merge `4206984` — the issue #91 fix: room-scoped device
+keys so concurrently open rooms all receive) changed three reopen-set
+surfaces: `crates/jeliya-core/src/identity.rs` and its tests (the versioned
+BLAKE3 room-device KDF, `SecretKeys::room_device`), `crates/jeliya-core/src/recovery.rs`
+tests (the room-device recovery-derivation test; additions only, no envelope
+change), and [`docs/PROTOCOL.md`](PROTOCOL.md) (a **normative field-contract
+addition** — `sender.device_id` is room-scoped and clients MUST key senders on
+`identity_id`; the single-user-machine trust boundary that put PROTOCOL.md in
+the reopen set is untouched). The reviewed range `dcd940e..4206984` also
+contains PR #93, the docs-only recording of the prior `dcd940e` pin that the
+prior micro-delta review itself mandated — review-package-document edits are a
+reopen-set class, and they are serviced by this same cycle (verified
+recording-class, hunk by hunk). Under the reopen rules this required a re-pin
+and a scoped delta review of those diffs.
+
+**Verdict: APPROVE-WITH-CONDITIONS — the `dcd940e` approval extends to the
+issue #91 tree `420698463bff70535d2f450a4f05d573a8ab589f`.** The scoped delta
+review was executed by an **independent delta-review session** (fresh agent
+contexts, Claude Fable 5, distinct from the fix's implementer; the same
+model-family independence caveat as the Step 7 verdict applies, and the
+risk-owner's merge of the recording PR serves as countersignature). Two
+adversarial challengers (refutation lens re-verifying every security-relevant
+claim against the tree; scope-creep lens independently walking the full
+range) upheld the verdict with **no verdict-changing objection**; their
+recording-level additions are folded into this record and the
+[refreshed zeroize inventory](phase-1-security-review-scope.md#known-zeroize-gaps-source-audit--step-6-fixes-applied):
+the raw-seed call-site counts (five `Zeroizing`-wrapped `to_seed()` sites now
+in the pinned surfaces; three carried-note sites in `supervisor.rs`), the
+PROTOCOL.md hunk characterized as normative, PR #93's package-doc edits named
+in the trigger above, and the three user-visible `supervisor.rs` behavior
+changes kept explicit (stale file-provider records remap to the sharer's
+current membership-bound device — availability only, fetches stay
+hash-verified; `room.open` fails closed on an irreproducible membership
+binding; opening a legacy room explicitly closes a colliding live legacy
+session).
+
+The delta reviewer's statement, verbatim:
+
+> I independently verified the pin at `420698463bff70535d2f450a4f05d573a8ab589f`
+> (worktree clean, HEAD = `main`): `Cargo.lock` sha256 is now `0645dea7…`,
+> changed from the recorded `dda192b5…` solely by the one-line addition of
+> `blake3` as a direct dependency of `jeliya-core` — blake3 resolves to
+> `1.8.5`, identical to the version the pin already recorded for
+> `jeliya-control`, and no other crypto dependency moved (aes-gcm 0.10.3,
+> argon2 0.5.3, zeroize 1.9.0, getrandom 0.4.3, hex 0.4.3); toolchains are
+> unchanged. I walked the ENTIRE `dcd940e..4206984` diff: it spans PR #93,
+> which is purely the docs-only recording of the prior `dcd940e` pin that the
+> prior micro-delta review mandated, and PR #94, where every hunk maps to the
+> issue #91 fix. Nothing in the range touches `engine.rs` (still `cdcae83`),
+> `jeliyad/src/serve.rs` (still `922f620`), ADR #3 (still `d610076`), or
+> ADR #2 (still `ce49d73`), and the `docs/PROTOCOL.md` hunk adds only a
+> client-facing `sender.device_id` field note — the single-user-machine trust
+> boundary that put PROTOCOL.md in the reopen set is untouched. On the
+> reopened surfaces I reviewed to the Step 7 standard: `SecretKeys::room_device`
+> derives `BLAKE3::derive_key` over an immutable, dated, application-specific
+> v1 context (unique in the codebase — `jeliya-control` uses plain
+> `blake3::hash`, no context collision) with a fixed 32+32-byte
+> `device_seed || room_id` ikm (no variable-length ambiguity), every named
+> intermediate (`device_seed`, `ikm`, `derived`) is `Zeroizing`-wrapped,
+> `SecretKeys` carries no `Debug`/`Serialize` and no error path embeds secret
+> material, and the versioning story (immutable v1 context, documented
+> v2-plus-legacy-dispatch path, pinned vector in
+> `room_device_kdf_v1_vector_is_pinned`, and `room_bound_device` failing
+> closed on an irreproducible binding) matches the F6 envelope-KDF precedent;
+> the two identity.rs tests pin exactly what they claim. In recovery.rs the
+> single added test `restored_identity_reproduces_room_device_keys` proves the
+> D1 property for room devices from bundle bytes alone, with no existing test
+> weakened and no bundle format change; the Argon2 identity-envelope evidence
+> rows are untouched by this diff, so the step7-kdf-probe evidence stands. I
+> cross-checked every design claim in `docs/room-device-key-decision.md`
+> against the implementation and found them accurate, and I confirmed the fix
+> is complete: the only remaining global-device authoring path in
+> `supervisor.rs` is the intentional legacy-dispatch branch plus a test helper
+> that manufactures legacy rooms. I reproduced the gates locally at `4206984`:
+> cargo fmt clean, clippy clean under `-D warnings`,
+> `cargo test --locked --workspace` 136 passed / 0 failed / 1 ignored —
+> exactly eight more than the 128 the scope doc expects at `dcd940e`,
+> reconciled one-for-one by the eight new tests — check-docs OK, check-ui-i18n
+> OK; and I verified push run `29997137062` at `4206984` completed with
+> conclusion success, all six jobs green. I found no code defect. I found two
+> documentation-level gaps: the F8 zeroize inventory's `supervisor.rs`
+> raw-seed note is now stale, and the new derivation introduces a
+> disclosed-residual-class item the inventory and the dependency feature audit
+> do not yet record (blake3's internal hasher state absorbs the seed-bearing
+> ikm on the stack and is not wiped; the blake3 crate has no row in the
+> feature-audit table). The `dcd940e` approval therefore extends to `4206984`
+> with three conditions, all recording-PR work: re-record the pin (new
+> lockfile hash, surface SHAs, blake3 in the jeliya-core crypto table),
+> refresh the zeroize inventory and feature-audit table as described, and
+> verify the recording PR's own push run green while appending the
+> `29997137062` row to the evidence package's CI table.
+
+**Disposition of the delta review's three conditions (2026-07-23, this
+recording PR):**
+
+1. **Pin re-recorded — applied.** The [pin table](phase-1-security-review-scope.md#review-target-pin)
+   now records `4206984`, the new `Cargo.lock` hash `0645dea7…`, the
+   `identity.rs`/`recovery.rs` last-change SHAs, and `blake3 "1" → 1.8.5` in
+   the jeliya-core crypto-dependency table.
+2. **Zeroize inventory + feature audit refreshed — applied**, including both
+   challenger corrections: the pinned-surface `to_seed()` count is now five
+   (the fifth, `SecretKeys::room_device`, `Zeroizing`-wrapped), the
+   `supervisor.rs` carried-note sites are three, a room-device derivation row
+   records the blake3 stack-state disclosed residual, and blake3 has a
+   feature-audit row (feature deliberately not enabled — it would not wipe
+   the one-shot `derive_key` internals).
+3. **CI rows — applied / confirmed on the recording PR.** The `29997137062`
+   push-run row (six jobs, success, merge SHA `4206984`) is appended to the
+   [evidence package's CI table](phase-1-evidence-package.md); the recording
+   PR's own checks are confirmed green on the PR before the risk-owner's
+   countersigning merge, per the established pattern.
+
+This is a docs-only recording; no pinned code surface changes after
+`4206984`, which remains the current pin.
+
 **Accepted risks reaffirmed** (unchanged owners and exit criteria, per the
 [accepted-risk register](phase-1-evidence-package.md#accepted-risks)): opt-in
 at-rest encryption (F5, row #2 stays OPEN), `jeliya-control` scaffolding (F3),

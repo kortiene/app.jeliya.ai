@@ -229,7 +229,8 @@ security property (not just the happy path).
 |---|---|---|---|
 | KEK (Argon2id output, identity.rs) | `derive_kek` returns `Zeroizing<[u8; 32]>` (Step 6 fix) | Wiped on drop at every call site | **Resolved (Step 6)** — return type is `Zeroizing`; callers receive a wiping wrapper |
 | Recovery key (`RecoveryKey`) | `RecoveryKey([u8; 32])` with `Drop` impl that calls `zeroize()` | Wiped on drop | Appears correct; verify no intermediate copies |
-| Raw seeds from `to_seed()` (identity.rs `secret_file_contents`, recovery.rs `export_bundle`) | iroh-rooms `SigningKey::to_seed()` returns a plain `[u8; 32]` by value | Wrapped in `Zeroizing` at all four call sites in the pinned surfaces (Step 7 verdict condition 1) | **Residual**: the by-value return can leave transient stack temporaries (full fix is an upstream self-wiping return type). Two further call sites in `supervisor.rs` (lines ~854/~1607, device-key handoff to the session layer) are outside row #7's pinned surfaces — noted by the conditions delta review for the next zeroize pass |
+| Raw seeds from `to_seed()` (identity.rs `secret_file_contents` + `room_device`, recovery.rs `export_bundle`) | iroh-rooms `SigningKey::to_seed()` returns a plain `[u8; 32]` by value | Wrapped in `Zeroizing` at all five call sites in the pinned surfaces (Step 7 verdict condition 1; the fifth — `SecretKeys::room_device`, identity.rs — added by PR #94 and delta-reviewed) | **Residual**: the by-value return can leave transient stack temporaries (full fix is an upstream self-wiping return type). Three further call sites in `supervisor.rs` (the two session-handoff sites, now passing the derived room-device seed, plus `room_bound_device`'s legacy branch) are outside row #7's pinned surfaces — carried-note class, tracked for the next zeroize pass / D5b review |
+| Room-scoped device seed derivation (identity.rs `SecretKeys::room_device`, PR #94) | `blake3::derive_key(v1 context, device_seed \|\| room_id)` over a fixed 64-byte ikm | Every named intermediate (`device_seed`, `ikm`, `derived`) is `Zeroizing`-wrapped ([issue #91 delta review](phase-1-security-review.md#issue-91-delta-review-2026-07-23)) | **Disclosed residual**: `blake3::derive_key`'s internal hasher state absorbs the seed-bearing ikm on the stack and is not wiped — the same class as the `to_seed()` stack-temporary limitation above; the crate's `zeroize` feature would not wipe the one-shot function's internals |
 | Password (identity.rs) | `password: &str` borrowed from a `String` the caller owns | The env-var `String` is plain; no wipe | Accepted: the env var outlives the process anyway (in the [accepted-risk register](phase-1-evidence-package.md#accepted-risks)) |
 | Ephemeral test-restore password (recovery.rs `test_restore`) | `Zeroizing<String>` (Step 7 verdict condition 3) | Wiped on drop | — |
 | Recovery phrase (recovery.rs) | `RecoveryKey::from_phrase` parses into a fixed `Zeroizing<[u8; 64]>` buffer (Step 7 condition 3, hardened post-delta-review) | Wiped on drop; **no input-proportional allocation exists**, so no reallocation can strand a copy of pasted phrase material, however long the input | **Resolved (Step 6 + Step 7 condition 3 + PR #90 hardening)** |
@@ -242,6 +243,7 @@ security property (not just the happy path).
 |---|---|---|---|
 | `aes-gcm` | `0.10.3` | `features = ["zeroize"]` in `Cargo.toml` | **Enabled (Step 6)** — AES round keys wiped on drop |
 | `argon2` | `0.5.3` | `features = ["zeroize"]` in `Cargo.toml` | **Enabled (Step 6)** — internal Argon2 state wiped on drop |
+| `blake3` | `1.8.5` | not enabled | **Deliberate (issue #91 delta review)** — the feature only adds `Zeroize` impls on hasher types; it would not wipe the one-shot `derive_key`'s internal stack state, which is recorded as a disclosed residual in the inventory above |
 
 A reviewer should still verify at Step 7 that the enabled features produce
 measurable heap-wiping (RSS/heap inspection), not just that the cargo features
@@ -367,32 +369,34 @@ tamper/version/wrong-key fail-closed.
 > a later change to any field in the "reopens review" set requires a re-review
 > before the Phase 1 gate can close.
 
-### Pin values (re-recorded 2026-07-22 after the conditions merge)
+### Pin values (re-recorded 2026-07-23 after the issue #91 fix)
 
 > Pin history: `35b1c5e` (Step 3) → `df28f6a` (Step 6; the Step 7 verdict and
 > GO were recorded against it) → `d610076` (verdict conditions, PR #89; the
 > approval [extends to it](phase-1-security-review.md#conditions-delta-review-2026-07-22))
 > → `dcd940e` (PR #90 — the `from_phrase` fixed-buffer hardening,
-> [micro-delta-reviewed](phase-1-security-review.md#conditions-delta-review-2026-07-22);
+> [micro-delta-reviewed](phase-1-security-review.md#conditions-delta-review-2026-07-22))
+> → `4206984` (PR #94 — issue #91 room-scoped device keys,
+> [delta-reviewed](phase-1-security-review.md#issue-91-delta-review-2026-07-23);
 > **the current pin**).
 
 | Field | Value |
 |---|---|
-| Source SHA | `dcd940e65a74b3596a9d8defacfc4946aedabd7d` (`main`; PR #90, final-pin merge — `d610076` plus the `from_phrase` hardening) |
-| `Cargo.lock` SHA-256 | `dda192b513195ca512587d01609aeb5d89447001fc04549aca538a3d0c31b223` |
+| Source SHA | `420698463bff70535d2f450a4f05d573a8ab589f` (`main`; PR #94 merge — issue #91 room-scoped device keys; `dcd940e` plus the docs-only PR #93 recording and PR #94) |
+| `Cargo.lock` SHA-256 | `0645dea74bdaf82176e7226294185cf35a6be737d1a1f7cb8a21ca317c0cda33` (changed from the prior `dda192b5…` solely by the `blake3` direct-dependency addition to `jeliya-core`; no resolved crypto version moved) |
 | Rust toolchain (CI full gate) | `1.96.0` (stable; `dtolnay/rust-toolchain` in `ci.yml` with `toolchain: 1.96.0`) |
 | Rust MSRV (CI MSRV lane) | `1.91.0` (`dtolnay/rust-toolchain` `1.91.0` in `ci.yml` and `release.yml`) |
 | Node (CI + release) | `22.22.3` (pinned in `ci.yml` and `release.yml` `node-version`) |
 | Local builder (this pin was recorded with) | `rustc 1.97.1`, Node `v24.18.0` — not the release toolchain; recorded for transparency only |
 | Worktree at pin time | clean (`git status --porcelain` empty) |
-| Pin date (UTC) | 2026-07-22 |
+| Pin date (UTC) | 2026-07-23 |
 
 ### Reviewed surfaces (last-change SHA)
 
 | Surface | File | Last changed |
 |---|---|---|
-| At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `d610076` (PR #89, verdict conditions) |
-| Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `dcd940e` (PR #90, `from_phrase` fixed-buffer hardening) |
+| At-rest identity envelope | [`crates/jeliya-core/src/identity.rs`](../crates/jeliya-core/src/identity.rs) | `4206984` (PR #94, room-scoped device-key derivation, [delta-reviewed](phase-1-security-review.md#issue-91-delta-review-2026-07-23)) |
+| Recovery bundle | [`crates/jeliya-core/src/recovery.rs`](../crates/jeliya-core/src/recovery.rs) | `4206984` (PR #94, room-device recovery-derivation test; additions only) |
 | Authority path (F4) | [`crates/jeliya-core/src/engine.rs`](../crates/jeliya-core/src/engine.rs) | `cdcae83` (PR #78) |
 | Daemon auth (F4) | [`crates/jeliyad/src/serve.rs`](../crates/jeliyad/src/serve.rs) | `922f620` (PR #58; created the file, unchanged since) |
 
@@ -414,6 +418,7 @@ Direct dependencies of `crates/jeliya-core` (the reviewed surfaces):
 | `zeroize` | `"1"` | `1.9.0` |
 | `getrandom` | `"0.4"` | `0.4.3` |
 | `hex` | `"0.4"` | `0.4.3` |
+| `blake3` | `"1"` | `1.8.5` (direct dep of `jeliya-core` since PR #94 — the room-scoped device-seed derivation, `SecretKeys::room_device`; same resolved version the pin already recorded for `jeliya-control` below) |
 
 > **`getrandom` disambiguation.** `Cargo.lock` contains three `getrandom`
 > entries: `0.2.17` (transitive, from `ring`/other), `0.3.4` (transitive), and
@@ -487,21 +492,23 @@ GO countersigned); the verdict conditions merged as `d610076` and the required
 for both verdicts, the reviewers' statements, and the run-ID erratum.
 A reviewer reproducing the current pin should:
 
-1. `git checkout dcd940e` for the pinned code tree — or check out current
+1. `git checkout 4206984` for the pinned code tree — or check out current
    `main` to have this pin record and the finalized review package alongside
    the code (recording a pin necessarily post-dates the pinned commit, so at
-   `dcd940e` itself the package docs are one step behind; confirm code
-   equivalence with `git diff dcd940e..main -- crates/ tools/`, which must be
+   `4206984` itself the package docs are one step behind; confirm code
+   equivalence with `git diff 4206984..main -- crates/ tools/`, which must be
    empty)
-2. Verify `sha256sum Cargo.lock` matches `dda192b5…` (shared by the
-   `df28f6a`, `d610076`, and `dcd940e` pins; the initial `35b1c5e` pin
-   predates the Step 6 zeroize-feature dependency change and recorded a
-   different lockfile, `f0baf2f1…`)
+2. Verify `sha256sum Cargo.lock` matches `0645dea7…` (the `4206984` pin —
+   changed from the `dda192b5…` shared by the `df28f6a`/`d610076`/`dcd940e`
+   pins solely by the blake3 direct-dependency addition; the initial
+   `35b1c5e` pin predates the Step 6 zeroize-feature dependency change and
+   recorded a different lockfile, `f0baf2f1…`)
 3. Verify the toolchain matches (CI full-gate Rust `1.96.0`, or MSRV `1.91.0`;
    Node `22.22.3`)
 4. Run the commands in the [evidence package](phase-1-evidence-package.md#reproduce-the-review)
-   (expected: 128 passed / 0 failed / 1 ignored; 127 at the prior `d610076`
-   pin, which lacked the overlong-paste rejection test)
+   (expected: 136 passed / 0 failed / 1 ignored at the `4206984` pin — the
+   eight issue-91 tests over the 128 at the prior `dcd940e` pin; 127 at
+   `d610076`, which lacked the overlong-paste rejection test)
 5. Verify the pin values above against the tree they checked out
 
 If any value does not match, the pin is stale and the review cannot proceed
