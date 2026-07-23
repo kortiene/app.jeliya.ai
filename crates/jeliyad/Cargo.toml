@@ -23,8 +23,22 @@ relay-only-test = ["jeliya-core/relay-only-test"]
 
 [dependencies]
 jeliya-core = { path = "../jeliya-core" }
+# The companion control plane (D5b): the Iroh control endpoint runtime, the
+# enforcing gateway it drives, and the wire method types the engine-backed
+# dispatch maps. Behind the opt-in --companion-control flag.
+jeliya-companion = { path = "../jeliya-companion" }
+jeliya-control = { path = "../jeliya-control" }
+jeliya-protocol = { path = "../jeliya-protocol" }
+# Companion secret derivation from the device seed (the versioned-context
+# derive_key discipline of jeliya-core's room_device), and zeroization of the
+# derived seeds. Same majors jeliya-core already resolves.
+blake3 = "1"
+zeroize = "1"
+# control_keys.json durability: the exact-pinned atomic-replacement semantics
+# state.json already relies on (see jeliya-core's localstate.rs).
+atomicwrites = "=0.4.4"
 clap = { version = "4", features = ["derive"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util"] }
 tokio-tungstenite = "0.26"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 serde = { version = "1", features = ["derive"] }
