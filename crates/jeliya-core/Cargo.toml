@@ -48,6 +48,12 @@ aes-gcm = { version = "0.10", features = ["zeroize"] }
 # user password that wraps the on-disk identity seeds. Memory-hard, versioned.
 # The `zeroize` feature wipes internal Argon2 state on drop (F8 audit).
 argon2 = { version = "0.5", features = ["zeroize"] }
+# Room-scoped device-seed derivation (issue #91): BLAKE3 `derive_key` with a
+# versioned context string maps the profile device seed + room id to one
+# distinct device key per room. Already in the dependency tree transitively
+# (iroh-rooms hashes rooms/events with it); direct so the security-sensitive
+# derivation does not lean on a transitive path that could shift.
+blake3 = "1"
 
 [dev-dependencies]
 tempfile = "3"

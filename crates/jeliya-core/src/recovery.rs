@@ -408,6 +408,27 @@ mod tests {
     }
 
     #[test]
+    fn restored_identity_reproduces_room_device_keys() {
+        // Issue #91: room-scoped device keys are DERIVED from the profile
+        // device seed, so the recovery bundle covers every room device —
+        // including rooms joined after the export — with no bundle change.
+        // A restored identity must reproduce the exact per-room device key
+        // its membership bindings carry, or restored users could read but
+        // never author in their rooms.
+        let (dir, _profile) = seeded_dir();
+        let original = identity::SecretKeys::load(dir.path()).unwrap();
+        let room_id = [0x5Au8; 32];
+
+        let (bundle, key) = export_bundle_from_dir(dir.path()).unwrap();
+        let (_p2, restored) = open_bundle(&bundle, &key).unwrap();
+        assert_eq!(
+            restored.room_device(&room_id).device_key(),
+            original.room_device(&room_id).device_key(),
+            "a restored identity must reproduce its room-scoped device keys"
+        );
+    }
+
+    #[test]
     fn export_then_open_round_trips_the_identity() {
         let (dir, profile) = seeded_dir();
         let (bundle, key) = export_bundle_from_dir(dir.path()).unwrap();

@@ -2165,6 +2165,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "atomicwrites",
+ "blake3",
  "getrandom 0.4.3",
  "hex",
  "iroh",

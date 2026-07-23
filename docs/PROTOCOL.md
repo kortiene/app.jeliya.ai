@@ -287,6 +287,11 @@ present only for that kind.
 
 Field notes a second client MUST honor:
 
+- **`sender.device_id`** is the room-bound signing device, and it is
+  **room-scoped**: since issue #91 each room a profile creates or joins binds
+  its own derived device key, so one identity legitimately shows a different
+  `device_id` per room (legacy rooms still show the profile device). Clients
+  MUST key senders on `identity_id`, never on `device_id`.
 - **`pipe`** — on `pipe_closed`, both `target` and `authorized_peer` are
   `null`. On `pipe_opened`, `authorized_peer` is `null` when no peer is scoped,
   or a **comma-joined** identity list for multi-identity authorization.
