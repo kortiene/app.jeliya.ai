@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Multi-room live receive collision (issue #91): every open room spawned its
+  `iroh-rooms` node from the single global profile device key, so several
+  rooms open at once presented one QUIC `EndpointId` and only the
+  last-opened room reliably received inbound traffic. Rooms created or
+  joined from now on bind a **room-scoped device key** derived from the
+  profile device seed via a versioned BLAKE3 `derive_key` context
+  (`SecretKeys::room_device`; see the
+  [room device key decision](docs/room-device-key-decision.md)) — distinct
+  `EndpointId` per room, same profile identity, no new persisted secrets,
+  and recovery bundles transparently cover every room device. Every
+  room-bound flow (authoring, invite discovery, file providers, pipes)
+  resolves the key through the room's signed membership binding, so legacy
+  rooms bound to the global device stay fully usable; a collision guard in
+  `room.open` explicitly closes an older live session that would share the
+  new node's `EndpointId` (only legacy rooms can collide) instead of letting
+  it silently stop receiving.
+
 ### Changed
 
 - Repinned `iroh-rooms` from tag `v0.1.0-rc.3` (`71fbb500…`) to the

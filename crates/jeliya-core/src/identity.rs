@@ -191,6 +191,15 @@ pub struct Profile {
     pub created_at_ms: u64,
 }
 
+/// BLAKE3 `derive_key` context for the room-scoped device-seed derivation
+/// (issue #91), version 1. The derivation is **versioned by this string**: it
+/// is immutable, and any change to the scheme requires a NEW v2 context plus a
+/// legacy dispatch keyed on which derived key the room's membership log
+/// actually binds — exactly like [`kdf_params_for_version`] for the encrypted
+/// envelope. Existing rooms keep authoring under the context that produced
+/// their bound device.
+const ROOM_DEVICE_KDF_CONTEXT_V1: &str = "jeliya.ai app.jeliya.ai 2026-07-22 room device seed v1";
+
 /// The two secret signing keys backing the local identity. No
 /// `Debug`/`Serialize`, so a stray format call cannot leak a seed.
 pub struct SecretKeys {
@@ -198,6 +207,36 @@ pub struct SecretKeys {
     pub identity: SigningKey,
     /// Signs events; signatures verify under `device_id`.
     pub device: SigningKey,
+}
+
+impl SecretKeys {
+    /// Derive the room-scoped device signing key for `room_id_bytes` (the raw
+    /// 32-byte room-id digest): `BLAKE3::derive_key(v1 context, device_seed ||
+    /// room_id)` (issue #91).
+    ///
+    /// `iroh-rooms` uses the room device key as the node's QUIC `EndpointId`,
+    /// so two concurrently open rooms bound to one device key steal each
+    /// other's inbound traffic. Every room this profile creates or joins
+    /// therefore binds its own derived device key — distinct per room, while
+    /// the identity key still proves the same profile is the member.
+    ///
+    /// Deterministic on purpose: the room device keys reproduce from the
+    /// profile device seed alone, so the Phase 1 D1 recovery bundle covers
+    /// every room device (including rooms joined after an export) without
+    /// persisting any new secret — `identity.secret` stays the only
+    /// secret-bearing file, fully under the D1b at-rest envelope.
+    #[must_use]
+    pub fn room_device(&self, room_id_bytes: &[u8; 32]) -> SigningKey {
+        let device_seed = Zeroizing::new(self.device.to_seed());
+        let mut ikm = Zeroizing::new([0u8; 2 * SEED_LEN]);
+        ikm[..SEED_LEN].copy_from_slice(&device_seed[..]);
+        ikm[SEED_LEN..].copy_from_slice(room_id_bytes);
+        let derived = Zeroizing::new(blake3::derive_key(
+            ROOM_DEVICE_KDF_CONTEXT_V1,
+            ikm.as_slice(),
+        ));
+        SigningKey::from_seed(&derived)
+    }
 }
 
 /// On-disk shape of `identity.secret`; zeroized after use.
@@ -829,6 +868,59 @@ mod tests {
             Err(e) => e,
         };
         assert_eq!(err.kind, ErrorKind::InvalidParams);
+    }
+
+    // ------------------------------------------------------------------
+    // Issue #91 — room-scoped device-key derivation
+    // ------------------------------------------------------------------
+
+    /// Fixed-seed keys for derivation tests (SigningKey::from_seed is the
+    /// same constructor the loader uses).
+    fn fixed_keys() -> SecretKeys {
+        use iroh_rooms::identity::SigningKey;
+        SecretKeys {
+            identity: SigningKey::from_seed(&[0x11u8; 32]),
+            device: SigningKey::from_seed(&[0x22u8; 32]),
+        }
+    }
+
+    #[test]
+    fn room_device_keys_are_room_scoped_and_deterministic() {
+        let keys = fixed_keys();
+        let room_a = [0xAAu8; 32];
+        let room_b = [0xBBu8; 32];
+        // Distinct per room — the whole point of issue #91: two open rooms
+        // must present two EndpointIds.
+        assert_ne!(
+            keys.room_device(&room_a).device_key(),
+            keys.room_device(&room_b).device_key()
+        );
+        // Never the global profile device (that is the legacy binding).
+        assert_ne!(
+            keys.room_device(&room_a).device_key(),
+            keys.device.device_key()
+        );
+        // Deterministic across independently loaded key material — this is
+        // what makes the D1 recovery bundle cover every room device for free.
+        assert_eq!(
+            keys.room_device(&room_a).device_key(),
+            fixed_keys().room_device(&room_a).device_key()
+        );
+    }
+
+    #[test]
+    fn room_device_kdf_v1_vector_is_pinned() {
+        // Migration fixture (like v1_kdf_params_are_pinned): if the context
+        // string, the ikm layout (device_seed || room_id), or the hash ever
+        // change, this vector breaks — alerting the author that existing
+        // rooms' bound devices would stop reproducing. Changing the scheme
+        // requires a v2 context plus legacy dispatch, never editing v1.
+        let derived = fixed_keys().room_device(&[0xAAu8; 32]);
+        assert_eq!(
+            derived.device_key().to_string(),
+            "39595b0f7818a306a62730065c44b997336188d2b782d9fd017ed3d242380ea8",
+            "room-device KDF v1 output changed — this breaks every existing room binding"
+        );
     }
 
     #[test]
