@@ -387,7 +387,10 @@ request or Referer header. Required controls are:
 
 - A minimal first-party bootstrap reads the fragment into memory and calls
   `history.replaceState()` before React startup, service-worker registration,
-  error reporting, or telemetry.
+  error reporting, or telemetry. `history.replaceState()` replaces only the
+  current session-history entry; it does not remove the visit already
+  committed to the browser's own history database at navigation time (see the
+  residual-disclosure list below).
 - Never store a ticket in `localStorage`, IndexedDB, Cache Storage, logs, crash
   reports, query strings, or URL paths.
 - Set `Referrer-Policy: no-referrer` and load no third-party analytics, scripts,
@@ -395,7 +398,9 @@ request or Referer header. Required controls are:
 - Add structural ticket and token redaction to browser, companion, relay-auth,
   support, and test tooling.
 - Default to single-use with a 30-minute expiry for live pairing and no more
-  than 24 hours for asynchronous invites.
+  than 24 hours for asynchronous invites. The live-pairing window is short
+  because a URL recorded outside the product cannot be retracted; expiry is
+  the only lever that bounds it.
 - Add `invite.cancel` and close the provisional join window immediately after
   redemption or cancellation.
 - Keep the upstream pin at or after `58aca4ba...` and require the
@@ -411,7 +416,20 @@ New-user onboarding is therefore a two-step flow:
 A generic holder-bearer invitation is a different capability model and must not
 replace identity binding implicitly. Browser extensions, screenshots, copied
 links, and OS clipboard managers remain disclosure risks that the product must
-state.
+state — and two channels in the same category happen without the user doing
+anything: the browser's own history database records the join-URL visit at
+navigation time (which `history.replaceState()` does not remove), and any
+enabled history or bookmark sync may carry that record off the device to a
+vendor account. Per-engine retention and upload behavior is written here as
+**possible, not established** — asserting a specific engine's history store
+retains fragments, or that a specific vendor's sync uploads them, requires
+per-engine confirmation first. These history channels lie **outside the reach
+of the Phase 3 gate** "invitations appear in no CDN, Worker, relay, or client
+diagnostic log" — that gate covers infrastructure and diagnostic surfaces the
+project operates, not the browser's own databases; the structural mitigations
+are the fragment-only URL, the short single-use expiry, and terminal
+redemption (an invite link that has been opened is spent — product copy must
+say so).
 
 ## Browser persistence, PWA, and offline behavior
 
@@ -947,7 +965,9 @@ Go/no-go gate:
 - native production mode no longer leaves the root secret plaintext;
 - 10,000 injected lost-response retries produce no duplicate message;
 - cursor resync matches full-log materialization;
-- expired and cancelled tickets fail on every transport;
+- expired, cancelled, and already-redeemed tickets fail on every transport
+  (redemption is terminal: the membership fold consumes the invite on every
+  peer, so an opened invite is spent);
 - replay, wrong-SAS, expired-key, and revoked-key pairing tests fail closed;
 - independent security review approves the wire formats and key lifecycle.
 
@@ -985,7 +1005,10 @@ Deliver:
 Go/no-go gate:
 
 - external TLS/header/CSP assessment passes;
-- invitations appear in no CDN, Worker, relay, or client diagnostic log;
+- invitations appear in no CDN, Worker, relay, or client diagnostic log
+  (infrastructure and diagnostic surfaces only — browser history and history
+  sync are outside this gate's reach; see the invite-fragment
+  residual-disclosure list);
 - offline shell and cached view open during origin outage;
 - N-to-N-1 rollback completes within 15 minutes;
 - a regional relay outage fails over within 2 minutes;
