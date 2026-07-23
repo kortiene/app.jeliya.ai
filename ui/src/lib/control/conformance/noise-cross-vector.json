@@ -1,0 +1,22 @@
+{
+  "_comment": "A deterministic Noise_XX_25519_AESGCM_SHA256 handshake, emitted by the Rust reference implementation (crates/jeliya-control/src/noise.rs) with fixed static and ephemeral scalars. The TypeScript initiator, driven with the same fixed scalars, must reproduce m1, m3, the handshake hash, and the SAS byte-for-byte, decrypt m2 and the responder->initiator transport message, and produce the initiator->responder transport message the Rust responder decrypted. This is the cross-implementation cross-check.",
+  "init_static_scalar": "0101010101010101010101010101010101010101010101010101010101010101",
+  "resp_static_scalar": "0202020202020202020202020202020202020202020202020202020202020202",
+  "init_ephemeral_scalar": "0303030303030303030303030303030303030303030303030303030303030303",
+  "resp_ephemeral_scalar": "0404040404040404040404040404040404040404040404040404040404040404",
+  "prologue": "6a656c6979612d63726f73732d766563746f722d70726f6c6f677565",
+  "init_static_public": "a4e09292b651c278b9772c569f5fa9bb13d906b46ab68c9df9dc2b4409f8a209",
+  "resp_static_public": "ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d59",
+  "init_ephemeral_public": "5dfedd3b6bd47f6fa28ee15d969d5bb0ea53774d488bdaf9df1c6e0124b3ef22",
+  "resp_ephemeral_public": "ac01b2209e86354fb853237b5de0f4fab13c7fcbf433a61c019369617fecf10b",
+  "m1": "5dfedd3b6bd47f6fa28ee15d969d5bb0ea53774d488bdaf9df1c6e0124b3ef22",
+  "m2": "ac01b2209e86354fb853237b5de0f4fab13c7fcbf433a61c019369617fecf10bffcf3d9d7e44ddd1fc370c31ff19ac9b3d6f8d4020d927ab41dd396933d649b8bd3284756016fefcae66d61f4453bdd0e9e493d7ae4a4abae83c5e04aedf7b3e",
+  "m3": "83e4288f16618a236f39315c841e0cf02e8bc3b147052ab0a386bbdd54ed693e5883fbda1c839e998d7725a87e7923f27a93bf58b45a5e98d785140efe2de848",
+  "handshake_hash": "0a6f21a6d31c3b20293c0bf26373a91cec3fbd52ac33e5e9786885566ece0655",
+  "sas": "17824-34733",
+  "learned_init_static": "a4e09292b651c278b9772c569f5fa9bb13d906b46ab68c9df9dc2b4409f8a209",
+  "transport_init_to_resp_plaintext": "hello-control",
+  "transport_init_to_resp": "a502aa21c357c7bc804d0713bbdadf860609fe72975935f497be72c1bd",
+  "transport_resp_to_init_plaintext": "pong",
+  "transport_resp_to_init": "69626b204068e46daf27ee573853bd0fb9b40199"
+}
