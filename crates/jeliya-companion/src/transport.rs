@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use iroh::endpoint::{presets, Connection, RecvStream, SendStream};
 use iroh::protocol::{AcceptError, ProtocolHandler, Router};
-use iroh::{Endpoint, EndpointAddr, RelayMode, SecretKey};
+use iroh::{Endpoint, EndpointAddr, RelayMode, SecretKey, TransportAddr};
 use tokio::sync::Mutex;
 use zeroize::Zeroizing;
 
@@ -241,6 +241,25 @@ impl ControlEndpoint {
     #[must_use]
     pub fn addr(&self) -> EndpointAddr {
         self.endpoint.addr()
+    }
+
+    /// The dialable address as plain strings for a host rendering the QR /
+    /// link surface: the endpoint id plus each reachable transport address, in
+    /// iroh's own `Display` forms (parseable back by an iroh dialer). Keeps
+    /// hosts from needing an iroh dependency just to print an offer.
+    #[must_use]
+    pub fn addr_strings(&self) -> (String, Vec<String>) {
+        let addr = self.endpoint.addr();
+        let addrs = addr
+            .addrs
+            .iter()
+            .filter_map(|transport| match transport {
+                TransportAddr::Ip(sock) => Some(sock.to_string()),
+                TransportAddr::Relay(url) => Some(url.to_string()),
+                _ => None,
+            })
+            .collect();
+        (addr.id.to_string(), addrs)
     }
 
     /// The companion static-key fingerprint (SHA-256(noise static)[0..8]) for

@@ -13,6 +13,7 @@
 //! and the WS auth token, graceful teardown on SIGTERM/SIGINT, and
 //! `--supervised` mode that exits when the parent closes stdin.
 
+mod companion;
 mod lifecycle;
 mod serve;
 
@@ -73,6 +74,21 @@ struct Args {
     /// OSes) and never auto-open a browser.
     #[arg(long, default_value_t = false)]
     supervised: bool,
+    /// Bind the companion control endpoint (direct connectivity only, no
+    /// relay) so a paired browser can drive this daemon over the mutually
+    /// authenticated control protocol (docs/control-wire-protocol.md).
+    /// Requires an existing identity — open the app once first.
+    #[arg(long, default_value_t = false)]
+    companion_control: bool,
+    /// Open a companion pairing offer at startup and confirm it on this
+    /// terminal (implies --companion-control; needs an interactive terminal,
+    /// so it cannot combine with --supervised).
+    #[arg(long, default_value_t = false, conflicts_with = "supervised")]
+    companion_pair: bool,
+    /// Forget all paired browser control keys before starting; every browser
+    /// must pair again.
+    #[arg(long, default_value_t = false)]
+    companion_reset_pairings: bool,
     /// Print a fixed attestation marker and exit before touching a data dir.
     /// This argument exists only in the separately compiled relay verifier.
     #[cfg(feature = "relay-only-test")]
@@ -224,46 +240,18 @@ async fn main() {
         }
     };
 
-    // The supervision contract: exactly one machine-readable JSON line on
-    // stdout, first, before any human-readable output. The token is NOT here —
-    // it lives in the 0600 portfile.
-    println!(
-        "{}",
-        json!({
-            "event": "ready",
-            "pid": portfile.pid,
-            "port": portfile.port,
-            "http": portfile.http,
-            "ws": portfile.ws,
-            "version": portfile.version,
-            "protocol": portfile.protocol,
-            "data_dir": portfile.data_dir,
-            "portfile": portfile_path.display().to_string(),
-        })
-    );
-    if ui.is_serving() {
-        println!(
-            "jeliyad on {}  ({})  data dir: {}",
-            portfile.http,
-            portfile.ws,
-            data_dir.display()
-        );
-    } else {
-        println!(
-            "jeliyad listening on {} (data dir: {})",
-            portfile.ws,
-            data_dir.display()
-        );
-    }
-
     // Detached: dropping the handle lets the push fan-out run for the daemon's
     // whole life; process exit reaps it (same as the old spawned push_loop).
     drop(state.engine.start_push_loop());
 
-    // Shutdown triggers. Ctrl-C covers all three OSes; SIGTERM is the Unix
-    // service-manager/supervisor signal; stdin EOF is the portable
+    // Shutdown triggers, installed BEFORE the (possibly slow) companion bind so
+    // a Ctrl-C / SIGTERM during startup is handled gracefully rather than by
+    // the default immediate-kill disposition. Ctrl-C covers all three OSes;
+    // SIGTERM is the Unix service-manager signal; stdin EOF is the portable
     // parent-death signal in --supervised mode (the parent holds our stdin
-    // pipe; when it dies — even by kill -9 — the pipe closes).
+    // pipe; when it dies — even by kill -9 — the pipe closes). --supervised
+    // and --companion-pair are mutually exclusive, so nothing else reads stdin
+    // while the companion's line reader is active.
     {
         let tx = shutdown_tx.clone();
         tokio::spawn(async move {
@@ -305,6 +293,88 @@ async fn main() {
         });
     }
 
+    // The companion control plane (opt-in). Bound BEFORE the ready line so
+    // `ready` truthfully means "fully serving, companion included", and the
+    // bind (which prints nothing to stdout) never precedes the machine-readable
+    // line. Startup failures here are fatal — the operator explicitly asked for
+    // the endpoint — and take the graceful path so the portfile never goes
+    // stale. The bind is raced against the shutdown channel so a Ctrl-C during
+    // a slow bind aborts startup cleanly instead of waiting out the timeout.
+    if args.companion_reset_pairings {
+        if let Err(err) = companion::reset_pairings(&data_dir) {
+            error!("{err}");
+            lifecycle::graceful_shutdown(&state, "companion pairing reset failed").await;
+            drop(log_guard);
+            std::process::exit(1);
+        }
+    }
+    let mut companion = if args.companion_control || args.companion_pair {
+        let spawn = companion::spawn(companion::CompanionOptions {
+            data_dir: data_dir.clone(),
+            engine: state.engine.clone(),
+            pair: args.companion_pair,
+            supervised: args.supervised,
+        });
+        tokio::select! {
+            spawned = spawn => match spawned {
+                Ok(companion) => Some(companion),
+                Err(err) => {
+                    error!("{err}");
+                    lifecycle::graceful_shutdown(&state, "companion control startup failed").await;
+                    drop(log_guard);
+                    std::process::exit(1);
+                }
+            },
+            reason = shutdown_rx.recv() => {
+                let reason = reason.unwrap_or_else(|| "shutdown during companion startup".to_owned());
+                drop(listener);
+                lifecycle::graceful_shutdown(&state, &reason).await;
+                drop(log_guard);
+                std::process::exit(0);
+            }
+        }
+    } else {
+        None
+    };
+
+    // The supervision contract: exactly one machine-readable JSON line on
+    // stdout, first, before any human-readable output. The token is NOT here —
+    // it lives in the 0600 portfile.
+    println!(
+        "{}",
+        json!({
+            "event": "ready",
+            "pid": portfile.pid,
+            "port": portfile.port,
+            "http": portfile.http,
+            "ws": portfile.ws,
+            "version": portfile.version,
+            "protocol": portfile.protocol,
+            "data_dir": portfile.data_dir,
+            "portfile": portfile_path.display().to_string(),
+        })
+    );
+    if ui.is_serving() {
+        println!(
+            "jeliyad on {}  ({})  data dir: {}",
+            portfile.http,
+            portfile.ws,
+            data_dir.display()
+        );
+    } else {
+        println!(
+            "jeliyad listening on {} (data dir: {})",
+            portfile.ws,
+            data_dir.display()
+        );
+    }
+    // Companion status + the pairing loop print AFTER the ready line so the
+    // machine-readable line stays first on stdout.
+    if let Some(companion) = companion.as_mut() {
+        println!("{}", companion.status_line());
+        companion.start_pairing();
+    }
+
     // Open the UI once we're bound and actually serving it (best-effort, never
     // fatal). Scripts, headless runs, and supervised sidecar runs never pop a
     // browser — in sidecar mode the parent app owns all UX.
@@ -340,6 +410,12 @@ async fn main() {
     // concurrent restart's health probe fails fast (connection refused) instead
     // of blocking on a socket whose accept loop has stopped.
     drop(listener);
+    // Companion first: its shutdown stops the pairing/stdin tasks, closes the
+    // Iroh endpoint so no session can install a key past the final snapshot,
+    // then writes that snapshot — all before the engine tears the rooms down.
+    if let Some(companion) = companion.take() {
+        companion.shutdown().await;
+    }
     lifecycle::graceful_shutdown(&state, &reason).await;
     // Flush the non-blocking file-log worker before the process dies —
     // std::process::exit runs no destructors, so drop the guard explicitly or

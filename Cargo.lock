@@ -2253,6 +2253,8 @@ version = "0.6.0"
 name = "jeliyad"
 version = "0.6.0"
 dependencies = [
+ "atomicwrites",
+ "blake3",
  "clap",
  "dirs",
  "fd-lock",
@@ -2263,7 +2265,10 @@ dependencies = [
  "hyper",
  "hyper-tungstenite",
  "hyper-util",
+ "jeliya-companion",
+ "jeliya-control",
  "jeliya-core",
+ "jeliya-protocol",
  "rust-embed",
  "serde",
  "serde_json",
@@ -2275,6 +2280,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "webbrowser",
+ "zeroize",
 ]
 
 [[package]]
