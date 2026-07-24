@@ -1032,7 +1032,8 @@ Go/no-go gate:
 - an external penetration review has no unresolved critical or high finding;
 - a published abuse contact and named triage owner exist at the origin (A6, [trust, safety, and legal record](trust-safety-and-legal-decision.md));
 - the retention and lawful-basis position is published at the origin (A6);
-- the statement of what the architecture can and cannot do about content already distributed is published at the origin (A6).
+- the statement of what the architecture can and cannot do about content already distributed is published at the origin (A6);
+- the named individual operating entity, a published privacy policy and terms of service, and a completed qualified privacy/legal review (records of processing, any DPA, and sign-off on the published text) are in place (A6).
 
 This is the first production launch gate.
 
