@@ -794,6 +794,28 @@ mod tests {
         );
     }
 
+    #[test]
+    fn changed_fields_reports_additions_removals_and_edits() {
+        let committed = r#"{"a":"1","b":"2"}"#;
+        assert_eq!(
+            changed_fields(committed, committed),
+            "only formatting (field order or whitespace)"
+        );
+        assert_eq!(changed_fields(committed, r#"{"a":"1","b":"3"}"#), "b");
+        // A field the generator NO LONGER emits — the case that iterating only
+        // the generated keys would miss, reporting "only formatting" instead.
+        assert_eq!(changed_fields(committed, r#"{"a":"1"}"#), "b");
+        // …and one it newly emits.
+        assert_eq!(
+            changed_fields(committed, r#"{"a":"1","b":"2","c":"4"}"#),
+            "c"
+        );
+        assert_eq!(
+            changed_fields("{not json", committed),
+            "the committed file is not valid JSON"
+        );
+    }
+
     /// Which top-level fields differ, so the failure names what moved instead
     /// of printing two walls of JSON. An unparseable committed file reports
     /// itself rather than pretending nothing changed.
@@ -808,10 +830,18 @@ mod tests {
         else {
             return "the committed file is not a JSON object".to_owned();
         };
-        let changed: Vec<&str> = generated
-            .iter()
-            .filter(|(key, value)| committed.get(*key) != Some(value))
-            .map(|(key, _)| key.as_str())
+        // Over the UNION of both key sets: a field dropped from `CrossVector`
+        // is present in the committed file and absent from the generated one,
+        // and iterating only the generated keys would miss it entirely — the
+        // message would then claim "only formatting" for a real change.
+        let keys: std::collections::BTreeSet<&str> = generated
+            .keys()
+            .chain(committed.keys())
+            .map(String::as_str)
+            .collect();
+        let changed: Vec<&str> = keys
+            .into_iter()
+            .filter(|key| committed.get(*key) != generated.get(*key))
             .collect();
         if changed.is_empty() {
             "only formatting (field order or whitespace)".to_owned()
