@@ -89,10 +89,38 @@ struct Args {
     /// must pair again.
     #[arg(long, default_value_t = false)]
     companion_reset_pairings: bool,
+    /// List the paired browser control keys and exit. Needs the data dir to
+    /// itself — stop a running daemon first.
+    #[arg(
+        long,
+        default_value_t = false,
+        conflicts_with_all = ["companion_revoke", "companion_control", "companion_pair", "companion_reset_pairings"]
+    )]
+    companion_list_pairings: bool,
+    /// Revoke one paired browser control key by its id (or a unique prefix of
+    /// it, from --companion-list-pairings) and exit. That browser must pair
+    /// again; the others keep their access. Needs the data dir to itself —
+    /// stop a running daemon first.
+    #[arg(
+        long,
+        value_name = "ID",
+        conflicts_with_all = ["companion_control", "companion_pair", "companion_reset_pairings"]
+    )]
+    companion_revoke: Option<String>,
     /// Print a fixed attestation marker and exit before touching a data dir.
     /// This argument exists only in the separately compiled relay verifier.
+    ///
+    /// It conflicts with the administrative pairing commands: this branch
+    /// returns 0 before any data dir is read, so combining them would exit 0
+    /// having revoked nothing — the "reported success while the key stayed
+    /// live" failure the admin path exists to prevent.
     #[cfg(feature = "relay-only-test")]
-    #[arg(long, hide = true, default_value_t = false)]
+    #[arg(
+        long,
+        hide = true,
+        default_value_t = false,
+        conflicts_with_all = ["companion_list_pairings", "companion_revoke"]
+    )]
     verification_relay_only_build: bool,
 }
 
@@ -156,6 +184,52 @@ async fn main() {
             std::process::exit(1);
         }
     };
+    // Administrative pairing commands: do the one thing and exit, before any
+    // port, engine, or companion endpoint exists.
+    //
+    // They take the instance lock with `try_write` instead of going through
+    // `acquire_or_adopt`, which adopts a healthy incumbent and exits 0. Exiting
+    // 0 is right for a second daemon start and badly wrong here: an operator
+    // revoking a compromised browser would be told "already running" — success,
+    // by exit code — while the key stayed live. So a busy data dir is a loud
+    // failure, and holding the lock for the whole operation is also what keeps
+    // `control_keys.json` single-writer.
+    if args.companion_list_pairings || args.companion_revoke.is_some() {
+        // Wait a bounded while for the lock rather than failing instantly: the
+        // natural way to run this is to stop the daemon and immediately revoke,
+        // and a stopping daemon holds the lock through its companion drain and
+        // room close (bounded at ~10s). Never wait forever — a still-running
+        // daemon must end as a loud failure, not a hang.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+        let admin_guard = loop {
+            if let Ok(guard) = instance_lock.try_write() {
+                break Some(guard);
+            }
+            if tokio::time::Instant::now() >= deadline {
+                break None;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        };
+        let Some(_admin_guard) = admin_guard else {
+            eprintln!(
+                "error: another process is using {}. If a jeliyad is running \
+                 there, stop it first and re-run this command — stopping it \
+                 also ends any companion session it was serving.",
+                data_dir.display()
+            );
+            std::process::exit(1);
+        };
+        let outcome = match args.companion_revoke.as_deref() {
+            Some(id) => companion::revoke_pairing(&data_dir, id),
+            None => companion::list_pairings(&data_dir),
+        };
+        if let Err(err) = outcome {
+            eprintln!("error: {err}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
     let _instance_guard = lifecycle::acquire_or_adopt(&mut instance_lock, &data_dir).await;
 
     let supervisor = match RoomSupervisor::new(data_dir.clone(), args.loopback) {
@@ -516,6 +590,89 @@ mod tests {
                 .expect("relay verifier accepts its hidden attestation flag")
                 .verification_relay_only_build
         );
+    }
+
+    /// The administrative pairing commands take the data dir exclusively and
+    /// then exit. Every one of these combinations would otherwise reach that
+    /// path with a daemon's flags alongside it — or, for the hidden verifier
+    /// flag, exit 0 before the data dir is ever read, reporting success for a
+    /// revocation that never happened. Clap is what enforces this, so the
+    /// matrix is pinned here: dropping one entry from a `conflicts_with_all`
+    /// is otherwise a silent regression.
+    #[test]
+    fn administrative_pairing_commands_refuse_daemon_flags() {
+        for argv in [
+            // The two admin commands are mutually exclusive.
+            vec![
+                "jeliyad",
+                "--companion-list-pairings",
+                "--companion-revoke",
+                "abcd",
+            ],
+            // Neither may combine with bringing the companion up…
+            vec![
+                "jeliyad",
+                "--companion-list-pairings",
+                "--companion-control",
+            ],
+            vec!["jeliyad", "--companion-list-pairings", "--companion-pair"],
+            vec![
+                "jeliyad",
+                "--companion-revoke",
+                "abcd",
+                "--companion-control",
+            ],
+            vec!["jeliyad", "--companion-revoke", "abcd", "--companion-pair"],
+            // …nor with forgetting every pairing at once.
+            vec![
+                "jeliyad",
+                "--companion-list-pairings",
+                "--companion-reset-pairings",
+            ],
+            vec![
+                "jeliyad",
+                "--companion-revoke",
+                "abcd",
+                "--companion-reset-pairings",
+            ],
+        ] {
+            assert!(
+                Args::try_parse_from(&argv).is_err(),
+                "must be rejected: {argv:?}"
+            );
+        }
+
+        // Each alone parses, so the rejections above are the conflicts and not
+        // a typo in a flag name.
+        assert!(Args::try_parse_from(["jeliyad", "--companion-list-pairings"]).is_ok());
+        let revoke = Args::try_parse_from(["jeliyad", "--companion-revoke", "abcd"])
+            .expect("revoke parses alone");
+        assert_eq!(revoke.companion_revoke.as_deref(), Some("abcd"));
+    }
+
+    #[cfg(feature = "relay-only-test")]
+    #[test]
+    fn the_relay_attestation_flag_cannot_mask_a_revocation() {
+        // That branch returns 0 before any data dir is read; combined with a
+        // revoke it would exit 0 having revoked nothing.
+        for argv in [
+            vec![
+                "jeliyad",
+                "--verification-relay-only-build",
+                "--companion-revoke",
+                "abcd",
+            ],
+            vec![
+                "jeliyad",
+                "--verification-relay-only-build",
+                "--companion-list-pairings",
+            ],
+        ] {
+            assert!(
+                Args::try_parse_from(&argv).is_err(),
+                "must be rejected: {argv:?}"
+            );
+        }
     }
 
     #[test]
