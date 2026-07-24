@@ -370,6 +370,32 @@ describe('control-key storage', () => {
     expect(await restored.keypair.dh(peer.publicRaw)).not.toBeNull();
   });
 
+  it('refuses to export or wrap the control private key (amendment A1)', async () => {
+    // Amendment A1 requires the browser control key be non-extractable: neither
+    // `exportKey` nor `wrapKey` can ever yield its private scalar, so a hostile
+    // same-origin script or a stolen storage snapshot gets no portable key.
+    const subtle = globalThis.crypto.subtle;
+    const { privateKey } = (await ControlKey.generate()).keypair;
+    expect(privateKey.extractable).toBe(false);
+
+    // exportKey rejects for every serialization format: WebCrypto checks the
+    // [[extractable]] slot before any format handling, so pkcs8 and jwk both throw.
+    await expect(subtle.exportKey('pkcs8', privateKey)).rejects.toThrow();
+    await expect(subtle.exportKey('jwk', privateKey)).rejects.toThrow();
+
+    // wrapKey rejects too: wrapping serializes the wrapped key, which requires it
+    // be extractable, so the scalar cannot be smuggled out under an AES-GCM wrap.
+    const wrappingKey = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
+      'wrapKey',
+    ]);
+    await expect(
+      subtle.wrapKey('pkcs8', privateKey, wrappingKey as CryptoKey, {
+        name: 'AES-GCM',
+        iv: new Uint8Array(12),
+      }),
+    ).rejects.toThrow();
+  });
+
   it('stores and reads back a companion pin', async () => {
     const store = new InMemoryControlKeyStore();
     await store.savePin('0011223344556677', 'aabb');
