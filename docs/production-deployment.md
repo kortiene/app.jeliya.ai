@@ -828,7 +828,7 @@ file availability depend on active peers.
 
 ### Abuse controls
 
-- short-lived endpoint-bound relay tokens, minted only to a companion-countersigned control key per the [relay-auth admission rule record](relay-auth-admission-rule-decision.md);
+- short-lived endpoint-bound relay tokens, minted post-pairing only to a companion-countersigned control key (with a separate, tighter-capped bootstrap credential for first pairing) per the [relay-auth admission rule record](relay-auth-admission-rule-decision.md);
 - per-control-key mint quotas and a bucketed global daily minting budget, plus a relay-side aggregate-egress cutoff that throttles and terminates sessions at the published GiB/spend ceiling — controls that do not depend on endpoint identity being scarce — in addition to per-IP and per-endpoint handshake, connection, byte, and rate limits;
 - owner-enforced invitation creation and redemption limits;
 - initially one pending invitation window per room;

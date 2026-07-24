@@ -69,8 +69,12 @@ and the endpoint id `E` the browser will present to the relay.
    construction, binding `K_pub` to a real pairing ceremony, not a bare keypair.
 
 **Admits.** A short-lived (≤ 60 s), endpoint-bound token is issued **iff** (1) and
-(2) verify **and** `K` is within its per-key mint quota (§2) **and** the mint fits
-the bucketed budget accounting (§3).
+(2) verify, **and** `σ_C` is unexpired at mint time (`now ∈ [t, t+L]`) and not on
+the companion's revocation feed, **and** `K` is within its per-key mint quota
+(§2), **and** the mint fits the bucketed budget accounting (§3). The
+countersignature lifetime `L` is kept short (**≤ 24 h**) so a companion that
+revokes `K` takes effect within one window even without a live revocation feed;
+where the feed is available, revocation is immediate.
 
 ### 1b. Pre-pairing (bootstrap) tier
 
@@ -82,9 +86,11 @@ session), on:
 
 - **Possession of `K`** by the same DH key-confirmation as 1a (`K` is generated at
   first load, before any pairing; the browser presents `K_pub` directly), and
-- **a much tighter, separate quota** — the bootstrap sub-bucket (§3) is the
-  smallest, and is the **first place the deferred proof-of-work anchor (§4)
-  applies**, because it is the only surface not bound by a pairing.
+- **a much tighter, separate quota** — the bootstrap sub-bucket (§3) caps
+  bootstrap mints at **5 / rolling hour / `K`** and a **global 150,000 / day**
+  (10% of the 75% new bucket; alerts 60% / 85%), and is the **first place the
+  deferred proof-of-work anchor (§4) applies**, because it is the only surface not
+  bound by a pairing.
 
 The companion endpoint reaches the relay under the **native-companion credential
 policy** (not this browser path), so both sides of a first pairing can connect.
@@ -131,6 +137,14 @@ on both planes:
   [Production deployment architecture](production-deployment.md) (relay cost
   formula).
 
+The **enforceable variable term is the 1,024 GiB/month egress ceiling** (and its
+$0.15/GiB cost); the **$900/month all-in cap is the outer bound** (fixed relay +
+egress + the $150 support allowance), so the relay meters and cuts over on GiB,
+not on the all-in figure. The relay→relay-auth cutoff signal, the metering
+granularity, and the bounded in-flight overshoot (≤ one metering interval's
+egress) are a **Phase 3 implementation contract** (§7) — this record fixes the
+ceiling and the requirement that both planes enforce it, not the wire protocol.
+
 ## 3. Budget accounting, buckets, and the established-key reserve
 
 A flat global shed would let an abuse-driven ceiling lock out honest new sessions,
@@ -148,6 +162,11 @@ in the trailing 7 days — a bounded, expiring set of key hashes, adding no iden
 linkage beyond the mint requests relay-auth already observes
 ([threat model](security-threat-model.md) TB2).
 
+- **Established status is earned by an authenticated relay-connect** the relay
+  reports back to relay-auth (idempotent, keyed by the token/endpoint). The
+  connect-report protocol and the mint/connect race and retry reconciliation are a
+  **Phase 3 implementation contract** (§7); this record fixes that the status
+  follows a *confirmed* relay-connect, not a mint alone.
 - **New-key shed fires when the 75% bucket is exhausted — not when the global
   ceiling is reached** — so the 25% reserve is genuinely protected: an established
   key can still mint after new-key minting has shed. Established minting sheds only
@@ -193,6 +212,13 @@ is exercised instead by the **Phase 3** real-relay validation (`web-ci.yml`
 real-relay lane) and the Phase 3 load test; that is where this criterion is met.
 No production gate is passed on the stand-in.
 
+**Accepted deviation (risk owner, 2026-07-24).** Because the Phase 0 gate is
+closed and was discharged on the transport-plane stand-in, AC4 cannot be met on
+Phase 0 evidence. The risk owner accepts this as a recorded deviation: the
+admission rule is exercised at the **Phase 3 real-relay validation** instead, and
+#49 closes on that basis. No production launch gate (#50) passes until that Phase
+3 exercise is green.
+
 ## 6. Relay-auth key custody (pointer, not decided here)
 
 relay-auth holding the project credential means its compromise equals
@@ -204,7 +230,23 @@ custody" and must be chosen before the launch relay-auth design is finalised.
 This record does not settle it; the admission rule above is independent of which
 custody model is chosen.
 
-## 7. Edits applied with this record
+## 7. Phase 3 implementation contracts (named here, specified there)
+
+This is a *decision* record: it fixes the rule and its binding requirements. The
+following are named as requirements and left to Phase 3 (#50) to specify and
+implement — they are deferred mechanics, not open decisions:
+
+- the **relay→relay-auth cutoff signal**, metering granularity, and bounded
+  in-flight overshoot (≤ one metering interval's egress) that make the GiB/spend
+  ceiling enforceable at the data plane (§2);
+- the **authenticated connect-event report** the relay sends relay-auth, and the
+  atomic mint/connect race and retry reconciliation behind established status (§3);
+- the optional **`σ_C` revocation feed** for immediate (rather than ≤ 24 h
+  window-bounded) revocation at mint time (§1a);
+- adoption of the whole rule in the managed-relay `AccessControl` and its exercise
+  by the Phase 3 real-relay validation (§5).
+
+## 8. Edits applied with this record
 
 - [Production deployment architecture](production-deployment.md) relay-auth
   admission bullet — "after proof of possession" replaced by a pointer to §1's
@@ -222,7 +264,7 @@ custody model is chosen.
   §2a — the "hard ceiling" claim corrected to name both planes (mint-shed plus
   the relay-side egress cutoff), not the mint-shed alone.
 
-## 8. Acceptance-criteria mapping (issue #49)
+## 9. Acceptance-criteria mapping (issue #49)
 
 - *Admission rule replaces "after proof of possession" and states what is
   possessed, proven, and what admits — issuance to a companion-paired control
@@ -233,9 +275,9 @@ custody model is chosen.
 - *A stated GiB and monthly spend cutoff sheds minting automatically and alerts at
   a stated fraction* — §2 (from #45 §2a/§2c), §3.
 - *The Phase 0 deliverable and gate exercise the chosen admission rule, not an
-  unauthenticated stand-in* — **not met on Phase 0 evidence; carried to Phase 3**
-  (§5). This record does not mark the closed Phase 0 gate as satisfying the
-  criterion; the rule is exercised by the Phase 3 real-relay validation.
+  unauthenticated stand-in* — **accepted deviation (risk owner, 2026-07-24)**: not
+  met on the closed Phase 0 gate (a stand-in), exercised instead at the Phase 3
+  real-relay validation (§5). Recorded, not silently closed.
 - *The Phase 3 gate names this published cutoff as the ceiling it is evaluated
   against* — the [#45 record](relay-load-and-cost-ceilings-decision.md) §4 restated
   the gate line against the published ceilings; this record defines the cutoff
@@ -244,7 +286,7 @@ custody model is chosen.
   admission-rule dimension; the residual Sybil-companion availability risk is
   named (§1 note, §3, §4).
 
-## 9. Citations
+## 10. Citations
 
 - [Production deployment architecture](production-deployment.md) — relay-auth
   admission ("after proof of possession"), no-accounts model, abuse-control list,
