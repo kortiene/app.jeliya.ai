@@ -52,9 +52,9 @@ every relayed byte counts once per receiving peer (the "fanout" column).
 | Peak concurrent paired sessions | 200 | companion↔browser control sessions live at once |
 | Concurrent active rooms | 100 | rooms with ≥1 online peer |
 | Mean room size (relayed recipients) | 3 members → fanout ×2 | each authored event relays to the other members |
-| Aggregate chat event rate | 5 events/s sustained, 25 events/s peak | across all rooms |
+| Aggregate chat event rate | 5 events/s sustained (22 h/day), 25 events/s peak (2 h/day) | across all rooms |
 | p95 chat event size | 4 KiB | control-wire framed event; oversize refused pre-nonce |
-| File transfers relayed | 1,000 sends/day, p95 8 MiB | file traffic dominates relay egress |
+| File transfers relayed | 1,000 sends/day; mean 4 MiB, p95 8 MiB, hard per-file cap 100 MiB | file traffic dominates egress; the per-file cap bounds the tail |
 | Peak relay connections | 400 | ~2× concurrent sessions (both directions / reconnects) |
 
 ## 2. Hard ceilings (with alert fractions)
@@ -65,15 +65,23 @@ in **#49** (this record sets the number; #49 sheds against it).
 
 ### 2a. Relay egress
 
-Derived from §1 (inputs shown so they can be re-derived):
+Derived from §1 across the **full** profile — the peak window and the file tail,
+not the sustained rate alone (inputs shown so they can be re-derived):
 
-- Chat: 5 ev/s × 4 KiB × fanout 2 ≈ 0.039 MiB/s × 2.59e6 s/mo ≈ **~100 GiB/mo**
-- Files: 1,000/day × 8 MiB × fanout 2 ≈ 15.6 GiB/day × 30 ≈ **~470 GiB/mo**
-- Typical total ≈ **~570 GiB/mo**; ceiling set at ~1.8× for reconnect + overhead + burst:
+- Chat: (5 ev/s × 22 h + 25 ev/s × 2 h) × 3600 = 576k events/day × 4 KiB × fanout 2 ≈ 4.4 GiB/day × 30 ≈ **~132 GiB/mo** (peak window included, not sustained-only)
+- Files: 1,000/day × **mean** 4 MiB × fanout 2 ≈ 7.8 GiB/day × 30 ≈ **~234 GiB/mo** (aggregate egress tracks the mean, not p95; the 100 MiB per-file cap bounds the tail so no single send is unbounded)
+- Typical total ≈ **~370 GiB/mo**; ceiling set at ~2.8× for reconnect + overhead + burst:
 
 | Ceiling | Value | Alert at |
 |---|---|---|
 | Relay egress, all production relays | **1,024 GiB / month** | 60% (`614 GiB`), 85% (`870 GiB`) |
+
+The ceiling is **hard because #49's automatic shed enforces it**, not because the
+profile cannot exceed it: when monthly relay egress reaches 1,024 GiB, minting
+sheds (new tokens are refused) rather than continuing to incur egress, so a run
+whose file-size tail or peak burst would carry it past the ceiling is stopped
+**at** the ceiling. The profile sets the headroom; the shed makes the number a
+bound rather than a prediction.
 
 ### 2b. Relay-auth edge-token service (Cloudflare Worker)
 
@@ -94,10 +102,11 @@ converts any keypair into relay capacity billed to Jeliya.
 |---|---|---|
 | All-in monthly spend, first slice | **$900 / month** | 70% (`$630`), 90% (`$810`) |
 
-Sized at ~1.7× the typical modeled all-in (§3, ~$522/mo), leaving room for the
-`+ managed support or SLA charges` term and short bursts without tripping in
-normal operation. At the cap, token minting sheds automatically (mechanism:
-**#49**). Spend cannot be un-spent, so the cap binds before availability.
+Set above the complete modeled all-in (§3): ~$644/mo typical and ~$742/mo at the
+egress ceiling — both including the $150 managed-support/SLA allowance — leaving
+~$158 (≈ 18%) of headroom before the cap binds. At the cap, token minting sheds
+automatically (mechanism: **#49**). Spend cannot be un-spent, so the cap binds
+before availability.
 
 ## 3. Cost table — every relay environment the plan mandates
 
@@ -116,18 +125,24 @@ which is the stated mitigation for their cost.
 | Environment | Relays | Run pattern | Instance-hours/mo | Instance-hour cost | Egress cost |
 |---|---|---|---|---|---|
 | **Production** | 2 (NA + EU) | continuous | 2 × 720 = 1,440 | **$388.80** | up to `1,024 GiB × $0.15 = $153.60` |
-| **Staging** | 1 | CI/promotion windows, ~3 hr/day | ~90 | **~$24.30** | negligible (synthetic) |
-| **CI test** | 1 | per-PR ephemeral, ~150 runs × 15 min | ~37.5 | **~$10.13** | negligible (synthetic) |
-| **Dev** | 1 | developer-initiated, ~20 hr/mo | ~20 | **~$5.40** | negligible |
+| **Staging** | 1 | CI/promotion windows, ~3 hr/day | ~90 | **~$24.30** | ≤ 5 GiB synthetic → **≤ $0.75** |
+| **CI test** | 1 | per-PR ephemeral, ~150 runs × 15 min | ~37.5 | **~$10.13** | ≤ 5 GiB synthetic → **≤ $0.75** |
+| **Dev** | 1 | developer-initiated, ~20 hr/mo | ~20 | **~$5.40** | ≤ 5 GiB → **≤ $0.75** |
 | Edge-token Worker (relay-auth) | — | continuous | — | **~$5–10** (Workers Paid) | — |
-| **Initial fixed total** | | | | **~$436** | + egress |
+| Managed support / SLA | — | reserved allowance | — | **$150** (allowance) | — |
+| **Initial fixed total** | | | | **~$436 + $150 SLA** | + egress |
 
-*Typical all-in* (fixed ~$436 + typical egress ~570 GiB × $0.15 = ~$85.50) ≈
-**~$522/mo**. *At the §2a egress ceiling* (1,024 GiB × $0.15 = $153.60) ≈
-**~$590/mo**. Both inside the **$900** spend cap, which reserves the balance for
-managed support / SLA charges (the `+ managed support or SLA charges` term of the
-cost formula at [Production deployment architecture](production-deployment.md)
-lines 829-832).
+Every mandated environment and charge is quantified against the cap (the
+`+ managed support or SLA charges` term of the cost formula at
+[Production deployment architecture](production-deployment.md) lines 829-832 is
+the $150 allowance line above):
+
+- *Typical all-in* = fixed ~$436 + $150 SLA + typical prod egress (~370 GiB × $0.15 ≈ $55.50) + non-prod egress (≤ ~$2.25) ≈ **~$644/mo**.
+- *At the §2a egress ceiling* = fixed ~$436 + $150 SLA + prod egress $153.60 + non-prod egress ≤ $2.25 ≈ **~$742/mo**.
+
+Both are inside the **$900** cap, leaving ~$158 (≈ 18%) of headroom above the
+complete at-ceiling spend before the cap itself binds. If managed support / SLA
+charges exceed the $150 allowance, revisit the cap.
 
 ## 4. Restated Phase 3 gate line
 
@@ -136,7 +151,7 @@ Per #45 acceptance criterion 4, the gate line at
 "load tests stay inside resource and cost ceilings" — is restated as:
 
 > *load tests at the profile in §1 of the relay load-and-cost-ceilings record
-> stay within the published egress, request, and spend ceilings of §2.*
+> stay within the published egress, request, CPU, and spend ceilings of §2.*
 
 This edit is applied to `production-deployment.md` in the same change that lands
 this record.
