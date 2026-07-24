@@ -58,9 +58,11 @@ This is a small open-source project, not a company:
   installer implementation does not verify them automatically before
   extraction. That verification is a mandatory `v0.5.0` gate; verify older
   downloads manually.
-- The **companion control protocol** (`crates/jeliya-companion/`) is a signed
-  native service that speaks a mutually-authenticated, end-to-end-encrypted
-  Iroh control ALPN and exposes **no public HTTP listener**. It is reached only
+- The **companion control protocol** (`crates/jeliya-companion/`) is a native
+  service that speaks a mutually-authenticated, end-to-end-encrypted Iroh control
+  ALPN and exposes **no public HTTP listener**. Its archives ship **unsigned**
+  until the post-deploy signing gate (`docs/signing-deferral-decision.md`), so
+  tampered/unsigned companion distribution is in scope, not out of it. It is reached only
   after SAS-confirmed pairing, and grants are default-deny, scoped, and
   bounded-lifetime (`docs/companion-control-protocol-decision.md`). Driving the
   companion *within a granted scope* is the documented trust decision. Getting
@@ -72,5 +74,8 @@ This is a small open-source project, not a company:
   (`docs/relay-auth-admission-rule-decision.md`); it is not a room member and
   holds no room content. Observing source IPs, endpoint routing, and short-lived
   key hashes is the documented, pseudonymous metadata boundary. Minting without
-  the required proof of possession, bypassing the admission rule or its quotas,
-  or leaking the project secret into static assets or logs, is a vulnerability.
+  the proof of possession the requested tier requires (post-pairing mints need a
+  companion-countersigned control key; the bootstrap path is pairing-ALPN-scoped
+  and mints without one under a tighter quota), bypassing the admission rule or
+  its quotas, or leaking the project secret into static assets or logs, is a
+  vulnerability.
