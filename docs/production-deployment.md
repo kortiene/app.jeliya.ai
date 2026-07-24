@@ -672,6 +672,21 @@ Add COEP only if Wasm threading requires cross-origin isolation and the complete
 asset graph passes. Do not depend on hosted-page access to loopback addresses;
 the relevant browser policy is still experimental and platform-dependent.
 
+Incident header (not standing):
+
+```text
+Clear-Site-Data: "cache", "storage", "executionContexts"
+```
+
+`Clear-Site-Data` is served **only during a frontend-compromise incident**, from the
+rolled-back origin on the service-worker script path and `index.html`. `"storage"`
+clears origin storage including Cache Storage and **unregisters every service-worker
+registration** on the origin; `"cache"` clears the HTTP cache. It is **not** a standing
+header — emitting it on every response would wipe the app's own storage and defeat the
+offline shell — and its delivery to an already-hostile service worker is not guaranteed;
+see the [hostile-frontend containment record](hostile-frontend-containment-decision.md)
+(A2), which pairs it with the signed web-shell kill switch below.
+
 ### Cache policy
 
 - `index.html`, the service worker, and public environment config use
@@ -746,6 +761,9 @@ Production smoke tests cover:
 - absence of unapproved third-party requests;
 - PWA install and offline-shell startup;
 - service-worker N/N-1 update;
+- hostile-shell eviction: a killed shell (signed kill-switch document) stops
+  serving its cached bytes and the client re-fetches clean bytes, and
+  `Clear-Site-Data` on the rolled-back origin unregisters the service worker;
 - two ephemeral peers creating, joining, sending, and reconnecting;
 - deliberately forced relay;
 - companion pairing and control-key revocation;
@@ -759,6 +777,15 @@ Production smoke tests cover:
 - Runtime data migrations support N and N-1 or provide a forward-compatible
   read-only fallback.
 - Component metadata has an independent signed kill switch.
+- The web shell has its own signed kill switch, independent of the
+  component-metadata one: a signed version/kill-switch document (hosted `no-cache`,
+  signed by the operator-held out-of-band Ed25519 release-evidence key, carrying a
+  monotonic anti-rollback sequence) that the service worker verifies on `activate`
+  and on navigation. When
+  it marks the shell killed, the service worker unregisters itself, clears its Cache
+  Storage, and stops serving the cached shell; when the document is unreachable it
+  fails open (keeps serving the last-known-good shell), so only a validly-signed kill
+  stops it. See the [hostile-frontend containment record](hostile-frontend-containment-decision.md) (A2).
 - The companion can enforce a minimum-safe control-protocol version, but the web
   origin cannot rewrite native state or silently elevate scopes.
 
@@ -778,7 +805,11 @@ Create and exercise runbooks for:
 Responses include frontend rollback, browser-control-key revocation, relay-token
 rotation, component revocation, signing-key rotation, content-free evidence
 preservation, scoped user notification, and a fresh exact-revision
-qualification run.
+qualification run. For a malicious frontend or CDN credential compromise, the
+shell-eviction step is **serving `Clear-Site-Data` and publishing the signed
+web-shell kill-switch document** — not only the CDN-pointer flip, which makes clean
+bytes available but does not stop hostile code already running in installed clients
+([hostile-frontend containment record](hostile-frontend-containment-decision.md), A2).
 
 ## Privacy-safe observability
 
@@ -829,7 +860,8 @@ Operational constraints:
 | Relay authentication plus at least one relay | 99.9 percent monthly availability |
 | Online event convergence | 99 percent of accepted chat events visible to both online peers within 10 seconds |
 | Companion pairing | At least 99 percent success on the supported OS/browser matrix |
-| Frontend rollback | At most 15 minutes |
+| Frontend rollback (CDN pointer, clean bytes available) | At most 15 minutes |
+| Hostile-code termination (installed client) | Bounded by the service-worker update check, worst case approximately 24 hours plus a navigation; near-immediate for a running shell via the kill-switch check ([A2](hostile-frontend-containment-decision.md)) |
 | Relay regional failover | At most 2 minutes |
 | Optional server-peer recovery | RTO at most 4 hours and RPO at most 5 minutes when enabled |
 
@@ -1049,13 +1081,17 @@ Deliver:
 
 Go/no-go gate:
 
-- external TLS/header/CSP assessment passes;
+- external TLS/header/CSP assessment passes, run against the header set including the
+  `Clear-Site-Data` incident header (A2, [hostile-frontend containment record](hostile-frontend-containment-decision.md));
 - invitations appear in no CDN, Worker, relay, or client diagnostic log
   (infrastructure and diagnostic surfaces only — browser history and history
   sync are outside this gate's reach; see the invite-fragment
   residual-disclosure list);
 - offline shell and cached view open during origin outage;
-- N-to-N-1 rollback completes within 15 minutes;
+- N-to-N-1 rollback completes within 15 minutes (byte availability), stated
+  separately from the hostile-code-termination objective (A2), which is bounded by
+  the service-worker update check and a hostile-shell eviction smoke test — the
+  15-minute number does not by itself imply hostile code has stopped running;
 - a regional relay outage fails over within 2 minutes;
 - load tests at the profile in the [relay load-and-cost-ceilings record](relay-load-and-cost-ceilings-decision.md) stay within its published egress, request, CPU, and spend ceilings;
 - an external penetration review has no unresolved critical or high finding;
