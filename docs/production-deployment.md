@@ -575,8 +575,12 @@ The implementation relationship is:
   Europe.
 - Relays are not room members and retain no room history.
 - A browser obtains a short-lived, endpoint-bound relay credential from
-  `relay-auth.jeliya.ai` after proof of possession. The project API secret never
-  enters static assets.
+  `relay-auth.jeliya.ai` under the admission rule in the [relay-auth admission
+  rule record](relay-auth-admission-rule-decision.md): it proves possession of a
+  companion-countersigned, non-extractable control key over an endpoint-bound
+  challenge, and issuance is bounded by per-key quotas and a global minting
+  budget that sheds automatically at the published ceilings. The project API
+  secret never enters static assets.
 - Native companions use the same short-lived credential policy rather than
   embedding a global project secret.
 - Preserve the ability to move to self-hosted relays through configuration and
@@ -822,8 +826,8 @@ file availability depend on active peers.
 
 ### Abuse controls
 
-- short-lived endpoint-bound relay tokens;
-- per-IP and per-endpoint handshake, connection, byte, and rate limits;
+- short-lived endpoint-bound relay tokens, minted only to a companion-countersigned control key per the [relay-auth admission rule record](relay-auth-admission-rule-decision.md);
+- per-control-key mint quotas and a global daily minting budget that sheds automatically at the published egress and spend ceilings — controls that do not depend on endpoint identity being scarce — in addition to per-IP and per-endpoint handshake, connection, byte, and rate limits;
 - owner-enforced invitation creation and redemption limits;
 - initially one pending invitation window per room;
 - event, body, file, and per-room authoring limits;
@@ -1173,7 +1177,7 @@ notarized installers become mandatory at the post-deploy signing gate
 
 1. Whether Iroh Rooms will accept and maintain the portable browser store,
    transport, and blob interfaces upstream.
-2. Browser relay-auth token issuance and proof-of-possession behavior.
+2. Browser relay-auth token issuance and proof-of-possession behavior — the admission rule is settled by the [relay-auth admission rule record](relay-auth-admission-rule-decision.md); the residual is the accepted Sybil-companion availability risk it names.
 3. Multi-device compatibility with existing room membership history.
 4. Browser-origin/CDN compromise and the maximum authority granted to a web
    controller.
