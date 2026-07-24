@@ -453,7 +453,14 @@ Records persist across companion restarts (a restart is not a mass
 revocation) in `control_keys.json` under the companion data dir, following
 the `localstate.rs` discipline exactly: versioned JSON (`version: 1`),
 atomic write (staged temp file + fsync file and directory + rename), `0600`
-on Unix, and a process-global write lock. Replay windows are **not**
+on Unix, and a single writer. Within a running companion that writer is one
+dedicated task, so two callers cannot race an atomic replace and commit a
+stale snapshot over a fresh one. The administrative commands
+(`--companion-list-pairings`, `--companion-revoke`) are a *second*,
+out-of-process writer, and are serialized against the first by the host's
+per-data-dir instance lock: they hold it exclusively for the whole
+read-modify-write and refuse rather than proceed while a companion is
+running. Replay windows are **not**
 persisted (they are per-session); `last_used_ms` is persisted lazily (on
 install, revoke, expiry-eviction, and at most once per minute otherwise) so
 a crash can lose only last-use freshness, never an authorization fact.
@@ -501,6 +508,22 @@ revoked controller already sent. There is no offline send queue in v1:
 authorization is checked at execution time on a live session, never deferred
 past revocation (closing the threat model's deferred-signing row for this
 surface).
+
+There is a second, **offline** revocation path for the case the live one
+cannot serve: the operator who needs to cut off a browser is not necessarily
+at a running companion, and the compromised browser is not necessarily
+connected. `--companion-revoke <id>` marks a single record revoked directly
+in the persisted store, with the data dir held exclusively, and
+`--companion-list-pairings` shows the records it selects from (identified by
+the first 8 bytes of SHA-256 over the browser's Noise static public, hex —
+the same construction as the companion's own fingerprint). It has no live
+sessions to tear down *because* it cannot run while the companion does: the
+stop that frees the data-dir lock is itself the teardown. On the next start
+the revoked record is loaded and fails admission closed, exactly as a live
+revocation would. Records are marked revoked and retained until expiry, never
+deleted, so an offline revocation cannot be undone by a restart and stays
+visible in the listing. Coarse-grained `--companion-reset-pairings` remains
+the "forget everything" instrument.
 
 ## Session bounds
 
