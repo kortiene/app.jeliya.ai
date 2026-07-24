@@ -76,12 +76,15 @@ not the sustained rate alone (inputs shown so they can be re-derived):
 |---|---|---|
 | Relay egress, all production relays | **1,024 GiB / month** | 60% (`614 GiB`), 85% (`870 GiB`) |
 
-The ceiling is **hard because #49's automatic shed enforces it**, not because the
-profile cannot exceed it: when monthly relay egress reaches 1,024 GiB, minting
-sheds (new tokens are refused) rather than continuing to incur egress, so a run
-whose file-size tail or peak burst would carry it past the ceiling is stopped
-**at** the ceiling. The profile sets the headroom; the shed makes the number a
-bound rather than a prediction.
+The ceiling is **hard because it is enforced on two planes**, not because the
+profile cannot exceed it: at 1,024 GiB the control-plane **mint-shed** refuses new
+tokens (and the ≤ 60 s token TTL starves in-flight sessions of renewals), while
+the relay **data plane** meters aggregate egress and throttles then terminates the
+highest-egress sessions and refuses new admissions (see the [relay-auth admission
+rule record](relay-auth-admission-rule-decision.md) §2). So a run whose file-size
+tail or peak burst would carry it past the ceiling is stopped **at** the ceiling.
+The profile sets the headroom; the two-plane enforcement makes it a bound, not a
+prediction.
 
 ### 2b. Relay-auth edge-token service (Cloudflare Worker)
 

@@ -577,10 +577,12 @@ The implementation relationship is:
 - A browser obtains a short-lived, endpoint-bound relay credential from
   `relay-auth.jeliya.ai` under the admission rule in the [relay-auth admission
   rule record](relay-auth-admission-rule-decision.md): it proves possession of a
-  companion-countersigned, non-extractable control key over an endpoint-bound
-  challenge, and issuance is bounded by per-key quotas and a global minting
-  budget that sheds automatically at the published ceilings. The project API
-  secret never enters static assets.
+  companion-countersigned, non-extractable control key by DH key-confirmation
+  (the X25519 control key cannot sign), issuance is bounded by per-key quotas and
+  a bucketed global minting budget, and the GiB/spend ceiling is enforced on both
+  planes — the mint-shed plus a relay-side aggregate-egress cutoff. A separate,
+  tightly-quota'd bootstrap credential admits the first, pre-pairing connection.
+  The project API secret never enters static assets.
 - Native companions use the same short-lived credential policy rather than
   embedding a global project secret.
 - Preserve the ability to move to self-hosted relays through configuration and
@@ -827,7 +829,7 @@ file availability depend on active peers.
 ### Abuse controls
 
 - short-lived endpoint-bound relay tokens, minted only to a companion-countersigned control key per the [relay-auth admission rule record](relay-auth-admission-rule-decision.md);
-- per-control-key mint quotas and a global daily minting budget that sheds automatically at the published egress and spend ceilings — controls that do not depend on endpoint identity being scarce — in addition to per-IP and per-endpoint handshake, connection, byte, and rate limits;
+- per-control-key mint quotas and a bucketed global daily minting budget, plus a relay-side aggregate-egress cutoff that throttles and terminates sessions at the published GiB/spend ceiling — controls that do not depend on endpoint identity being scarce — in addition to per-IP and per-endpoint handshake, connection, byte, and rate limits;
 - owner-enforced invitation creation and redemption limits;
 - initially one pending invitation window per room;
 - event, body, file, and per-room authoring limits;
