@@ -6,13 +6,20 @@ keys and data. Security reports are taken seriously and handled privately.
 ## Reporting a vulnerability
 
 Use **GitHub's private vulnerability reporting**: the
-[Security tab](https://github.com/kortiene/jeliya/security) → "Report a
-vulnerability". That opens a private advisory only the maintainer can see.
+[Security tab](https://github.com/kortiene/app.jeliya.ai/security) → "Report a
+vulnerability". That opens a private advisory only the maintainer can see. Once
+the production origin ships, it will advertise this channel at
+`https://app.jeliya.ai/.well-known/security.txt` (RFC 9116).
 
 Please include what you can: affected component (`jeliyad`, `jeliya-core`,
-the web UI, the agent runner), a reproduction, and the impact as you
-understand it. Please don't open a public issue for something exploitable
-before it's fixed.
+the companion control protocol, the `relay-auth.jeliya.ai` Worker, the web UI,
+the agent runner), a reproduction, and the impact as you understand it. Please
+don't open a public issue for something exploitable before it's fixed.
+
+This channel is for **security** defects. User-safety reports (abuse, harmful
+content, a hostile peer) route through the abuse channel in
+`docs/trust-safety-and-legal-decision.md`; during the closed beta both use this
+same private-reporting form.
 
 If the "Report a vulnerability" button is ever missing, open a plain issue
 saying only "security — requesting a private channel" with **no details**,
@@ -27,6 +34,16 @@ This is a small open-source project, not a company:
   fix prioritized by real impact; there is no SLA.
 - **No embargo theater.** Once a fix ships, the advisory is published and
   the release notes say plainly what was wrong.
+- **Origin fixes get an advisory too.** The hosted origin can be patched
+  silently with no release artifact, so **every vulnerability fixed in the
+  hosted origin** (the web app, service worker, `relay-auth.jeliya.ai` Worker,
+  or companion control ALPN) still receives a **published GitHub Security
+  Advisory** naming the surface and the fix's deploy time. When the defect
+  plausibly exposed user data or metadata, required a credential/relay-token
+  rotation, enabled a hostile origin to observe rendered content or elevate a
+  companion scope, or warranted a browser control-key revocation, a **scoped
+  user notification** is sent as well. See
+  `docs/vulnerability-disclosure-decision.md`.
 
 ## Scope notes
 
@@ -41,3 +58,19 @@ This is a small open-source project, not a company:
   installer implementation does not verify them automatically before
   extraction. That verification is a mandatory `v0.5.0` gate; verify older
   downloads manually.
+- The **companion control protocol** (`crates/jeliya-companion/`) is a signed
+  native service that speaks a mutually-authenticated, end-to-end-encrypted
+  Iroh control ALPN and exposes **no public HTTP listener**. It is reached only
+  after SAS-confirmed pairing, and grants are default-deny, scoped, and
+  bounded-lifetime (`docs/companion-control-protocol-decision.md`). Driving the
+  companion *within a granted scope* is the documented trust decision. Getting
+  it to listen on a public interface, or bypassing pairing, elevating a scope
+  beyond what was granted, replaying a control frame, or evading revocation, is
+  a vulnerability.
+- The **`relay-auth.jeliya.ai` Worker** mints short-lived, endpoint-bound relay
+  credentials under a stated admission rule
+  (`docs/relay-auth-admission-rule-decision.md`); it is not a room member and
+  holds no room content. Observing source IPs, endpoint routing, and short-lived
+  key hashes is the documented, pseudonymous metadata boundary. Minting without
+  the required proof of possession, bypassing the admission rule or its quotas,
+  or leaking the project secret into static assets or logs, is a vulnerability.

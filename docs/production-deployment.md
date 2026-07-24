@@ -666,6 +666,11 @@ the relevant browser policy is still experimental and platform-dependent.
   `Cache-Control: no-cache`.
 - Content-hashed JavaScript, CSS, Wasm, and images use
   `public, max-age=31536000, immutable`.
+- `/.well-known/security.txt` is a static `text/plain` route (RFC 9116),
+  excluded from any SPA fallback rewrite and served with a short `Cache-Control`
+  so its `Expires` field stays fresh; the `default-src 'none'` CSP does not
+  apply to a directly-fetched text file. See the [hosted-origin vulnerability
+  disclosure record](vulnerability-disclosure-decision.md).
 - Keep N and N-1 assets available through rollout and rollback.
 
 ### Secrets
@@ -716,7 +721,10 @@ staged digest; do not rebuild.
 
 Production smoke tests cover:
 
-- DNS, certificate, HTTP redirect, and security headers;
+- DNS, certificate, HTTP redirect, and security headers, including the
+  `/.well-known/security.txt` route (RFC 9116, `text/plain`, unexpired
+  `Expires`) per the [hosted-origin vulnerability disclosure
+  record](vulnerability-disclosure-decision.md);
 - absence of unapproved third-party requests;
 - PWA install and offline-shell startup;
 - service-worker N/N-1 update;
@@ -1016,7 +1024,10 @@ Deliver:
 - service worker and encrypted companion-view cache;
 - two dedicated relays and the relay-auth service;
 - staging/production promotion, smoke, and rollback;
-- privacy-safe metrics and incident runbooks.
+- privacy-safe metrics and incident runbooks;
+- the hosted-origin vulnerability-disclosure path — `/.well-known/security.txt`
+  (RFC 9116) and the extended `SECURITY.md` — per the [hosted-origin
+  vulnerability disclosure record](vulnerability-disclosure-decision.md).
 
 Go/no-go gate:
 
@@ -1034,6 +1045,8 @@ Go/no-go gate:
 - the retention and lawful-basis position is published at the origin (A6);
 - the statement of what the architecture can and cannot do about content already distributed is published at the origin (A6);
 - the named individual operating entity, a published privacy policy and terms of service, and a completed qualified privacy/legal review (records of processing, any DPA, and sign-off on the published text) are in place (A6).
+- `/.well-known/security.txt` is served in RFC 9116 form with an unexpired `Expires` and covered by the production smoke tests (#48, [hosted-origin vulnerability disclosure record](vulnerability-disclosure-decision.md));
+- GitHub private vulnerability reporting is enabled on `kortiene/app.jeliya.ai` and reachable from the origin (#48).
 
 This is the first production launch gate.
 
