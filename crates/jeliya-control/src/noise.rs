@@ -588,4 +588,235 @@ mod tests {
         let n = snow_t.read_message(&ct, &mut payload).unwrap();
         assert_eq!(&payload[..n], b"from-us");
     }
+
+    // ---- The TypeScript cross-implementation vector --------------------
+    //
+    // `ui/src/lib/control/conformance/noise-cross-vector.json` is the one
+    // artifact the browser controller and this crate both assert against: the
+    // TypeScript initiator (`ui/src/lib/control/noise.test.ts`) replays it and
+    // must reproduce m1, m3, the handshake hash and the SAS byte-for-byte. It
+    // was originally emitted through a temporary, reverted fixed-ephemeral
+    // hook, which left it unregenerable from committed code — a change here
+    // could have drifted from the browser's expectations with nothing on the
+    // Rust side to notice. The test below closes that: it re-derives the whole
+    // vector from the fixed scalars and fails if the committed file no longer
+    // matches, so a deliberate change is a one-command regeneration and an
+    // accidental one is a red test.
+    //
+    // No production seam is needed. `e` is private to this module, so a child
+    // test module can plant a fixed ephemeral directly; shipped code still has
+    // exactly one way to obtain an ephemeral, `KeyPair::generate`.
+
+    /// Path of the committed vector, relative to this crate's manifest dir.
+    const CROSS_VECTOR_PATH: &str = "../../ui/src/lib/control/conformance/noise-cross-vector.json";
+
+    /// How to regenerate, named in the failure message so the fix is obvious.
+    const CROSS_VECTOR_UPDATE_ENV: &str = "JELIYA_UPDATE_CROSS_VECTOR";
+
+    /// The fixed inputs. Arbitrary but immutable: changing one invalidates the
+    /// committed vector and every expectation the TypeScript test holds.
+    const INIT_STATIC_SCALAR: [u8; DHLEN] = [0x01; DHLEN];
+    const RESP_STATIC_SCALAR: [u8; DHLEN] = [0x02; DHLEN];
+    const INIT_EPHEMERAL_SCALAR: [u8; DHLEN] = [0x03; DHLEN];
+    const RESP_EPHEMERAL_SCALAR: [u8; DHLEN] = [0x04; DHLEN];
+    const CROSS_VECTOR_PROLOGUE: &[u8] = b"jeliya-cross-vector-prologue";
+    const INIT_TO_RESP_PLAINTEXT: &str = "hello-control";
+    const RESP_TO_INIT_PLAINTEXT: &str = "pong";
+
+    /// Every field of the committed JSON, in file order (serde emits struct
+    /// fields in declaration order, which is what keeps the regenerated file a
+    /// byte-for-byte match rather than a reordering diff).
+    #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
+    struct CrossVector {
+        #[serde(rename = "_comment")]
+        comment: String,
+        init_static_scalar: String,
+        resp_static_scalar: String,
+        init_ephemeral_scalar: String,
+        resp_ephemeral_scalar: String,
+        prologue: String,
+        init_static_public: String,
+        resp_static_public: String,
+        init_ephemeral_public: String,
+        resp_ephemeral_public: String,
+        m1: String,
+        m2: String,
+        m3: String,
+        handshake_hash: String,
+        sas: String,
+        learned_init_static: String,
+        transport_init_to_resp_plaintext: String,
+        transport_init_to_resp: String,
+        transport_resp_to_init_plaintext: String,
+        transport_resp_to_init: String,
+    }
+
+    fn to_hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    fn fixed(scalar: [u8; DHLEN]) -> KeyPair {
+        KeyPair::from_secret(zeroize::Zeroizing::new(scalar))
+    }
+
+    /// Run the deterministic handshake and record everything the committed
+    /// vector states. Both parties are this implementation, so the vector is a
+    /// statement about *this* code; the cross-implementation claim is the
+    /// TypeScript side reproducing it independently.
+    fn generate_cross_vector() -> CrossVector {
+        let init_e = fixed(INIT_EPHEMERAL_SCALAR);
+        let resp_e = fixed(RESP_EPHEMERAL_SCALAR);
+        let init_static_public = fixed(INIT_STATIC_SCALAR).public();
+        let resp_static_public = fixed(RESP_STATIC_SCALAR).public();
+        let init_ephemeral_public = init_e.public();
+        let resp_ephemeral_public = resp_e.public();
+
+        let mut init =
+            HandshakeState::new_initiator(fixed(INIT_STATIC_SCALAR), CROSS_VECTOR_PROLOGUE);
+        let mut resp =
+            HandshakeState::new_responder(fixed(RESP_STATIC_SCALAR), CROSS_VECTOR_PROLOGUE);
+        // Plant the fixed ephemerals before either party reaches for one.
+        init.e = Some(init_e);
+        resp.e = Some(resp_e);
+
+        let m1 = init.write_message_1().expect("message 1");
+        resp.read_message_1(&m1).expect("responder reads m1");
+        let m2 = resp.write_message_2().expect("message 2");
+        init.read_message_2(&m2).expect("initiator reads m2");
+        let (m3, mut init_t, init_hh) = init.write_message_3().expect("message 3");
+        let (mut resp_t, learned, resp_hh) = resp.read_message_3(&m3).expect("responder reads m3");
+        assert_eq!(init_hh, resp_hh, "both sides agree on the handshake hash");
+
+        let init_to_resp = init_t
+            .encrypt(INIT_TO_RESP_PLAINTEXT.as_bytes())
+            .expect("initiator transport message");
+        assert_eq!(
+            resp_t.decrypt(&init_to_resp).expect("responder decrypts"),
+            INIT_TO_RESP_PLAINTEXT.as_bytes(),
+        );
+        let resp_to_init = resp_t
+            .encrypt(RESP_TO_INIT_PLAINTEXT.as_bytes())
+            .expect("responder transport message");
+        assert_eq!(
+            init_t.decrypt(&resp_to_init).expect("initiator decrypts"),
+            RESP_TO_INIT_PLAINTEXT.as_bytes(),
+        );
+
+        CrossVector {
+            comment: "A deterministic Noise_XX_25519_AESGCM_SHA256 handshake, emitted by the \
+                      Rust reference implementation (crates/jeliya-control/src/noise.rs) with \
+                      fixed static and ephemeral scalars. The TypeScript initiator, driven with \
+                      the same fixed scalars, must reproduce m1, m3, the handshake hash, and the \
+                      SAS byte-for-byte, decrypt m2 and the responder->initiator transport \
+                      message, and produce the initiator->responder transport message the Rust \
+                      responder decrypted. This is the cross-implementation cross-check. \
+                      Regenerate with JELIYA_UPDATE_CROSS_VECTOR=1 cargo test -p jeliya-control \
+                      cross_vector."
+                .to_owned(),
+            init_static_scalar: to_hex(&INIT_STATIC_SCALAR),
+            resp_static_scalar: to_hex(&RESP_STATIC_SCALAR),
+            init_ephemeral_scalar: to_hex(&INIT_EPHEMERAL_SCALAR),
+            resp_ephemeral_scalar: to_hex(&RESP_EPHEMERAL_SCALAR),
+            prologue: to_hex(CROSS_VECTOR_PROLOGUE),
+            init_static_public: to_hex(&init_static_public),
+            resp_static_public: to_hex(&resp_static_public),
+            init_ephemeral_public: to_hex(&init_ephemeral_public),
+            resp_ephemeral_public: to_hex(&resp_ephemeral_public),
+            m1: to_hex(&m1),
+            m2: to_hex(&m2),
+            m3: to_hex(&m3),
+            handshake_hash: to_hex(&init_hh),
+            sas: crate::sas::sas_from_handshake_hash(&init_hh),
+            learned_init_static: to_hex(&learned),
+            transport_init_to_resp_plaintext: INIT_TO_RESP_PLAINTEXT.to_owned(),
+            transport_init_to_resp: to_hex(&init_to_resp),
+            transport_resp_to_init_plaintext: RESP_TO_INIT_PLAINTEXT.to_owned(),
+            transport_resp_to_init: to_hex(&resp_to_init),
+        }
+    }
+
+    /// The generated vector, rendered exactly as the file is committed:
+    /// two-space pretty JSON with a trailing newline.
+    fn render(vector: &CrossVector) -> String {
+        let mut json = serde_json::to_string_pretty(vector).expect("the vector serializes");
+        json.push('\n');
+        json
+    }
+
+    /// The handshake is deterministic given the fixed scalars — the property
+    /// the committed vector rests on. Without this, a nondeterminism bug would
+    /// surface only as a confusing intermittent failure in the comparison test
+    /// below (or, worse, as a "regeneration" that silently rewrites the file).
+    #[test]
+    fn cross_vector_generation_is_deterministic() {
+        assert_eq!(generate_cross_vector(), generate_cross_vector());
+    }
+
+    /// The committed cross-implementation vector still describes this
+    /// implementation. If this fails, either a deliberate protocol change needs
+    /// the vector regenerated (and the TypeScript side re-checked against it),
+    /// or something changed that should not have.
+    #[test]
+    fn cross_vector_matches_the_committed_file() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(CROSS_VECTOR_PATH);
+        let generated = render(&generate_cross_vector());
+
+        let committed = std::fs::read_to_string(&path).unwrap_or_else(|err| {
+            panic!(
+                "could not read the cross-implementation vector at {}: {err}",
+                path.display()
+            )
+        });
+        if generated == committed {
+            return;
+        }
+
+        if std::env::var_os(CROSS_VECTOR_UPDATE_ENV).is_some() {
+            std::fs::write(&path, &generated)
+                .unwrap_or_else(|err| panic!("could not rewrite {}: {err}", path.display()));
+            eprintln!(
+                "regenerated {} — re-run the ui suite (npm run test:unit) to confirm the \
+                 TypeScript initiator still reproduces it",
+                path.display()
+            );
+            return;
+        }
+
+        panic!(
+            "the committed cross-implementation vector no longer matches this implementation\
+             \n  file    : {}\
+             \n  changed : {}\
+             \nIf the change is intended, regenerate with `{CROSS_VECTOR_UPDATE_ENV}=1 cargo test \
+             -p jeliya-control cross_vector` and re-run the ui suite, which asserts the \
+             TypeScript initiator reproduces the same bytes.",
+            path.display(),
+            changed_fields(&committed, &generated),
+        );
+    }
+
+    /// Which top-level fields differ, so the failure names what moved instead
+    /// of printing two walls of JSON. An unparseable committed file reports
+    /// itself rather than pretending nothing changed.
+    fn changed_fields(committed: &str, generated: &str) -> String {
+        let (Ok(committed), Ok(generated)) = (
+            serde_json::from_str::<serde_json::Value>(committed),
+            serde_json::from_str::<serde_json::Value>(generated),
+        ) else {
+            return "the committed file is not valid JSON".to_owned();
+        };
+        let (Some(committed), Some(generated)) = (committed.as_object(), generated.as_object())
+        else {
+            return "the committed file is not a JSON object".to_owned();
+        };
+        let changed: Vec<&str> = generated
+            .iter()
+            .filter(|(key, value)| committed.get(*key) != Some(value))
+            .map(|(key, _)| key.as_str())
+            .collect();
+        if changed.is_empty() {
+            "only formatting (field order or whitespace)".to_owned()
+        } else {
+            changed.join(", ")
+        }
+    }
 }
