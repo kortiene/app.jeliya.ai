@@ -132,22 +132,55 @@ fn sanitize_for_terminal(s: &str) -> String {
 }
 
 /// Whether a character can move the cursor, hide text, or reorder what is
-/// around it. `char::is_control` covers only the C0/C1 control characters, so
-/// it misses the Unicode `Cf` formatting characters — bidirectional overrides
-/// and isolates in particular, which reverse the visual order of the text after
-/// them and can make a room id or a scope list read as something else entirely
-/// without a single control byte.
+/// around it.
+///
+/// `char::is_control` covers only the C0/C1 controls (general category `Cc`),
+/// which leaves two families that steer a rendered line just as effectively:
+///
+/// * **`Cf`, format characters** — the bidirectional overrides and isolates
+///   that reverse the visual order of everything after them, the zero-width
+///   joiners, the interlinear-annotation marks, and the tag characters that
+///   carry an invisible ASCII payload.
+/// * **`Zl`/`Zp`, line and paragraph separators** — line breaks that are not
+///   `\n`, so a renderer can split a row the sanitizer thought was one line.
+///
+/// The `Cf` set is enumerated **in full** rather than approximated by the few
+/// blocks that are most often abused, because a denylist covering the obvious
+/// ones is precisely the kind that gets walked around. The ranges below are
+/// exactly `Cf ∪ Zl ∪ Zp` as of **Unicode 15.0**, cross-checked against the
+/// Unicode character database in both directions — nothing in those categories
+/// is missed, and nothing outside them is caught (so legitimate international
+/// room names survive intact). Re-run that check when adopting a newer Unicode
+/// revision: this is still a denylist, which is why the surfaces printing
+/// untrusted strings also bound their length and line count rather than
+/// trusting this function alone.
 fn steers_display(c: char) -> bool {
     c.is_control()
         || matches!(c,
-            '\u{061c}'                // ARABIC LETTER MARK (a bidi control)
-            | '\u{200b}'..='\u{200f}' // zero-width space/joiners, LRM/RLM
-            | '\u{2028}'              // LINE SEPARATOR (category Zl, not Cc)
-            | '\u{2029}'              // PARAGRAPH SEPARATOR (category Zp)
-            | '\u{202a}'..='\u{202e}' // bidi embeddings and overrides
-            | '\u{2060}'..='\u{2064}' // word joiner, invisible operators
-            | '\u{2066}'..='\u{2069}' // bidi isolates
-            | '\u{feff}') // zero-width no-break space / BOM
+            // Zl / Zp — line breaks that are not '\n'.
+            '\u{2028}' | '\u{2029}'
+            // Cf — format characters.
+            | '\u{00ad}'                // SOFT HYPHEN
+            | '\u{0600}'..='\u{0605}'   // Arabic number signs
+            | '\u{061c}'                // ARABIC LETTER MARK
+            | '\u{06dd}'                // ARABIC END OF AYAH
+            | '\u{070f}'                // SYRIAC ABBREVIATION MARK
+            | '\u{0890}'..='\u{0891}'   // Arabic pound/piastre marks above
+            | '\u{08e2}'                // ARABIC DISPUTED END OF AYAH
+            | '\u{180e}'                // MONGOLIAN VOWEL SEPARATOR
+            | '\u{200b}'..='\u{200f}'   // zero-width space/joiners, LRM/RLM
+            | '\u{202a}'..='\u{202e}'   // bidi embeddings and overrides
+            | '\u{2060}'..='\u{2064}'   // word joiner, invisible operators
+            | '\u{2066}'..='\u{206f}'   // bidi isolates, deprecated formats
+            | '\u{feff}'                // ZWNBSP / BOM
+            | '\u{fff9}'..='\u{fffb}'   // interlinear annotation
+            | '\u{110bd}' | '\u{110cd}' // Kaithi number signs
+            | '\u{13430}'..='\u{1343f}' // Egyptian hieroglyph formats
+            | '\u{1bca0}'..='\u{1bca3}' // shorthand format controls
+            | '\u{1d173}'..='\u{1d17a}' // musical symbol formats
+            | '\u{e0001}'               // LANGUAGE TAG
+            | '\u{e0020}'..='\u{e007f}' // TAG characters (invisible ASCII)
+        )
 }
 
 /// Executes an authorized companion call against the engine's public dispatch
@@ -1780,30 +1813,79 @@ mod tests {
         // is remote-chosen (the creator's signed `room.created` field) and is
         // printed on the pairing-confirmation surface, so an override there
         // could visually rewrite the scope the operator is approving.
+        // One representative from every range `steers_display` enumerates, so
+        // dropping a range from that list fails here rather than in the field.
         for hostile in [
-            "\u{202e}desrever", // right-to-left override
+            '\u{00ad}',  // SOFT HYPHEN
+            '\u{0600}',  // ARABIC NUMBER SIGN
+            '\u{061c}',  // ARABIC LETTER MARK
+            '\u{06dd}',  // ARABIC END OF AYAH
+            '\u{070f}',  // SYRIAC ABBREVIATION MARK
+            '\u{0890}',  // ARABIC POUND MARK ABOVE
+            '\u{08e2}',  // ARABIC DISPUTED END OF AYAH
+            '\u{180e}',  // MONGOLIAN VOWEL SEPARATOR
+            '\u{200b}',  // ZERO WIDTH SPACE
+            '\u{200f}',  // RIGHT-TO-LEFT MARK
+            '\u{2028}',  // LINE SEPARATOR (Zl, not Cc)
+            '\u{2029}',  // PARAGRAPH SEPARATOR (Zp, not Cc)
+            '\u{202e}',  // RIGHT-TO-LEFT OVERRIDE
+            '\u{2060}',  // WORD JOINER
+            '\u{2066}',  // LEFT-TO-RIGHT ISOLATE
+            '\u{206f}',  // NOMINAL DIGIT SHAPES (deprecated format)
+            '\u{feff}',  // ZWNBSP / BOM
+            '\u{fff9}',  // INTERLINEAR ANNOTATION ANCHOR
+            '\u{110bd}', // KAITHI NUMBER SIGN
+            '\u{13430}', // Egyptian hieroglyph format control
+            '\u{1bca0}', // SHORTHAND FORMAT LETTER OVERLAP
+            '\u{1d173}', // MUSICAL SYMBOL BEGIN BEAM
+            '\u{e0001}', // LANGUAGE TAG
+            '\u{e0041}', // TAG LATIN CAPITAL LETTER A — invisible ASCII
+        ] {
+            assert!(
+                steers_display(hostile),
+                "U+{:04X} must be classified as display-steering",
+                hostile as u32
+            );
+            let clean = sanitize_for_terminal(&format!("room{hostile}name"));
+            assert!(
+                clean.contains('\u{fffd}') && !clean.chars().any(steers_display),
+                "U+{:04X} must be neutralized, got {clean:?}",
+                hostile as u32
+            );
+        }
+
+        // The whole-string cases the listing and the pairing prompt actually
+        // face.
+        for hostile in [
+            "\u{202e}desrever",
             "\u{2066}isolated\u{2069}",
-            "zero\u{200b}width",
-            "\u{feff}bom",
-            // Line/paragraph separators are categories Zl/Zp, not Cc, so
-            // `is_control` misses them while a renderer still breaks on them.
             "line\u{2028}separated",
-            "para\u{2029}separated",
-            "arabic\u{061c}mark", // ARABIC LETTER MARK, a bidi control
+            "tagged\u{e0020}\u{e0073}\u{e0065}\u{e0063}\u{e0072}\u{e0065}\u{e0074}",
         ] {
             let clean = sanitize_for_terminal(hostile);
             assert!(
                 clean.contains('\u{fffd}'),
                 "{hostile:?} must be neutralized, got {clean:?}"
             );
-            assert!(clean.chars().all(|c| !steers_display(c)));
+            assert!(!clean.chars().any(steers_display));
         }
-        // Ordinary non-ASCII text is untouched — this must not become an
-        // ASCII-only filter that mangles legitimate room names.
-        assert_eq!(
-            sanitize_for_terminal("Salon café — Kɔrɔ"),
-            "Salon café — Kɔrɔ"
-        );
+
+        // Legitimate international text is untouched — this must not become an
+        // ASCII-only filter that mangles the room names it is meant to display.
+        // Bambara, French, Arabic, Chinese, and an emoji with a skin-tone
+        // modifier (a Sk modifier, not a format character).
+        for benign in [
+            "Salon café — Kɔrɔ",
+            "غرفة العائلة",
+            "家族の部屋",
+            "team 👋🏽 standup",
+        ] {
+            assert_eq!(
+                sanitize_for_terminal(benign),
+                benign,
+                "{benign:?} is legitimate"
+            );
+        }
     }
 
     #[test]
