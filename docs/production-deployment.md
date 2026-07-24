@@ -784,7 +784,9 @@ Operational constraints:
   sensitive.
 - Aggregate metrics inside the service where possible.
 - Retain raw security access logs for no more than 72 hours initially, with
-  restricted access and documented incident exceptions.
+  restricted access and documented incident exceptions; the retention, residency,
+  and lawful-basis position is stated in the [trust, safety, and legal
+  record](trust-safety-and-legal-decision.md) (A6).
 - Disable query logging where the provider allows it.
 - Scrub CSP reports of `document-uri`, query values, and code samples.
 - Keep beta client telemetry opt-in and use a rotating, unlinkable session ID.
@@ -836,7 +838,7 @@ file availability depend on active peers.
 - browser, component, and server-peer storage quotas;
 - no arbitrary relay egress or generic TCP proxying;
 - native-only, separately approved pipes and agents;
-- user block/report tools with explicit content disclosure when reporting;
+- user block/report tools with explicit content disclosure when reporting, routed to the recipient, triage owner, and per-class duty named in the [trust, safety, and legal record](trust-safety-and-legal-decision.md) (A6);
 - synchronization and component circuit breakers.
 
 ### Initial monthly cost model
@@ -1027,7 +1029,11 @@ Go/no-go gate:
 - N-to-N-1 rollback completes within 15 minutes;
 - a regional relay outage fails over within 2 minutes;
 - load tests at the profile in the [relay load-and-cost-ceilings record](relay-load-and-cost-ceilings-decision.md) stay within its published egress, request, CPU, and spend ceilings;
-- an external penetration review has no unresolved critical or high finding.
+- an external penetration review has no unresolved critical or high finding;
+- a published abuse contact and named triage owner exist at the origin (A6, [trust, safety, and legal record](trust-safety-and-legal-decision.md));
+- the retention and lawful-basis position is published at the origin (A6);
+- the statement of what the architecture can and cannot do about content already distributed is published at the origin (A6);
+- the named individual operating entity, a published privacy policy and terms of service, and a completed qualified privacy/legal review (records of processing, any DPA, and sign-off on the published text) are in place (A6).
 
 This is the first production launch gate.
 
