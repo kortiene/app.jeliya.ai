@@ -117,7 +117,13 @@ async fn browser_pair_as(
     let h3 = init.on_handshake2(&h2).unwrap();
     chan.write_frame(h3).await.unwrap();
     let pc = init.pair_confirm().unwrap();
-    chan.write_frame(pc).await.unwrap();
+    // A rejecting companion may close its read half the instant it decides to
+    // reject — before it consumes our pair-confirm frame — so this write can
+    // lose a race with that teardown and surface a broken pipe (flaky under a
+    // loaded scheduler, e.g. CI). Tolerate it: the companion has already queued
+    // the rejection PairResult, which the read below still returns. On the
+    // accept path the companion reads pc and this write succeeds normally.
+    let _ = chan.write_frame(pc).await;
     let pr = chan.read_frame().await.unwrap();
     init.read(&pr).unwrap()
 }
