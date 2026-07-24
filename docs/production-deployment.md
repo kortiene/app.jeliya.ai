@@ -639,7 +639,19 @@ frame-src 'none';
 frame-ancestors 'none';
 form-action 'none';
 require-trusted-types-for 'script';
+trusted-types jeliya-sw;
 ```
+
+`trusted-types` names an allowlist of exactly one policy the shell creates —
+`jeliya-sw`, which mints the `TrustedScriptURL` for service-worker registration.
+Any `trustedTypes.createPolicy()` with another name throws, including a `default`
+policy (never created without a recorded review). It is **not** `trusted-types
+'none'`, which would forbid the policy the planned service worker
+(`ui/src/sw.ts`) needs to register. The allowlist is **scoped to the current
+shell** and re-examined — not pre-broadened — when the worker-hosted Wasm runtime
+lands; see the [Trusted Types policy allowlist record](trusted-types-policy-decision.md).
+This directive must be served in the header set (not only a `<meta>` element), so the
+Phase 3 header/CSP assessment gate covers it.
 
 When component UI is introduced, add only the reviewed isolated component
 origin to `frame-src`. Do not loosen the main origin to run arbitrary inline
@@ -703,7 +715,10 @@ Every pull request runs:
 - storage quota, eviction, corruption, and migration tests;
 - an assertion that invite fragments never enter HTTP requests, logs, or crash
   evidence;
-- CSP and Trusted Types tests;
+- CSP and Trusted Types tests, including that an off-allowlist
+  `trustedTypes.createPolicy()` throws under the served `trusted-types jeliya-sw`
+  directive and that service-worker registration still succeeds (see the [Trusted
+  Types policy allowlist record](trusted-types-policy-decision.md));
 - protocol conformance, fuzzing, and malformed-frame tests;
 - SBOM, license, secret, and Cargo/npm advisory checks;
 - native signature validation for release candidates.
