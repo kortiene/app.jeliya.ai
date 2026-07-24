@@ -134,14 +134,17 @@ edge-cases a naive implementation would miss:
   incident and returns after the all-clear must still be evicted if it is on a killed
   version: the higher-sequence all-clear marks the clean range while the tombstone for
   the killed range persists.
-- **Authenticated key rollover.** If the release-evidence key is rotated (e.g. after a
-  key incident), already-installed workers pin the prior public key and would treat a
-  kill signed by the replacement key as unverifiable — then fail open (§4). The
-  implementation must define an **authenticated rollover**: a statement signed by the
-  outgoing key authorizing the incoming key (or a small pinned key set / bounded dual-key
-  window), plus how an installed worker stops trusting a revoked key — so the
-  near-immediate containment path survives a signing-key incident, consistent with the
-  signing-key-rotation runbook in
+- **Authenticated key rollover that does not trust only the outgoing key.** If the
+  release-evidence key is rotated, already-installed workers pin the prior public key and
+  would treat a kill signed by the replacement key as unverifiable — then fail open (§4).
+  The implementation must define an **authenticated rollover**, and because rotation often
+  follows a **suspected key compromise**, it must **not depend solely on the outgoing
+  key** (an attacker holding it could authorize their own replacement and keep forging
+  documents): use a **pre-pinned successor key set**, an **independently-trusted recovery
+  key**, or **threshold authorization**, with revocation semantics that do not depend on
+  the compromised key. Outgoing-key authorization alone is acceptable only for **routine,
+  uncompromised** rotation. This keeps the near-immediate containment path alive through a
+  signing-key incident, consistent with the signing-key-rotation runbook in
   [production deployment architecture](production-deployment.md).
 - **Anti-rollback floor persistence** (above) survives the kill's own
   `Clear-Site-Data: "storage"` reset.
@@ -182,8 +185,17 @@ stated one:
   point, if the registration is more than 24h stale, the update fetch bypasses the HTTP
   cache and refetches the worker script.
 
-The two are reported separately so a runbook cannot claim containment on the 15-minute
-number while installed clients still execute the attacker's shell.
+**The ~24h termination bound is conditional, not unconditional.** It holds only once an
+**online** client performs the update-triggering navigation and the subsequent clean
+reload. A client that **never navigates**, or that stays **offline**, is not evicted by
+this path until it does — the fail-open posture (§4) keeps it serving its last-known-good
+shell meanwhile, and an already-loaded hostile document keeps running until its next
+navigation. The number is an upper bound on *online, navigating* clients, not a guarantee
+for every installed client; the durable version-targeted tombstone (§3) is what evicts a
+late-returning client once it does navigate.
+
+The two objectives are reported separately so a runbook cannot claim containment on the
+15-minute number while installed clients still execute the attacker's shell.
 
 ## 6. Runbook, smoke test, and gate
 
