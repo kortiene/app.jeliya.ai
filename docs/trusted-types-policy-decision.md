@@ -68,23 +68,24 @@ The shell's startup code creates the policy once and uses it to mint the typed v
 the service-worker registration sink requires:
 
 ```js
+const ALLOWED_SCRIPT_PATHS = new Set(['/sw.js']); // same-origin worker/SW scripts
 const swPolicy = trustedTypes.createPolicy('jeliya-sw', {
   createScriptURL: (u) => {
-    // same-origin, allowlisted worker/SW paths only
     const url = new URL(u, self.origin);
     if (url.origin !== self.origin) throw new TypeError('cross-origin script URL');
+    if (!ALLOWED_SCRIPT_PATHS.has(url.pathname)) throw new TypeError('unallowlisted script path');
     return url.href;
   },
 });
 navigator.serviceWorker.register(swPolicy.createScriptURL('/sw.js'));
 ```
 
-The policy's `createScriptURL` is **restrictive** — it accepts only same-origin
-paths — so naming `jeliya-sw` on the allowlist does not weaken the protection; it moves
-the one legitimate sink use through an audited, same-origin-only factory. The exact
-shape (the allowlisted path set, whether the policy is also reused for a same-origin
-worker the current shell spawns) is settled in the implementing PR; this record fixes
-the **name, the count (one), and the exclusions (`'none'`, `default`).**
+The policy's `createScriptURL` is **restrictive** — it accepts only same-origin,
+explicitly-allowlisted paths — so naming `jeliya-sw` on the allowlist does not weaken
+the protection; it moves the one legitimate sink use through an audited factory. The
+exact shape (the allowlisted path set, whether the policy is also reused for a
+same-origin worker the current shell spawns) is settled in the implementing PR; this
+record fixes the **name, the count (one), and the exclusions (`'none'`, `default`).**
 
 ## 3. Sinks in scope, and the current shell's actual need
 
@@ -150,6 +151,10 @@ extension, never a catch-all `default` and never a speculative pre-broadening no
   records that the directive is served in the **header set** so the Phase-3
   header/CSP assessment gate covers it (AC 4), and that the allowlist is **scoped to
   the current shell** and re-examined for the Wasm worker runtime (AC 5).
+- [security threat model](security-threat-model.md) — the Trusted Types residual-risk
+  row is updated from "no `trusted-types` directive / proposed" to the **adopted
+  `jeliya-sw` allowlist** (residual risk now: decided, not yet served or exercised).
+- [docs index](index.md) — registers this record.
 
 ## 8. Acceptance-criteria mapping (issue #46)
 
@@ -176,8 +181,9 @@ Each criterion is marked **met** (decided/applied here) or **publication-deferre
 
 ## 9. Reopen-set position
 
-This record and its edits touch **documentation only** — a new decision record and a
-documentation-only edit to `docs/production-deployment.md` and the [docs index](index.md).
+This record and its edits touch **documentation only** — a new decision record and
+documentation-only edits to `docs/production-deployment.md`, the Trusted Types
+residual-risk row in `docs/security-threat-model.md`, and the [docs index](index.md).
 None is in the Phase-1 reopen set
 ([phase-1 security review scope](phase-1-security-review-scope.md)) — the CSP header
 block is design documentation, not `jeliya-core`/`serve.rs`/`PROTOCOL.md`/ADR/crypto
