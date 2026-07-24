@@ -71,11 +71,14 @@ unowned account.
 ### Cost ceilings
 
 [Production deployment architecture](production-deployment.md) names "cost
-ceilings" as a Phase 3 gate. `<TODO: record the monthly USD ceiling per
-provider, the egress ceiling per relay, and the alert + automatic cutoff at
-the stated GiB ceiling — #24 criterion 2; required because the relay-auth
-token is an uncapped cost channel if minting is open (see [Threat
-model](security-threat-model.md), credential-minting-as-abuse-channel).>`
+ceilings" as a Phase 3 gate. These are now **recorded** in the [relay
+load-and-cost-ceilings record](relay-load-and-cost-ceilings-decision.md) (#45):
+a $900/month all-in spend cap, a 1,024 GiB/month relay-egress ceiling, a
+2,000,000/day token-mint ceiling, and a 5 ms p95 relay-auth CPU-per-request
+ceiling, each with alert fractions, sized at a conservative $0.15/GiB. The alert-and-automatic-cutoff that sheds minting when a
+ceiling is reached is the separate admission-rule decision (issue #49). The open
+item that remains here is the per-provider account identifiers and the
+relay-auth signing-key custody model in §2, not the ceilings themselves.
 
 ## 3. Fallback provider set
 

@@ -1020,7 +1020,7 @@ Go/no-go gate:
 - offline shell and cached view open during origin outage;
 - N-to-N-1 rollback completes within 15 minutes;
 - a regional relay outage fails over within 2 minutes;
-- load tests stay inside resource and cost ceilings;
+- load tests at the profile in the [relay load-and-cost-ceilings record](relay-load-and-cost-ceilings-decision.md) stay within its published egress, request, CPU, and spend ceilings;
 - an external penetration review has no unresolved critical or high finding.
 
 This is the first production launch gate.

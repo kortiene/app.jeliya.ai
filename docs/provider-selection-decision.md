@@ -216,10 +216,14 @@ monthly relay cost =
 Per-user pricing is not published until real room size, online time, and
 file-transfer distributions are measured ([Production deployment
 architecture](production-deployment.md) lines 836-837). Browser peers are
-always relayed, so file traffic can dominate cost; cost ceilings per relay
-environment are a Phase 3 gate ([Production deployment
-architecture](production-deployment.md), Phase 3 gate) and are tracked as TODO
-in [Production ownership record](production-ownership.md) §2.
+always relayed, so file traffic can dominate cost; cost ceilings are now
+published in the [relay load-and-cost-ceilings
+record](relay-load-and-cost-ceilings-decision.md) (#45) as **aggregate** caps —
+a $900/month all-in spend cap, a 1,024 GiB/month egress ceiling across all
+production relays, a 2,000,000/day token-mint ceiling, and a 5 ms p95 relay-auth
+CPU ceiling, each with alert fractions. That record's cost table carries the
+per-environment (production, staging, CI, dev) arithmetic, and the Phase 3 gate
+is restated against these ceilings there.
 
 ## Rejected alternatives
 
