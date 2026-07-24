@@ -346,7 +346,10 @@ identity.
 - Invite creation, `room.join` redemption (with human confirmation of the
   room being joined, per amendment A1), file access, pipes, identity
   operations, and agents require separate approval.
-- Control keys are rate-limited, expire, and can be revoked immediately.
+- Control keys are rate-limited and can be revoked immediately, and carry a
+  bounded maximum lifetime: every requested lifetime is clamped into
+  `[5 minutes, 90 days]` with a 30-day default, after which the key expires and
+  there is no path to an unbounded key (per amendment A1).
 
 ### Recovery
 
