@@ -140,7 +140,10 @@ fn sanitize_for_terminal(s: &str) -> String {
 fn steers_display(c: char) -> bool {
     c.is_control()
         || matches!(c,
-            '\u{200b}'..='\u{200f}'   // zero-width space/joiners, LRM/RLM
+            '\u{061c}'                // ARABIC LETTER MARK (a bidi control)
+            | '\u{200b}'..='\u{200f}' // zero-width space/joiners, LRM/RLM
+            | '\u{2028}'              // LINE SEPARATOR (category Zl, not Cc)
+            | '\u{2029}'              // PARAGRAPH SEPARATOR (category Zp)
             | '\u{202a}'..='\u{202e}' // bidi embeddings and overrides
             | '\u{2060}'..='\u{2064}' // word joiner, invisible operators
             | '\u{2066}'..='\u{2069}' // bidi isolates
@@ -1782,6 +1785,11 @@ mod tests {
             "\u{2066}isolated\u{2069}",
             "zero\u{200b}width",
             "\u{feff}bom",
+            // Line/paragraph separators are categories Zl/Zp, not Cc, so
+            // `is_control` misses them while a renderer still breaks on them.
+            "line\u{2028}separated",
+            "para\u{2029}separated",
+            "arabic\u{061c}mark", // ARABIC LETTER MARK, a bidi control
         ] {
             let clean = sanitize_for_terminal(hostile);
             assert!(
