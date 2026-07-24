@@ -66,7 +66,7 @@ evicted. Two caveats are recorded honestly:
 
 - **Browser support.** `"executionContexts"` is currently unimplemented across the whole
   supported matrix — Chrome/Edge never shipped it, Firefox removed it after v67, Safari
-  after v18.2 — so the app relies on it nowhere; it stays in the emitted header (unknown
+  removed it in 18.3 — so the app relies on it nowhere; it stays in the emitted header (unknown
   directive values are ignored), but the **eviction rests on `"storage"`**, which
   performs the SW unregistration on every engine in the
   [supported matrix](platform-matrix-decision.md).
@@ -97,18 +97,54 @@ the web shell**, independent of the existing component-metadata kill switch:
   verifies the detached signature before honoring the document. Reusing the operator's
   one existing offline key avoids adding to the solo-operator signing-custody gap
   recorded in [production ownership record](production-ownership.md) §4.
-- **Anti-rollback.** The SW persists the highest sequence number it has verified and
-  **refuses any document with a lower or equal sequence**, so an attacker with pointer
-  control cannot replay an old "all-clear" to un-kill a killed shell (closing the
-  rollback-as-downgrade path the [threat model](security-threat-model.md) records). A
-  validly-signed *higher-sequence* document supersedes a prior kill, so genuine recovery
-  is possible.
+- **Anti-rollback.** The SW persists the **highest sequence number it has verified,
+  together with that document's payload hash**, and **rejects any strictly-lower
+  sequence**. An **equal** sequence is honored **idempotently only if its payload hash
+  matches** — so a kill interrupted by a crash before unregistration and cache deletion
+  finish can be re-applied on the next event — and is **rejected if the content differs**.
+  A validly-signed *higher-sequence* document supersedes a prior kill, so genuine recovery
+  is possible. This closes the rollback-as-downgrade path the
+  [threat model](security-threat-model.md) records. Because `Clear-Site-Data: "storage"`
+  (§2) clears origin storage, the persisted floor must be **kept where the kill's own
+  reset does not erase it, or re-established from the freshly-fetched current-sequence
+  document on reinstall** — the rolled-back origin serves the current document, so a fresh
+  client starts at the current floor, never an older one (named as a requirement below).
 - **The SW checks it on `activate` and on navigation** (and may re-check on a bounded
   timer while running), then **stops serving its cached shell when the document marks
   the shell killed** — it unregisters itself, clears its Cache Storage, and serves a
   minimal safe page directing the user to reload. Checking on navigation, not only on
   `activate`, means a long-running legitimate SW that has not received an update still
   notices a kill promptly.
+
+**Design requirements carried to the Phase-3 build.** The kill switch is Phase-3 build;
+the implementing PR must satisfy these named requirements, several of which are protocol
+edge-cases a naive implementation would miss:
+
+- **Wire contract and domain separation.** The document reuses the evidence-manifest
+  signing format ([verification evidence](verification-evidence.md)) with an explicit
+  **domain-separation tag** distinguishing a kill-switch document from an evidence
+  manifest (and any other signed artifact), so a signature minted for one document type
+  can never be accepted as another. The serialized payload, signature envelope, and key
+  identifier are fixed by a **normative schema with test vectors** so independent
+  implementations verify the same bytes.
+- **Version-targeted kill (tombstone), not a transient flag.** The kill **names the
+  compromised shell version / sequence range**, and the eviction control for the
+  compromised worker-script URLs is **durable** — not withdrawn merely because the
+  clients seen during the incident were evicted. A client that stays dormant through the
+  incident and returns after the all-clear must still be evicted if it is on a killed
+  version: the higher-sequence all-clear marks the clean range while the tombstone for
+  the killed range persists.
+- **Authenticated key rollover.** If the release-evidence key is rotated (e.g. after a
+  key incident), already-installed workers pin the prior public key and would treat a
+  kill signed by the replacement key as unverifiable — then fail open (§4). The
+  implementation must define an **authenticated rollover**: a statement signed by the
+  outgoing key authorizing the incoming key (or a small pinned key set / bounded dual-key
+  window), plus how an installed worker stops trusting a revoked key — so the
+  near-immediate containment path survives a signing-key incident, consistent with the
+  signing-key-rotation runbook in
+  [production deployment architecture](production-deployment.md).
+- **Anti-rollback floor persistence** (above) survives the kill's own
+  `Clear-Site-Data: "storage"` reset.
 
 ## 4. Failure posture: fail-open on unreachable
 
@@ -134,9 +170,14 @@ stated one:
 - **Frontend rollback (CDN pointer): at most 15 minutes** — when clean bytes become
   *available* at the origin (unchanged).
 - **Hostile-code termination: bounded by the service-worker update check, worst case
-  ~24 hours plus a navigation** — when hostile code stops *running* in an installed
-  client. For a **running** legitimate shell the in-SW kill-switch check (§3) makes this
-  near-immediate (next navigation); the ~24h worst case applies to a **dormant** installed
+  ~24 hours plus the update-triggering navigation and a subsequent clean reload** — when
+  hostile code stops *running* in an installed client. The extra reload is load-bearing:
+  `Clear-Site-Data: "storage"` unregisters the hostile worker on the worker-script
+  refetch, but because `"executionContexts"` (which would auto-reload the document) is
+  unsupported (§2), the already-loaded hostile document keeps running until the next
+  navigation loads clean bytes. For a **running** legitimate shell the in-SW kill-switch
+  check (§3) makes this near-immediate (next navigation); the ~24h worst case applies to a
+  **dormant** installed
   PWA that is not navigated — its SW is not re-checked until the next navigation, at which
   point, if the registration is more than 24h stale, the update fetch bypasses the HTTP
   cache and refetches the worker script.
@@ -197,6 +238,9 @@ architecture](production-deployment.md) "Go/no-go gate") gains:
 - [production deployment architecture](production-deployment.md) Phase-3 go/no-go gate —
   header assessment **includes `Clear-Site-Data`**; rollback-15-minutes stays **separate**
   from the termination objective (AC 7).
+- [security threat model](security-threat-model.md) — the two A2 residual-risk rows are
+  updated from "proposed / A2 open" to the **decided** controls, preserving the honest
+  residual that they are not yet implemented (Phase-3 build).
 - [docs index](index.md) — registers this record.
 
 ## 10. Acceptance-criteria mapping (issue #44)
@@ -228,7 +272,8 @@ Each criterion is marked **met** (decided/applied here) or **publication-deferre
 ## 11. Reopen-set position
 
 This record and its edits touch **documentation only** — a new decision record and
-documentation-only edits to `docs/production-deployment.md` and the [docs index](index.md).
+documentation-only edits to `docs/production-deployment.md`, the two A2 rows in
+`docs/security-threat-model.md`, and the [docs index](index.md).
 None is in the Phase-1 reopen set
 ([phase-1 security review scope](phase-1-security-review-scope.md)). No re-pin or delta
 review is owed. When `ui/src/sw.ts`, the served `Clear-Site-Data`, and the signed

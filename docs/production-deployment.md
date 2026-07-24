@@ -761,9 +761,13 @@ Production smoke tests cover:
 - absence of unapproved third-party requests;
 - PWA install and offline-shell startup;
 - service-worker N/N-1 update;
-- hostile-shell eviction: a killed shell (signed kill-switch document) stops
-  serving its cached bytes and the client re-fetches clean bytes, and
-  `Clear-Site-Data` on the rolled-back origin unregisters the service worker;
+- hostile-shell eviction, covering both a cooperative and an adversarial service
+  worker: a legitimate worker honors a killed signed document and stops serving its
+  cached shell; an adversarial worker that ignores the document and answers
+  navigations from cache is evicted by driving the stale-registration update path so
+  the browser refetches the worker script and receives `Clear-Site-Data`, and a
+  subsequent clean load then runs clean bytes (verifying termination, not only
+  availability);
 - two ephemeral peers creating, joining, sending, and reconnecting;
 - deliberately forced relay;
 - companion pairing and control-key revocation;
@@ -861,7 +865,7 @@ Operational constraints:
 | Online event convergence | 99 percent of accepted chat events visible to both online peers within 10 seconds |
 | Companion pairing | At least 99 percent success on the supported OS/browser matrix |
 | Frontend rollback (CDN pointer, clean bytes available) | At most 15 minutes |
-| Hostile-code termination (installed client) | Bounded by the service-worker update check, worst case approximately 24 hours plus a navigation; near-immediate for a running shell via the kill-switch check ([A2](hostile-frontend-containment-decision.md)) |
+| Hostile-code termination (installed client) | Bounded by the service-worker update check, worst case approximately 24 hours plus the update-triggering navigation and a subsequent clean reload; near-immediate for a running shell via the kill-switch check ([A2](hostile-frontend-containment-decision.md)) |
 | Relay regional failover | At most 2 minutes |
 | Optional server-peer recovery | RTO at most 4 hours and RPO at most 5 minutes when enabled |
 
