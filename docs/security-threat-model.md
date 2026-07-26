@@ -82,6 +82,74 @@ requirements, not release administration.
 | Forged or edited verification record | false release confidence | retained exact manifest, canonical public key, detached Ed25519 signature, source/publication/ancestry checks | retained signatures verify for the prior snapshot; the current-pin direct (`098c4979`) and forced-relay (`8bda01e6`) signatures verify for `922f620…` + `a5d98b70…`, and the release evidence gate is READY |
 | Secrets copied into logs or evidence | credential or identity disclosure | transient logs confined to run-owned data directories, no address retention, and digest-only retained summaries | retained runs report completed cleanup. Manifests keep only line/byte counts and stream SHA-256 digests and contain no tickets, tokens, seeds, private keys, excerpts, or IP addresses |
 
+## Why the loopback daemon must not be public
+
+Carried forward from the deprecated [production deployment
+architecture](production-deployment.md#why-the-loopback-daemon-must-not-be-public)
+by the [desktop-operator-first scope
+decision](desktop-first-scope-decision.md). It was the boundary statement for
+one surface among several planned; it is now the boundary statement for **the
+only client-facing surface that exists**.
+
+`jeliyad` is local-only by construction:
+
+- [`crates/jeliyad/src/main.rs`](../crates/jeliyad/src/main.rs) binds only
+  `127.0.0.1` and exposes no flag for a non-loopback address.
+- It creates one per-process bearer token and writes that token to the local
+  owner-only portfile.
+- `/api/session` gives the token only to the expected loopback browser shape.
+  Its documented threat model explicitly excludes hostile same-user processes
+  and shared multi-user service operation.
+- Host and Origin checks defend a loopback application from DNS rebinding and
+  cross-site WebSocket hijacking. They are not remote account authentication.
+- The RPC surface includes identity creation, daemon shutdown, room history,
+  native file operations, pipes, and agent projections.
+- One daemon data directory represents one user identity. There is no tenant,
+  account, authorization-domain, quota, or public audit model.
+- It has no public TLS, remote pairing, device approval, abuse controls, or
+  multitenant resource isolation.
+- The current UI transports bearer material in WebSocket and upload query URLs.
+
+A reverse proxy would not add the missing security model. It would instead
+invalidate the Host and Origin assumptions and place a single-user,
+high-authority local API behind public ingress. **Do not add a public-listen
+flag, proxy `/ws`, or reuse the daemon token remotely.** Those prohibitions are
+unconditional. Any future second control surface must be designed as a separate
+surface with its own authentication and its own scope model, inheriting none of
+these controls; it is deferred with the hosted plane, and no such surface may
+ever receive a daemon bearer token.
+
+**Two honest limits of this surface.** First, the `Origin` and `Sec-Fetch-Site`
+checks on `/api/session` are browser-shaped checks: as the code comment in
+[`serve.rs`](../crates/jeliyad/src/serve.rs) states, "neither header is a
+boundary against a non-browser local process, which can forge both", and that
+route performs no token comparison at all — the constant-time bearer comparison
+guards `/ws` and `/api/files/*`. Second, a hostile same-user local process and
+shared multi-user operation are out of scope. Anything sharing that data
+directory inherits both exclusions, and the weaker of the two surfaces bounds
+the pair.
+
+## Architectural limits
+
+Carried forward by the [desktop-operator-first scope
+decision](desktop-first-scope-decision.md) as a standing section. These are
+statements of what the architecture **cannot** do. They are not gaps awaiting
+work and they do not shrink when the plan shrinks — a peer-to-peer tool that
+states its limits precisely is trustworthy in a way a smaller feature set never
+makes it. They must survive every future cut.
+
+- **A signature prevents forgery, not copying.** It proves who authored bytes.
+  It cannot stop a peer who legitimately received those bytes from keeping,
+  copying, or re-publishing them. This applies equally to component packages,
+  to update metadata, and to any signed artifact a future plane introduces: a
+  signature proves provenance, never harmlessness.
+- **Revocation cannot recall material a peer already received.** Removing a
+  member or revoking a key stops future authorized action; it does not reach
+  back into what has already replicated to someone else's disk.
+- **A recovery bundle restores identity authority, not unreplicated blobs.**
+  Recovering an identity lets you act as yourself again. Content that existed
+  only on the lost device, and was never replicated to another peer, is gone.
+
 ## Authorization invariant
 
 A caller-supplied room, invite, event, file, pipe, or agent identifier is
@@ -191,6 +259,21 @@ has not been verified.
 
 ## Proposed hosted boundaries: web origin, companion, and relays
 
+> **DORMANT 2026-07-26.** The [desktop-operator-first scope
+> decision](desktop-first-scope-decision.md) defers the hosted browser plane,
+> and the companion control plane has been deleted from the tree. Everything in
+> this section is retained as the analysis a hosted re-entry would restart
+> from — **not** as a description of anything planned, built, or pending. The
+> preconditions any re-entry must satisfy before it is built are in the scope
+> decision, not here.
+>
+> Two things that used to live in this section are now live content and have
+> moved **above**, out of the dormant block: the loopback boundary argument is
+> now [Why the loopback daemon must not be
+> public](#why-the-loopback-daemon-must-not-be-public), and the honest limits
+> of the `/api/session` header checks moved with it. The subsection below is
+> kept only so the section reads whole.
+
 Everything from here to the end of this section describes an **adopted but
 entirely unbuilt** architecture. [Production deployment architecture —
 decision record](production-deployment-decision.md) adopts the design in
@@ -200,7 +283,8 @@ production deployment, and it does not advance any implementation,
 verification, or release status".
 
 No part of this exists in the candidate tree. `crates/` contains only
-`jeliya-core` and `jeliyad`. There is no web origin, no CDN, no service worker,
+`jeliya-core` and `jeliyad` — the three companion crates that briefly existed
+were deleted with the plane. There is no web origin, no CDN, no service worker,
 no header emission, no companion control protocol, no pairing, no browser
 control key, no relay, and no relay-auth credential service. `app.jeliya.ai`
 had no resolvable A, AAAA, or CNAME record at the time of the decision record.
@@ -382,6 +466,48 @@ below for the preview.
   evidence window.
 - Comprehensive accessibility conformance and release-artifact
   signing/notarization are not preview security guarantees.
+
+### Invite-ticket residual disclosure
+
+Carried forward from the deprecated [production deployment
+architecture](production-deployment.md) by the [desktop-operator-first scope
+decision](desktop-first-scope-decision.md), and re-anchored to the surfaces
+that actually exist.
+
+A generic holder-bearer invitation is a different capability model and must not
+replace identity binding implicitly. Browser extensions, screenshots, copied
+links, and OS clipboard managers remain disclosure risks that the product must
+state. All four are **live today**: the loopback UI is a browser page, and the
+ticket transits the OS clipboard.
+
+Two further channels fire **with no user action at all**, whenever an invite is
+delivered inside a URL — the browser's own history database records the visit
+at navigation time (which `history.replaceState()` does **not** remove), and any
+enabled history or bookmark sync may carry that record off the device to a
+vendor account. Jeliya does not deliver invites by URL today: `invite.create`
+returns a ticket string the UI copies to the clipboard. These two channels are
+therefore a standing constraint on **any future URL-borne delivery** — a hosted
+re-entry, or a custom-scheme handler — rather than a present exposure. Per-engine
+retention and upload behaviour is recorded as **possible, not established**:
+asserting that a specific engine's history store retains fragments, or that a
+specific vendor's sync uploads them, requires per-engine confirmation first.
+
+These history channels lie **outside the reach of any gate the project
+operates**. Such gates cover infrastructure and diagnostic surfaces, not the
+browser's own databases. The live analogue that does hold is the UI's own
+diagnostics redaction, which explicitly excludes invite tickets.
+
+The structural mitigations that are **shipped** are bounded expiry (the UI's
+1h/24h/7d presets over the daemon's 24-hour default, Phase 1 D4), terminal
+redemption — each invite is single-use, and once redeemed it is spent — and
+owner-only cancellation through `invite.cancel`. Opening or viewing an invite
+does **not** consume it; only redemption, cancellation, or expiry does. So the
+product instruction for a possibly-disclosed link is to treat it as
+compromised: **cancel it and reissue**, because a recorded URL cannot be
+retracted.
+
+Product copy must state both halves — single-use redemption, and
+cancel-and-reissue on possible disclosure.
 
 See [`known-gaps-roadmap.md`](known-gaps-roadmap.md) for ownership and release
 blocking status, the

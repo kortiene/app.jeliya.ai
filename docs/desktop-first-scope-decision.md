@@ -261,14 +261,25 @@ set**, or it survives only in Git history:
   in the roadmap.
 - **The architectural limits.** Signatures prevent forgery but not copying;
   revocation cannot recall material a peer already received; a recovery bundle
-  restores identity authority and not unreplicated blobs. These belong in the
-  threat model as a standing section. They are the product's differentiator and
-  must survive every future cut.
+  restores identity authority and not unreplicated blobs. They are the
+  product's differentiator and must survive every future cut. **Landed:**
+  [Architectural limits](security-threat-model.md#architectural-limits), a
+  standing section in the threat model.
 - **The invite residual-disclosure list**, including the channels that fire with
-  no user action.
+  no user action. **Landed:** [Invite-ticket residual
+  disclosure](security-threat-model.md#invite-ticket-residual-disclosure).
+  Re-anchored on arrival: the two no-user-action channels were conditional on a
+  join **URL**, which desktop-first does not have — invites are ticket strings
+  copied to the clipboard — so they are restated as a standing constraint on any
+  future URL-borne delivery rather than a present exposure. The four
+  clipboard-and-screenshot channels are live today.
 - **Why the loopback daemon must not be public** — the complete constructional
   argument, which is now the boundary statement for the only surface that
-  exists.
+  exists. **Landed:** [Why the loopback daemon must not be
+  public](security-threat-model.md#why-the-loopback-daemon-must-not-be-public).
+  The "two honest limits" paragraph, which was stranded inside the now-dormant
+  hosted-boundaries section and is sharper than the carried text, moved up with
+  it.
 - **Recovery finding F7:** re-export does not rotate, so every prior recovery
   key stays valid indefinitely. A named limitation of a shipped feature.
 - **The `room.timeline` limit clamp.** The upper bound was defined only in a
