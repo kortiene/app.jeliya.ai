@@ -15,8 +15,9 @@ audience: ["contributors", "maintainers", "operators"]
 
 This is the canonical `v0.6.0` network-evidence procedure. It drives one local
 operator process and two supervised remote daemons through
-`scripts/realnet-evidence.mjs`. The older `gate-a.mjs` flow is retained only as
-a diagnostic and historical reference; it cannot qualify a release.
+`scripts/realnet-evidence.mjs`. The older `gate-a.mjs` flow has been **deleted**
+— see [Legacy Gate A diagnostic — removed](#legacy-gate-a-diagnostic--removed).
+It could not qualify a release, and nothing in this runbook depends on it.
 
 ## Current evidence status
 

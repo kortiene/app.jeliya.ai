@@ -115,7 +115,7 @@ irm https://raw.githubusercontent.com/kortiene/jeliya/main/packaging/install.ps1
 Prefer to grab a file yourself? Download the build for your system from the
 [Releases page](https://github.com/kortiene/jeliya/releases) and unpack it.
 Note: these builds are unsigned, so macOS/Windows will show a security warning
-on first run (see [Troubleshooting](#troubleshooting)) — the `brew`/`curl`/
+on first run (see [Troubleshooting](#troubleshooting)) — the `curl` and
 PowerShell installs above don't trigger this.
 
 Release `v0.4.3` publishes SHA-256 sidecars, but its installer implementation
@@ -290,8 +290,9 @@ node scripts/agent-e2e.mjs
   Everything still works; it's just not a direct connection.
 - **A browser-downloaded macOS binary is blocked ("cannot be opened because
   the developer cannot be verified").** Release binaries are currently
-  unsigned. Prefer Homebrew or the install script on macOS; they install the
-  same release without setting the browser quarantine bit. If you did download
+  unsigned. Prefer the install script on macOS; it installs the same release
+  without setting the browser quarantine bit, and it verifies the SHA-256
+  sidecar before extracting. If you did download
   it directly, right-click (or Control-click) the binary, choose **Open**, then
   confirm **Open** in the dialog — this only needs to be done once.
 - **Windows SmartScreen says "Windows protected your PC" for a
@@ -317,10 +318,11 @@ node scripts/agent-e2e.mjs
   - macOS: `rm -rf "$HOME/Library/Application Support/Jeliya"`
   - Linux: `rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/Jeliya"`
   - Windows PowerShell: `Remove-Item -Recurse -Force "$env:APPDATA\Jeliya"`
-- **Uninstall.** Homebrew users can run `brew uninstall jeliya`. If you used
-  the install script, remove the installed binary (`/usr/local/bin/jeliyad` or
-  `~/.local/bin/jeliyad`). Windows users can remove
-  `%LOCALAPPDATA%\Programs\Jeliya`.
+- **Uninstall.** If you used the install script, remove the installed binary
+  (`/usr/local/bin/jeliyad` or `~/.local/bin/jeliyad`). Windows users can remove
+  `%LOCALAPPDATA%\Programs\Jeliya`. If you installed through the former
+  Homebrew tap, `brew uninstall jeliya` still works — that path is no longer
+  offered, but the instruction is kept for anyone who used it.
 
 ---
 
