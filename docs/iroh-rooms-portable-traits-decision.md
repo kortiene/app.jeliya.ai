@@ -4,7 +4,7 @@ title: "Portable Iroh Rooms traits — decision record"
 description: "Decides how the portable event-store, blob-store, sync-transport, clock, and task-scheduling traits reach the browser peer: an audited short-lived patch series with the upstream proposal as its exit path, a named audit owner, and a stated recurring cost."
 tags: ["browser", "decision", "dependencies", "iroh", "security", "upstream"]
 timestamp: "2026-07-20T13:20:00Z"
-status: "canonical"
+status: "deprecated"
 implementation_status: "planned"
 verification_status: "unverified"
 release_status: "unreleased"
@@ -12,6 +12,14 @@ audience: ["contributors", "maintainers", "release-engineers", "security-reviewe
 ---
 
 # Portable Iroh Rooms traits — decision record
+
+> **DEPRECATED 2026-07-26 — no fork of the peer-to-peer engine is maintained.**
+> The [desktop-operator-first scope decision](desktop-first-scope-decision.md) defers the browser peer
+> that required portable traits, and with it the security-reviewed fork that
+> would have been re-audited on every rebase. One rule survives as standing
+> **dependency policy** rather than as browser-peer plan: any dependency fork
+> is short-lived **by rule, not by hope**, and carries an audited patch for as
+> long as it exists.
 
 **Status: DECIDED 2026-07-20.** The browser peer depends on portable traits
 for "event store, blob store, sync transport, clock, and task scheduling"

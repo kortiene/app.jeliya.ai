@@ -4,7 +4,7 @@ title: "Relay load profile and cost ceilings — decision record"
 description: "Publishes the beta load profile (concurrent sessions, rooms, message rate, p95 event size) and the hard resource and cost ceilings — relay egress, relay-auth Worker requests and CPU, and a $900/month spend cap with alert fractions — for every relay environment the plan mandates (production, staging, CI test, dev), sized at a conservative $0.15/GiB egress rate, and restates the Phase 3 gate against them. Issue #45."
 tags: ["decision", "deployment", "relay", "cost", "load", "ceilings", "phase-3"]
 timestamp: "2026-07-24T12:30:00Z"
-status: "canonical"
+status: "deprecated"
 implementation_status: "planned"
 verification_status: "unverified"
 release_status: "unreleased"
@@ -12,6 +12,13 @@ audience: ["contributors", "maintainers", "release-engineers", "operators", "sec
 ---
 
 # Relay load profile and cost ceilings — decision record
+
+> **DEPRECATED 2026-07-26 — no relay plane is operated.** The
+> [desktop-operator-first scope decision](desktop-first-scope-decision.md) defers production relay
+> operations, so the cost ceilings and the standing infrastructure floor
+> recorded here are dormant. The floor itself remains the number a funding
+> re-entry trigger has to clear, so the figures are retained rather than
+> discarded.
 
 **Status: DECIDED 2026-07-24 —** This record settles issue
 [#45](https://github.com/kortiene/app.jeliya.ai/issues/45): it publishes the beta

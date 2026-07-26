@@ -4,7 +4,7 @@ title: "Hostile-frontend containment — decision record"
 description: "Discharges amendment A2 for the first public launch: separates the 15-minute CDN-pointer rollback objective (when clean bytes become available) from a hostile-code-termination objective (when hostile code stops running), and specifies the two mechanisms that actually evict a hostile web shell. Adds Clear-Site-Data as an incident header served from the rolled-back origin on the service-worker script path and index.html; a signed web-shell kill-switch document — signed by the existing release/provenance chain with a monotonic anti-rollback version floor — that the service worker checks on activate and on navigation and self-terminates on; a fail-open-on-unreachable posture so the offline shell survives a network blip; and the runbook, smoke-test, and gate edits that wire them in. Issue #44."
 tags: ["decision", "deployment", "security", "hostile-frontend", "service-worker", "phase-3"]
 timestamp: "2026-07-24T21:00:00Z"
-status: "canonical"
+status: "deprecated"
 implementation_status: "planned"
 verification_status: "unverified"
 release_status: "unreleased"
@@ -12,6 +12,14 @@ audience: ["maintainers", "operators", "security-reviewers", "frontend", "releas
 ---
 
 # Hostile-frontend containment — decision record
+
+> **DEPRECATED 2026-07-26 — superseded by the [desktop-operator-first scope decision](desktop-first-scope-decision.md).**
+> There is no hosted origin to contain. Its design result is carried forward
+> as one design rather than three: a monotonic anti-rollback floor with a
+> payload-hash comparison and idempotent equal-sequence handling; a key
+> rollover that does not trust only the outgoing key; and an
+> unreachable-document path that fails **open**, so an offline client is never
+> bricked.
 
 **Status: DECIDED 2026-07-24 —** This record makes the amendment **A2**
 ([production deployment decision](production-deployment-decision.md) §A2) decisions for
