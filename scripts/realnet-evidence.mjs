@@ -61,6 +61,8 @@ import {
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 
+import { ROOM_SCOPED_METHODS } from "./room-scoped-methods.mjs";
+
 import { parseArgs, pollUntil } from "./realnet-lib.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -2811,12 +2813,33 @@ async function runFlow({ peers, expectedPath, runId, resources, record }) {
     ["pipe.close", { room_id: foreign.room_id, pipe_id: foreignPipeId }],
     ["peers.status", { room_id: foreign.room_id }],
     ["agent.history", { room_id: foreign.room_id, identity_id: foreignAgentIdentity }],
+    // room.health and invite.cancel were missing from this probe until
+    // 2026-07-26. The engine has always preflighted them, so they were guarded
+    // — but no certifying run ever demonstrated it, which meant the signed
+    // evidence proved non-disclosure for 17 of the 19 methods that claim it.
+    // The dummy invite id is deliberate: the accepted-room preflight runs
+    // BEFORE method-specific parameter validation, so a well-formed id that
+    // matches no invite still has to be refused with room_unknown. If this ever
+    // fails with invalid_params instead, the preflight has moved after
+    // validation and the ordering invariant is broken.
+    ["room.health", { room_id: foreign.room_id }],
+    ["invite.cancel", { room_id: foreign.room_id, invite_id: "0".repeat(32) }],
   ];
   await record("B public room-scoped RPCs do not disclose a foreign room ID", async () => {
     for (const [method, params] of foreignScopedMethods) {
       await expectRoomUnknown(b.client, method, params);
     }
-    return { denied_methods: foreignScopedMethods.map(([method]) => method) };
+    const probed = foreignScopedMethods.map(([method]) => method);
+    const missing = ROOM_SCOPED_METHODS.filter((m) => !probed.includes(m));
+    if (missing.length > 0) {
+      // Fail closed rather than emit a manifest that silently under-claims:
+      // this is the exact defect that produced the 19-vs-17 drift.
+      throw new Error(
+        `foreign-room probe omits room-scoped method(s): ${missing.join(", ")} — `
+          + "every method in scripts/room-scoped-methods.json must be exercised",
+      );
+    }
+    return { denied_methods: probed };
   });
   await record("B local-file HTTP endpoint does not disclose a foreign room ID", async () => {
     if (!(await foreignLocalFileIsDenied(b, foreign.room_id, foreignFile.file_id))) {

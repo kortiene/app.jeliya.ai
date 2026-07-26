@@ -1,0 +1,54 @@
+{
+  "_comment": "THE source of truth for which daemon-protocol methods are room-scoped. 'Which methods are room-scoped' was previously written down in several places that had silently drifted apart: crates/jeliya-core/src/engine.rs preflighted 19 methods while the release gate, its own test, and the network-evidence harness each enumerated 17 — all three omitting room.health and invite.cancel. The consequence was not cosmetic: the signed cross-machine release evidence proved foreign-room non-disclosure for 17 of the 19 methods that claim it, and nothing in the repository said so. Every consumer now reads this file, and scripts/check-room-scoped-methods.mjs fails CI if it stops matching the engine's own allowlist.",
+
+  "rule": "A method belongs here if and only if requires_room_access_preflight() in crates/jeliya-core/src/engine.rs returns true for it — which is to say, if its params struct carries a room_id. room.join is deliberately absent: its authorization object is the key-bound ticket, and the caller is not a room member until redemption succeeds.",
+
+  "methods": [
+    "agent.history",
+    "file.fetch",
+    "file.list",
+    "file.share",
+    "invite.cancel",
+    "invite.create",
+    "message.send",
+    "peers.status",
+    "pipe.close",
+    "pipe.connect",
+    "pipe.expose",
+    "pipe.list",
+    "room.close",
+    "room.health",
+    "room.leave",
+    "room.members",
+    "room.open",
+    "room.timeline",
+    "status.post"
+  ],
+
+  "legacy_manifest_sets": [
+    {
+      "id": "pre-2026-07-26-seventeen",
+      "_comment": "Every network-evidence manifest generated before the drift was found probes these 17. Retained manifests are covered by detached Ed25519 signatures over their exact bytes, so they can neither be regenerated nor edited — the gate must accept this set for retained evidence while requiring the complete set above for anything new. This entry is the record of what those signatures do NOT prove: foreign-room non-disclosure for room.health and invite.cancel was never exercised on a certifying run.",
+      "unproven": ["invite.cancel", "room.health"],
+      "methods": [
+        "room.open",
+        "room.close",
+        "room.leave",
+        "room.timeline",
+        "room.members",
+        "invite.create",
+        "message.send",
+        "status.post",
+        "file.share",
+        "file.list",
+        "file.fetch",
+        "pipe.expose",
+        "pipe.list",
+        "pipe.connect",
+        "pipe.close",
+        "peers.status",
+        "agent.history"
+      ]
+    }
+  ]
+}
