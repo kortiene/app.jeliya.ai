@@ -96,16 +96,9 @@ Choose the install method for your computer:
 
 | If you are on… | Use this | Why |
 |---|---|---|
-| **macOS with Homebrew** | `brew install kortiene/jeliya/jeliya` | Easiest to update and uninstall. |
-| **macOS without Homebrew** | install script | Downloads the right macOS binary automatically. |
+| **macOS** | install script | Downloads the right macOS binary automatically and verifies its checksum before extracting. |
 | **Linux** | install script | Downloads the right static Linux binary automatically. |
 | **Windows** | PowerShell install script | Installs `jeliyad.exe` under your user profile and adds it to PATH. |
-
-**macOS (Homebrew):**
-
-```bash
-brew install kortiene/jeliya/jeliya
-```
 
 **macOS or Linux (install script):**
 
@@ -286,8 +279,6 @@ node scripts/agent-e2e.mjs
 - **`jeliyad: command not found` after the install script.** The installer may
   have used `~/.local/bin`, which is not always on `PATH`. Add the line it
   printed, or run `~/.local/bin/jeliyad` directly.
-- **Homebrew says the formula is missing.** Refresh the tap and try again:
-  `brew update && brew install kortiene/jeliya/jeliya`.
 - **`cargo` or `node` "command not found".** Install the prerequisites above and
   reopen your terminal so the new tools are on your `PATH`.
 - **`node --version` is below 22.** The scripts and UI need Node 22+ (they rely
@@ -366,7 +357,7 @@ the app is a *fold* (a replay) over Iroh Rooms' signed event log.
 | `docs/agent-orchestration.md` | The pinned v1 fleet contract: truthful agent liveness, status vocabulary, task claims, and the fleet read RPCs, across daemon, runner, and UI. |
 | `docs/agent-marketplace.md` | Proposed hosted-agent marketplace architecture, trust model, and delivery plan (not yet implemented). |
 | `mockups/` | The original product mockups the UI is built to. |
-| `packaging/` | Daemon distribution: `install.sh` / `install.ps1`, plus the Homebrew formula (`jeliya.rb`) template for the tap. |
+| `packaging/` | Daemon distribution: `install.sh` / `install.ps1`, which verify the SHA-256 sidecar before extracting. |
 | `scripts/` | Test and demo harnesses: the two-daemon loopback demo + e2e, the real-agent runner (real network stack by default) with its three-daemon agent e2e, and the two-machine real-network NAT scripts. |
 | `memory/` | Dated session records — debugging and analysis notes kept for the record. |
 

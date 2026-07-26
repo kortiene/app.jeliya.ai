@@ -75,7 +75,6 @@ for (const candidate of [
   ".jeliya-agent/identity.secret",
   ".jeliya-agent-builder-1/identity.secret",
   ".jeliya-data/identity.secret",
-  ".jeliya-realnet-host/identity.secret",
   "identity.secret",
   "daemon.json",
   "release/evidence-ed25519-private.pem",

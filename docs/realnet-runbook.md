@@ -356,13 +356,19 @@ independent read-only checks found no run directories or processes remaining on
 `demo1` or `demo2`. The earlier pre-certification preview relay build failed
 before remote mutation.
 
-## Legacy Gate A diagnostic
+## Legacy Gate A diagnostic — removed
 
-`scripts/gate-a.mjs`, `scripts/realnet-host.mjs`, and
-`scripts/realnet-check.mjs` remain useful for two-host diagnosis and manual
-connectivity exploration. Their records are not source-bound to the complete
-release candidate and cannot satisfy the three-peer topology, forced-relay,
-authorization, retained-signature, or release-ancestry gates.
+`scripts/gate-a.mjs`, `scripts/realnet-host.mjs` and `scripts/realnet-check.mjs`
+have been **deleted**. They were superseded by `scripts/realnet-evidence.mjs`,
+run by no CI job, and imported by nothing but each other.
+
+They are recorded here rather than silently dropped because the distinction
+that retired them is worth keeping: their records were **not source-bound to
+the complete release candidate**, and they could not satisfy the three-peer
+topology, forced-relay, authorization, retained-signature, or release-ancestry
+gates. Anything that replaces them for ad-hoc two-host diagnosis inherits that
+limitation — a two-host connectivity check is a diagnostic, never evidence.
+`git log` has them if a manual exploration ever needs them back.
 
 The 2026-07-04 result is historical only. See
 [`gate-a-result.md`](gate-a-result.md). Do not promote `.jeliya-gatea` output

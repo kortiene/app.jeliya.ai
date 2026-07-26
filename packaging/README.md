@@ -2,9 +2,13 @@
 
 These files distribute the `jeliyad` daemon as prebuilt, per-platform binaries.
 The installer scripts and archive URLs are wired to `kortiene/jeliya` and have
-been live since `v0.3.0` (see the release-status section below). `jeliya.rb`
-is a per-release Homebrew formula: its `version` and sha256 values are
-refreshed from each release's sidecars.
+been live since `v0.3.0` (see the release-status section below).
+
+The Homebrew formula `jeliya.rb` has been **removed**. It pinned `0.4.3` against
+a `v0.6.0` candidate, no gate read it, and refreshing its version and checksums
+from each release's sidecars was a standing manual step. Ways to obtain
+`jeliyad` therefore drop from four to three — and each survivor is covered by an
+executing gate, which the formula never was.
 
 **`v0.5.0` publishes exactly five `jeliyad` archives with the embedded web UI,
 plus one checksum sidecar per archive.** It publishes no other artifact.
@@ -16,7 +20,6 @@ plus one checksum sidecar per archive.** It publishes no other artifact.
 | `../.github/workflows/release.yml` | Manual GitHub Actions promotion workflow. For `v0.5.0`, it runs the complete CI workflow twice on the exact `main` revision, builds `jeliyad` plus its embedded UI for five targets, validates the private archive/checksum set, and then exposes one complete release from the sole write-enabled job. It publishes no other artifact. |
 | `install.sh` | POSIX-sh one-liner installer for macOS + Linux (`curl \| sh`). Detects OS/arch, downloads the matching archive and checksum, verifies SHA-256 before extraction, then installs `jeliyad` to `/usr/local/bin` (or `~/.local/bin`). |
 | `install.ps1` | Windows PowerShell equivalent. Downloads the archive and checksum, verifies SHA-256 before extraction, installs to `%LOCALAPPDATA%\Programs\Jeliya`, and adds it to the user PATH. |
-| `jeliya.rb` | Homebrew formula template. Belongs in a tap (`kortiene/homebrew-jeliya`), not homebrew-core. |
 
 ## How they fit together
 
@@ -40,7 +43,8 @@ plus one checksum sidecar per archive.** It publishes no other artifact.
    latest **stable** release, or a pinned `JELIYA_VERSION`) only after the script downloads
    the exact sidecar, checks that it names the selected archive, and verifies
    SHA-256 before extraction. A missing, malformed, or mismatched sidecar fails
-   closed. Homebrew verifies the digest recorded in its published formula.
+   closed. That fail-closed check is the enforced integrity contract for every
+   install path that remains.
 
 GitHub does not provide one transaction spanning a Git ref and release assets.
 The workflow therefore guarantees that the complete artifact set is verified
@@ -103,31 +107,25 @@ shipped:
    could not install those old releases.
 3. **Bridging release:** `v0.3.0` ("first installable Jeliya release") and
    `v0.3.1` were cut after the repo rename, built by `release.yml` from
-   `-p jeliyad`, and packaged as `jeliyad-<tag>-<target>` archives. `jeliya.rb`
-   was filled in with the matching version and sha256 values for both tags.
-4. **Homebrew tap:** the top-level README's install command
-   (`brew install kortiene/jeliya/jeliya`) resolves against a
-   `kortiene/homebrew-jeliya` tap carrying the `jeliya.rb` formula, so the tap
-   is reachable under the new name. This directory doesn't track that tap
-   repo's own history, so we can confirm the naming is correct but not
-   whether the tap repo was renamed in place or created fresh.
+   `-p jeliyad`, and packaged as `jeliyad-<tag>-<target>` archives.
+4. **Homebrew tap (historical):** the `kortiene/homebrew-jeliya` tap carried the
+   `jeliya.rb` formula that the top-level README's `brew install` command
+   resolved against. Both the formula and that install instruction are removed;
+   the tap repository is outside this repository's history and is unaffected by
+   this change.
 5. **Redistribution rights:** confirmed for publishing built binaries that
    include the pinned `iroh-rooms` git dependency (unchanged by the rename).
 
 ## Per-release follow-up
-
-After the five `v0.5.0` daemon archives are published and independently
-verified, update `version` and checksums in `jeliya.rb` in a separate reviewed
-tap change.
 
 `release.yml` needs no slug edit — it always builds the repo it runs in.
 
 ## Signing / notarization = Phase 2 (in progress)
 
 The daemon archives are **unsigned**. A *browser* download of an unsigned
-binary trips Gatekeeper (macOS) and SmartScreen (Windows). The `curl | sh` and
-Homebrew install paths do **not** set the quarantine bit, so they install
-cleanly. Every release to date carries only unsigned daemon archives. Signing
+binary trips Gatekeeper (macOS) and SmartScreen (Windows). The `curl | sh`
+install path does **not** set the quarantine bit, so it installs cleanly; with
+the Homebrew formula removed it is the only quarantine-free path left. Every release to date carries only unsigned daemon archives. Signing
 the bare daemon archives (issue #1) and Windows Authenticode (issue #2) are
 tracked in
 [`../docs/signing-notarization.md`](../docs/signing-notarization.md).
