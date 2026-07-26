@@ -123,7 +123,7 @@ authentication, method-to-scope mapping, and daemon integration are all
 deferred to D5b/D6. There is nothing byte-level for a reviewer to approve on
 the control side.
 
-**Evidence.** [`crates/jeliya-control/src/lib.rs`](../crates/jeliya-control/src/lib.rs)
+**Evidence.** `crates/jeliya-control/src/lib.rs`
 exposes a Rust API (`Pairing`, `ControlGateway`, `authorize`, `install`,
 `revoke`) but no byte serialization, no transport, and no daemon binding. The
 gate verdict and the scope doc both concede the transport is Phase 2 ("the
@@ -150,13 +150,13 @@ control-protocol wire deferred to the
 ### F3 — High: jeliya-control core does not enforce the attributed properties
 
 **Claim.** The state machine in
-[`crates/jeliya-control/src/lib.rs`](../crates/jeliya-control/src/lib.rs) is
+`crates/jeliya-control/src/lib.rs` is
 attributed security properties it does not actually enforce at the API
 surface it exposes.
 
 **Evidence.**
 
-- **SAS binds only two sorted pubkeys.** [`Pairing::sas`](../crates/jeliya-control/src/lib.rs)
+- **SAS binds only two sorted pubkeys.** `Pairing::sas`
   hashes `companion_key || browser_key` in canonical order — no version,
   roles, scopes, lifetime, nonce, or transcript. A two-sided attacker can
   birthday-search the ~32-bit SAS space in roughly 2^16 pairings
@@ -189,7 +189,7 @@ to make clear nothing transports or enforces these checks yet. The actual
 enforcement review happens at the D5b/D6 gate.
 
 **Status.** Resolved (labeling) 2026-07-22 — `jeliya-control` relabeled as
-scaffolding in its [module doc](../crates/jeliya-control/src/lib.rs), the
+scaffolding in its module doc, the
 [gate verdict](phase-1-gate-verdict.md) row #6, and the
 [scope doc](phase-1-security-review-scope.md). The enforcement gaps themselves
 (SAS bypass, unbounded lifetime, caller-supplied time, no rate limiting, global
@@ -399,7 +399,7 @@ settled, and the approval contract itself is undefined.
      grouped-**hex** ([`recovery.rs` `to_phrase`](../crates/jeliya-core/src/recovery.rs)).
   2. ADR #2 specifies a **Noise-XX transcript-derived SAS**; the code emits a
      simple BLAKE3 over two sorted pubkeys
-     ([`jeliya-control/src/lib.rs` `Pairing::sas`](../crates/jeliya-control/src/lib.rs)).
+     (`jeliya-control/src/lib.rs` `Pairing::sas`).
   3. ADR #2 decision 8 specifies per-key **rate limiting**; the code has none.
   4. ADR #2 decision 5 specifies a default **30-day lifetime**; the code
      accepts any caller-supplied `Duration` and has no default.
@@ -496,7 +496,7 @@ ones.
 |---|---|---|
 | 0 | (this page) | ✅ The findings are recorded in the repo as the durable independent-review record, linked from [the wiki index](index.md). |
 | 1 | F9 | ✅ ADR/code contradictions resolved 2026-07-21 (see [F9 resolutions](#resolutions-2026-07-21)): ADR #3 promoted `proposal → canonical` / `partial` with [Amendments A and B](recovery-bundle-decision.md#amendments-a-and-b-2026-07-21); ADR #2 remains `proposal` with its [scaffolding relationship](companion-control-protocol-decision.md#relationship-to-the-phase-1-scaffolding-2026-07-21) documented. Approval-contract codification is still open and folds into Step 6 + Step 7. |
-| 2 | F2, F3 | ✅ Row #7 re-scoped to the two D1 envelopes ([scope doc](phase-1-security-review-scope.md)); `jeliya-control` relabeled as scaffolding in its [module doc](../crates/jeliya-control/src/lib.rs) and the [gate verdict](phase-1-gate-verdict.md) row #6; D5b/D6 control-wire review gate defined in the [scope doc](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate). |
+| 2 | F2, F3 | ✅ Row #7 re-scoped to the two D1 envelopes ([scope doc](phase-1-security-review-scope.md)); `jeliya-control` relabeled as scaffolding in its module doc and the [gate verdict](phase-1-gate-verdict.md) row #6; D5b/D6 control-wire review gate defined in the [scope doc](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate). |
 | 3 | F1 | ✅ Review target pinned in the [scope doc](phase-1-security-review-scope.md#review-target-pin): source SHA `35b1c5e` + `Cargo.lock` hash + toolchain + ADR revisions + crypto dep versions + clean-worktree assertion + reopen rules. **Provisional** — Step 5 changes `identity.rs` and requires a re-pin before Step 7. |
 | 4 | F5, F7, F4, F8 | ✅ Doc overclaims fixed: row #2 relabeled OPEN (F5, opt-in not enforced); lifecycle corrected — re-export adds a backup, old material irrevocable (F7); daemon-auth/single-user boundary stated as honest boundary, `engine.rs` in pin (F4); zeroize recast as source/dep audit + secret-data-flow inventory (F8, full audit is Step 6). |
 | 5 | F6 | ✅ KDF params are now an immutable per-version param-set (`KdfParams` + `V1_KDF` + `kdf_params_for_version` dispatch); attribution corrected (OWASP minimum); migration fixtures + latency measurement added. `identity.rs` changed — pin needs re-record before Step 7. |

@@ -194,7 +194,7 @@ signed cancellation reaches the redeeming peer.
 
 `replayed_nonce_is_rejected`, `wrong_sas_yields_no_record`,
 `expired_key_is_rejected`, and `revoked_key_is_rejected`
-([jeliya-control/src/lib.rs](../crates/jeliya-control/src/lib.rs)) exercise the
+(`jeliya-control/src/lib.rs`) exercise the
 control-protocol gateway directly. Plus `scope_is_default_deny` (A1),
 `out_of_order_nonces_inside_the_window_are_accepted`,
 `nonce_below_the_window_floor_is_rejected`, and the SAS MITM-detection
@@ -236,7 +236,7 @@ Row #7 was [re-scoped per finding F2](phase-1-security-review-scope.md) to the
 parameters ([identity.rs](../crates/jeliya-core/src/identity.rs)), and the
 recovery-bundle AEAD and key handling ([recovery.rs](../crates/jeliya-core/src/recovery.rs))
 — plus their key lifecycle. The control-protocol surface
-([jeliya-control](../crates/jeliya-control/src/lib.rs)) has no wire format to
+(`jeliya-control`) has no wire format to
 review and is deferred to the
 [D5b/D6 review gate](phase-1-security-review-scope.md#deferred-surface--the-d5bd6-control-wire-review-gate).
 

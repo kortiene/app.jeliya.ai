@@ -405,7 +405,41 @@ tamper/version/wrong-key fail-closed.
 | ADR | Document | Last changed | Status |
 |---|---|---|---|
 | ADR #3 (recovery bundle) | [`docs/recovery-bundle-decision.md`](recovery-bundle-decision.md) | `d610076` (PR #89; condition-6 corrections, delta-reviewed) | `canonical` / `partial` (Amendments A+B; F7 lifecycle fix; condition-6 corrections) |
-| ADR #2 (control protocol) | [`docs/companion-control-protocol-decision.md`](companion-control-protocol-decision.md) | adoption PR, 2026-07-23 — the adopted file is pinned immutably by content: `sha256 fafb15c06b313a662ad77b0fa95ab492c9fbc82f085989b629d84754b3588703` (verify with `sha256sum`; any mismatch is a post-adoption edit and reopens review). Merge SHA recorded at the next re-pin; prior `ce49d73`, PR #80 | `canonical` — adopted 2026-07-23, control-key lifetime default fixed at 30 days ([micro-delta note](phase-1-security-review.md#adr-2-adoption-micro-delta-note-2026-07-23)); D5b conformance still checked at the D5b/D6 gate |
+| ADR #2 (control protocol) | [`docs/companion-control-protocol-decision.md`](companion-control-protocol-decision.md) | **re-pinned 2026-07-26** by content: `sha256 a8b3994a48d0c0d3c1e0bf241b9d9cf168bfe43f40f8357cc9012441857a9744` (verify with `sha256sum`; any mismatch is a post-adoption edit and reopens review). Prior pin `sha256 fafb15c06b313a662ad77b0fa95ab492c9fbc82f085989b629d84754b3588703`, adoption PR 2026-07-23; before that `ce49d73`, PR #80. **The re-pin carries no semantic content** — see the note below. | `deprecated` — the plane this ADR specifies was removed by the [desktop-operator-first scope decision](desktop-first-scope-decision.md); retained as the only specification of the removed protocol and as the re-entry artifact. The D5b/D6 conformance gate is dormant with it |
+
+> **The 2026-07-26 ADR #2 re-pin carries no semantic content.** The pin above
+> declares any edit to the adopted file a post-adoption change that reopens
+> review. That pin could not be honoured when the companion control plane was
+> removed: several retained audit documents — this one, the gate verdict, and
+> the security review — linked to a source file inside a deleted crate, and the
+> documentation gate fails on a link to a path that no longer exists. The link
+> repairs were therefore mandatory, and the pinned file was among them.
+>
+> The edit was made deliberate rather than incidental, and a reviewer must be
+> able to confirm that **by diff**. Exactly three things changed in the pinned
+> file, all in the same change set and under the same re-pin:
+>
+> 1. Every link whose target was `../crates/jeliya-control/src/lib.rs` was
+>    unwrapped to leave its link text in place — a code span where the text was
+>    a path or a symbol, plain prose where it was prose — with the surrounding
+>    sentences byte-identical.
+> 2. The `status` field moved `canonical → deprecated`, with a deprecation
+>    banner naming its replacement.
+> 3. One paragraph in "Relationship to the Phase-1 scaffolding" moved from the
+>    present tense to the past. It said the crate "exists and is merged on
+>    `main`", which stopped being true in the same commit that deleted the
+>    crate, and left the retained record contradicting its own banner. The
+>    finding it reports is unchanged: the crate did not conform to this ADR and
+>    must not be cited as if it had.
+>
+> No normative statement, no decision, no open-question resolution and no
+> security claim was touched. The re-pin records the new content hash so the
+> immutability guarantee continues to hold going forward; it is **not** an
+> approval of new normative content, because there is none.
+>
+> The D5b/D6 control-wire review gate this pin was protecting is dormant, not
+> discharged. If the hosted plane is ever re-entered, that gate re-enters with
+> it and starts from the preconditions carried forward in the scope decision.
 
 ### Crypto dependency versions (from `Cargo.lock`)
 
