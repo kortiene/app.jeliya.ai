@@ -96,16 +96,9 @@ Choose the install method for your computer:
 
 | If you are on… | Use this | Why |
 |---|---|---|
-| **macOS with Homebrew** | `brew install kortiene/jeliya/jeliya` | Easiest to update and uninstall. |
-| **macOS without Homebrew** | install script | Downloads the right macOS binary automatically. |
+| **macOS** | install script | Downloads the right macOS binary automatically and verifies its checksum before extracting. |
 | **Linux** | install script | Downloads the right static Linux binary automatically. |
 | **Windows** | PowerShell install script | Installs `jeliyad.exe` under your user profile and adds it to PATH. |
-
-**macOS (Homebrew):**
-
-```bash
-brew install kortiene/jeliya/jeliya
-```
 
 **macOS or Linux (install script):**
 
@@ -122,7 +115,7 @@ irm https://raw.githubusercontent.com/kortiene/jeliya/main/packaging/install.ps1
 Prefer to grab a file yourself? Download the build for your system from the
 [Releases page](https://github.com/kortiene/jeliya/releases) and unpack it.
 Note: these builds are unsigned, so macOS/Windows will show a security warning
-on first run (see [Troubleshooting](#troubleshooting)) — the `brew`/`curl`/
+on first run (see [Troubleshooting](#troubleshooting)) — the `curl` and
 PowerShell installs above don't trigger this.
 
 Release `v0.4.3` publishes SHA-256 sidecars, but its installer implementation
@@ -286,8 +279,6 @@ node scripts/agent-e2e.mjs
 - **`jeliyad: command not found` after the install script.** The installer may
   have used `~/.local/bin`, which is not always on `PATH`. Add the line it
   printed, or run `~/.local/bin/jeliyad` directly.
-- **Homebrew says the formula is missing.** Refresh the tap and try again:
-  `brew update && brew install kortiene/jeliya/jeliya`.
 - **`cargo` or `node` "command not found".** Install the prerequisites above and
   reopen your terminal so the new tools are on your `PATH`.
 - **`node --version` is below 22.** The scripts and UI need Node 22+ (they rely
@@ -299,8 +290,9 @@ node scripts/agent-e2e.mjs
   Everything still works; it's just not a direct connection.
 - **A browser-downloaded macOS binary is blocked ("cannot be opened because
   the developer cannot be verified").** Release binaries are currently
-  unsigned. Prefer Homebrew or the install script on macOS; they install the
-  same release without setting the browser quarantine bit. If you did download
+  unsigned. Prefer the install script on macOS; it installs the same release
+  without setting the browser quarantine bit, and it verifies the SHA-256
+  sidecar before extracting. If you did download
   it directly, right-click (or Control-click) the binary, choose **Open**, then
   confirm **Open** in the dialog — this only needs to be done once.
 - **Windows SmartScreen says "Windows protected your PC" for a
@@ -326,10 +318,11 @@ node scripts/agent-e2e.mjs
   - macOS: `rm -rf "$HOME/Library/Application Support/Jeliya"`
   - Linux: `rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/Jeliya"`
   - Windows PowerShell: `Remove-Item -Recurse -Force "$env:APPDATA\Jeliya"`
-- **Uninstall.** Homebrew users can run `brew uninstall jeliya`. If you used
-  the install script, remove the installed binary (`/usr/local/bin/jeliyad` or
-  `~/.local/bin/jeliyad`). Windows users can remove
-  `%LOCALAPPDATA%\Programs\Jeliya`.
+- **Uninstall.** If you used the install script, remove the installed binary
+  (`/usr/local/bin/jeliyad` or `~/.local/bin/jeliyad`). Windows users can remove
+  `%LOCALAPPDATA%\Programs\Jeliya`. If you installed through the former
+  Homebrew tap, `brew uninstall jeliya` still works — that path is no longer
+  offered, but the instruction is kept for anyone who used it.
 
 ---
 
@@ -366,7 +359,7 @@ the app is a *fold* (a replay) over Iroh Rooms' signed event log.
 | `docs/agent-orchestration.md` | The pinned v1 fleet contract: truthful agent liveness, status vocabulary, task claims, and the fleet read RPCs, across daemon, runner, and UI. |
 | `docs/agent-marketplace.md` | Proposed hosted-agent marketplace architecture, trust model, and delivery plan (not yet implemented). |
 | `mockups/` | The original product mockups the UI is built to. |
-| `packaging/` | Daemon distribution: `install.sh` / `install.ps1`, plus the Homebrew formula (`jeliya.rb`) template for the tap. |
+| `packaging/` | Daemon distribution: `install.sh` / `install.ps1`, which verify the SHA-256 sidecar before extracting. |
 | `scripts/` | Test and demo harnesses: the two-daemon loopback demo + e2e, the real-agent runner (real network stack by default) with its three-daemon agent e2e, and the two-machine real-network NAT scripts. |
 | `memory/` | Dated session records — debugging and analysis notes kept for the record. |
 

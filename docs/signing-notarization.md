@@ -15,10 +15,13 @@ audience: ["contributors", "maintainers", "release-engineers"]
 
 Release binaries to date are unsigned (`v0.1.0`/`v0.2.0` were
 released under the project's former name Bantaba — see `docs/naming.md`).
-The `curl | sh` and
-Homebrew paths install cleanly because they do not set the macOS quarantine bit,
-but browser downloads can still trip Gatekeeper on macOS and SmartScreen on
-Windows. This document tracks the work needed to ship signed daemon binaries.
+The `curl | sh` install
+script installs cleanly because it does not set the macOS quarantine bit, but
+browser downloads can still trip Gatekeeper on macOS and SmartScreen on
+Windows. (This argument previously also rested on the Homebrew path; that
+formula has been removed, so the install script is the only quarantine-free
+path that remains — and unlike the formula, its checksum verification is
+covered by an executing gate.) This document tracks the work needed to ship signed daemon binaries.
 
 Current status:
 
@@ -194,8 +197,9 @@ future signing change requires a separate platform review. Outline:
 
 Notes:
 
-- Notarization is most valuable for browser-downloaded macOS artifacts. Homebrew
-  and `curl | sh` are less affected, but signed artifacts still improve trust.
+- Notarization is most valuable for browser-downloaded macOS artifacts. The
+  `curl | sh` install script is less affected, but signed artifacts still
+  improve trust.
 - A bare CLI daemon archive has no app bundle to staple a notarization ticket
   to; Gatekeeper checks the ticket online.
 
