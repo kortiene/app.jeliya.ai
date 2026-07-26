@@ -154,6 +154,13 @@ them is what stops them from surviving only in Git history.
   cap, so an unbounded `limit` reaches the store. The fix lands in
   `jeliya-core`, next to the other room-scoped preflight rules, rather than in
   any client.
+- **A named production deputy does not exist.** One individual holds the
+  repository, the release keys, and the out-of-band Ed25519 release-evidence
+  key. Amendment A6 went dormant with the hosted plane, but this dependency did
+  not: concentration of key custody is independent of whether an origin exists,
+  and deferring the browser plane made the build and release pipeline the only
+  distribution trust boundary there is. Tracked as
+  [#122](https://github.com/kortiene/app.jeliya.ai/issues/122).
 - **Point the distribution repository's security file at the centralized
   intake.** Private vulnerability reporting is enabled on
   `kortiene/app.jeliya.ai`, and that is where the disclosure channel now points.
