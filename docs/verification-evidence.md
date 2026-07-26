@@ -146,6 +146,66 @@ release-blocking. A new reachable high or critical vulnerability is a release
 blocker unless maintainers explicitly approve a separate, scoped, owned, and
 time-bounded exception.
 
+## Dependency fork policy
+
+Carried forward from the deprecated [portable Iroh Rooms traits
+decision](iroh-rooms-portable-traits-decision.md) by the
+[desktop-operator-first scope decision](desktop-first-scope-decision.md). The
+browser peer that would have required a fork is deferred; the rule that
+governed it survives as standing dependency policy, because it is not specific
+to that fork.
+
+**No fork exists today.** `iroh-rooms` is consumed at an exact upstream
+revision, unmodified. If one is ever taken:
+
+- It is **short-lived by rule, not by hope.** A fork with no stated end is a
+  permanent maintenance obligation acquired by accident.
+- It carries a **security-focused diff review of the full patch series** against
+  the pinned upstream revision, recorded with the release evidence — not a
+  review of the final state, which hides what changed.
+- It is **re-audited on every rebase.** Rebasing moves the patch onto code
+  nobody reviewed it against; the prior audit does not transfer.
+- It is qualified at an **immutable commit hash**, with the reason no release
+  tag is used stated in the record — the same discipline the current untagged
+  pin follows.
+- **Continuing it past its stated review point is a new decision, not a
+  default.** Silence renews nothing.
+
+## Conformance method
+
+Carried forward by the [desktop-operator-first scope
+decision](desktop-first-scope-decision.md) as the project's standard for any
+future second implementation.
+
+The method is one **committed golden corpus**, exercised by every
+implementation:
+
+- The corpus is the conformance artifact, not a description of one. It lives in
+  the repository and changes only by review.
+- Every implementation is replayed against **that same corpus**. Today that is
+  the real daemon over WebSocket and the in-memory mock reference client, both
+  driven through one harness at the envelope level, and both gated in CI.
+- **Any future second implementation qualifies by replaying that corpus, not by
+  shipping a parallel suite of its own vectors.** An implementation tested only
+  against vectors it wrote itself is non-conformant by construction: it proves
+  self-consistency, never agreement.
+
+This is the method the deleted control wire used — one committed vector held
+byte-identical across a Rust and a TypeScript implementation — generalized away
+from the plane that produced it. Its value was demonstrated: the cross-check was
+what made a two-language wire trustworthy at all.
+
+> **Where this is recorded, and why not in `PROTOCOL.md`.** The protocol
+> specification is the more natural home for a conformance standard. It is also
+> in the Phase 1 security review's [reopen
+> set](phase-1-security-review-scope.md#reopens-review) — "a change to
+> `docs/PROTOCOL.md` (the single-user-machine assumption that bounds the
+> daemon's trust model)" reopens a closed review. Reopening it to add a
+> documentation section would be a poor trade, so the standard is recorded here,
+> in the release-evidence ledger that already owns the dependency and pin rules.
+> Moving it into `PROTOCOL.md` is a reasonable thing to do the next time that
+> review is legitimately reopened.
+
 ## Evidence schema 2 source-build contract
 
 A qualifying direct or relay run must emit evidence schema 2. The source build

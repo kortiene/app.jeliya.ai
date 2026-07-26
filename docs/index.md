@@ -52,8 +52,8 @@ CI rules for every page in this wiki.
 - [Recovery bundle decision](recovery-bundle-decision.md) - Canonical / partial (ADR #3, amended 2026-07-21): versioned authenticated-encryption recovery bundle keyed by a random 256-bit key, user-held custody, and optional opaque cloud hosting; Phase-1 D1 slice adopted, password wrap + wider payload + setup-time test_restore are Phase 2 / unwired.
 - [Room device key decision](room-device-key-decision.md) - Canonical / complete (issue #91): deterministic per-room device keys derived from the profile device seed (versioned BLAKE3 derive_key context), resolved through the room's signed membership binding, with a legacy collision guard — fixes multi-room live-receive collision without new persisted secrets or recovery-bundle changes.
 - [Companion control protocol decision](companion-control-protocol-decision.md) - Canonical / adopted 2026-07-23 (ADR #2, control-key lifetime default fixed at 30 days): mutually-authenticated E2EE browser-to-companion control protocol (Noise XX-equivalent), SAS-confirmed pairing, non-extractable bounded-lifetime control key, default-deny scopes, replay defense, and revocation; D5b is now implementable, conformance checked at the D5b/D6 review gate.
-- [Companion control wire protocol v1 (D5b/D6)](control-wire-protocol.md) - Draft / partial: the byte-level wire ADR #2 defers to D5 — the `/jeliya/control/1` ALPN, the D6 version hellos bound into the Noise `Noise_XX_25519_AESGCM_SHA256` prologue, the transcript-derived SAS, scoped-RPC framing with per-session replay windows, pairing enrollment, rate limits, revocation teardown, and persistence. Implemented in `crates/jeliya-protocol` + `crates/jeliya-control`; the Iroh transport and browser controller are the remaining D5b work. The D5b/D6 independent review gate approves it.
-- [Code-signing deferral decision](signing-deferral-decision.md) - Decision record deferring code-signing (the signing gate and #25) until after the full system is deployed and tested, so signing never blocks development.
+- [Companion control wire protocol v1 (D5b/D6)](control-wire-protocol.md) - **Deprecated / archived plane.** The byte-level specification of the control wire that ADR #2 deferred to D5 — the `/jeliya/control/1` ALPN, the D6 version hellos bound into the Noise `Noise_XX_25519_AESGCM_SHA256` prologue, the transcript-derived SAS, scoped-RPC framing with per-session replay windows, pairing enrollment, rate limits, revocation teardown, and persistence. The implementing crates were deleted by the desktop-operator-first scope decision; this page is retained as the only specification of the removed wire and as the remediation artifact that closed a Phase 1 blocker finding.
+- [Code-signing deferral decision](signing-deferral-decision.md) - Canonical / trigger re-anchored 2026-07-26: defers code-signing (the signing gate and #25) until the first release published without the technical-preview label, so signing never blocks development. The original "after Phase 5" trigger could never fire once the phases were deferred. Until the gate fires, archives ship with SHA-256 sidecars and the installers' fail-closed verified-checksum behaviour is the enforced contract.
 
 ## Agents
 
@@ -80,3 +80,49 @@ CI rules for every page in this wiki.
 - [French glossary](glossary-fr.md) - Canonical French terminology and localization decisions.
 - [Naming decision](naming.md) - Decision record and trademark research supporting the rename to Jeliya.
 - [Documentation profile](PROFILE.md) - Metadata, navigation, linking, and CI rules for this wiki.
+
+## Archived plane — deferred, retained
+
+The [desktop-operator-first scope decision](desktop-first-scope-decision.md)
+defers the hosted browser plane behind a named re-entry trigger. **Nothing
+below is deleted, and nothing below describes code that is being built.** Each
+page is retained because a deferral's value is that the analysis survives for
+whoever re-enters — and several of them are the only written home of a result
+that is still binding.
+
+The entries themselves stay in their original sections above, so links from
+elsewhere in the wiki keep resolving. This section is a reading guide, not a
+second index.
+
+- **Start here on re-entry:** [Production deployment
+  architecture](production-deployment.md), retained whole as the starting
+  analysis, and the [preconditions any hosted re-entry must
+  satisfy](desktop-first-scope-decision.md#preconditions-on-any-hosted-re-entry)
+  — which is the part that binds.
+- **Deprecated and retained:** the production deployment
+  [decision](production-deployment-decision.md) and
+  [review](production-deployment-review.md); [relay load and cost
+  ceilings](relay-load-and-cost-ceilings-decision.md); the [relay-auth admission
+  rule](relay-auth-admission-rule-decision.md); [hostile-frontend
+  containment](hostile-frontend-containment-decision.md); the [Trusted Types
+  policy](trusted-types-policy-decision.md); [portable Iroh Rooms
+  traits](iroh-rooms-portable-traits-decision.md); [ADR #2, the companion
+  control protocol](companion-control-protocol-decision.md); and the [companion
+  control wire protocol](control-wire-protocol.md).
+- **Reduced in place — read the banner for which half still binds:** [provider
+  selection](provider-selection-decision.md), [production
+  ownership](production-ownership.md), the [platform matrix
+  decision](platform-matrix-decision.md) and [platform
+  matrix](platform-matrix.md), [trust, safety and
+  legal](trust-safety-and-legal-decision.md), [vulnerability
+  disclosure](vulnerability-disclosure-decision.md), and the [security threat
+  model](security-threat-model.md).
+- **Results that outlived their homes:** the [architectural
+  limits](security-threat-model.md#architectural-limits), [why the loopback
+  daemon must not be
+  public](security-threat-model.md#why-the-loopback-daemon-must-not-be-public),
+  [invite-ticket residual
+  disclosure](security-threat-model.md#invite-ticket-residual-disclosure), the
+  [conformance method](verification-evidence.md#conformance-method), the
+  [dependency fork policy](verification-evidence.md#dependency-fork-policy), and
+  the [carried-forward gaps](known-gaps-roadmap.md#carried-forward-gaps).
