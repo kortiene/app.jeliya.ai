@@ -11,6 +11,13 @@
 //
 // Usage: node scripts/demo-agent.mjs [--human-port 7420] [--agent-port 7421]
 //                                    [--agent-data-dir .jeliya-demo/agent]
+//                                    [--human-data-dir <dir>]
+//
+// --human-data-dir must name the data dir the HUMAN daemon was started with,
+// because that is where its portfile — and therefore its per-start `/ws` auth
+// token — lives. It defaults to the platform data dir, which is right when you
+// attach to a daemon someone started by hand, and wrong for demo.sh, which
+// starts the human daemon on .jeliya-demo/human.
 
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -30,6 +37,10 @@ function arg(name, fallback) {
 const HUMAN_PORT = Number(arg("human-port", "7420"));
 const AGENT_PORT = Number(arg("agent-port", "7421"));
 const AGENT_DIR = resolve(repoRoot, arg("agent-data-dir", ".jeliya-demo/agent"));
+// Where the HUMAN daemon's portfile lives. Its per-start `/ws` token is read
+// from there; without it every connect attempt is unauthenticated and the
+// daemon answers 401 until the 60s deadline expires.
+const HUMAN_DIR = resolve(repoRoot, arg("human-data-dir", defaultDataDir()));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -120,7 +131,7 @@ class Client {
 }
 
 // --- 1. human daemon: identity + demo room, open ---------------------------
-const human = new Client("human", HUMAN_PORT);
+const human = new Client("human", HUMAN_PORT, HUMAN_DIR);
 await human.connect();
 let status = await human.call("daemon.status");
 if (!status.identity) {
