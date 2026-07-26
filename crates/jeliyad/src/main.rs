@@ -13,7 +13,6 @@
 //! and the WS auth token, graceful teardown on SIGTERM/SIGINT, and
 //! `--supervised` mode that exits when the parent closes stdin.
 
-mod companion;
 mod lifecycle;
 mod serve;
 
@@ -74,53 +73,10 @@ struct Args {
     /// OSes) and never auto-open a browser.
     #[arg(long, default_value_t = false)]
     supervised: bool,
-    /// Bind the companion control endpoint (direct connectivity only, no
-    /// relay) so a paired browser can drive this daemon over the mutually
-    /// authenticated control protocol (docs/control-wire-protocol.md).
-    /// Requires an existing identity — open the app once first.
-    #[arg(long, default_value_t = false)]
-    companion_control: bool,
-    /// Open a companion pairing offer at startup and confirm it on this
-    /// terminal (implies --companion-control; needs an interactive terminal,
-    /// so it cannot combine with --supervised).
-    #[arg(long, default_value_t = false, conflicts_with = "supervised")]
-    companion_pair: bool,
-    /// Forget all paired browser control keys before starting; every browser
-    /// must pair again.
-    #[arg(long, default_value_t = false)]
-    companion_reset_pairings: bool,
-    /// List the paired browser control keys and exit. Needs the data dir to
-    /// itself — stop a running daemon first.
-    #[arg(
-        long,
-        default_value_t = false,
-        conflicts_with_all = ["companion_revoke", "companion_control", "companion_pair", "companion_reset_pairings"]
-    )]
-    companion_list_pairings: bool,
-    /// Revoke one paired browser control key by its id (or a unique prefix of
-    /// it, from --companion-list-pairings) and exit. That browser must pair
-    /// again; the others keep their access. Needs the data dir to itself —
-    /// stop a running daemon first.
-    #[arg(
-        long,
-        value_name = "ID",
-        conflicts_with_all = ["companion_control", "companion_pair", "companion_reset_pairings"]
-    )]
-    companion_revoke: Option<String>,
     /// Print a fixed attestation marker and exit before touching a data dir.
     /// This argument exists only in the separately compiled relay verifier.
-    ///
-    /// It conflicts with the administrative pairing commands: this branch
-    /// returns 0 before any data dir is read, so combining them would exit 0
-    /// having revoked nothing — the "reported success while the key stayed
-    /// live" failure the admin path exists to prevent.
     #[cfg(feature = "relay-only-test")]
-    #[arg(
-        long,
-        hide = true,
-        default_value_t = false,
-        conflicts_with_all = ["companion_list_pairings", "companion_revoke"]
-    )]
+    #[arg(long, hide = true, default_value_t = false)]
     verification_relay_only_build: bool,
 }
 
@@ -184,52 +140,6 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    // Administrative pairing commands: do the one thing and exit, before any
-    // port, engine, or companion endpoint exists.
-    //
-    // They take the instance lock with `try_write` instead of going through
-    // `acquire_or_adopt`, which adopts a healthy incumbent and exits 0. Exiting
-    // 0 is right for a second daemon start and badly wrong here: an operator
-    // revoking a compromised browser would be told "already running" — success,
-    // by exit code — while the key stayed live. So a busy data dir is a loud
-    // failure, and holding the lock for the whole operation is also what keeps
-    // `control_keys.json` single-writer.
-    if args.companion_list_pairings || args.companion_revoke.is_some() {
-        // Wait a bounded while for the lock rather than failing instantly: the
-        // natural way to run this is to stop the daemon and immediately revoke,
-        // and a stopping daemon holds the lock through its companion drain and
-        // room close (bounded at ~10s). Never wait forever — a still-running
-        // daemon must end as a loud failure, not a hang.
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
-        let admin_guard = loop {
-            if let Ok(guard) = instance_lock.try_write() {
-                break Some(guard);
-            }
-            if tokio::time::Instant::now() >= deadline {
-                break None;
-            }
-            tokio::time::sleep(Duration::from_millis(250)).await;
-        };
-        let Some(_admin_guard) = admin_guard else {
-            eprintln!(
-                "error: another process is using {}. If a jeliyad is running \
-                 there, stop it first and re-run this command — stopping it \
-                 also ends any companion session it was serving.",
-                data_dir.display()
-            );
-            std::process::exit(1);
-        };
-        let outcome = match args.companion_revoke.as_deref() {
-            Some(id) => companion::revoke_pairing(&data_dir, id),
-            None => companion::list_pairings(&data_dir),
-        };
-        if let Err(err) = outcome {
-            eprintln!("error: {err}");
-            std::process::exit(1);
-        }
-        return;
-    }
-
     let _instance_guard = lifecycle::acquire_or_adopt(&mut instance_lock, &data_dir).await;
 
     let supervisor = match RoomSupervisor::new(data_dir.clone(), args.loopback) {
@@ -318,14 +228,12 @@ async fn main() {
     // whole life; process exit reaps it (same as the old spawned push_loop).
     drop(state.engine.start_push_loop());
 
-    // Shutdown triggers, installed BEFORE the (possibly slow) companion bind so
-    // a Ctrl-C / SIGTERM during startup is handled gracefully rather than by
-    // the default immediate-kill disposition. Ctrl-C covers all three OSes;
-    // SIGTERM is the Unix service-manager signal; stdin EOF is the portable
-    // parent-death signal in --supervised mode (the parent holds our stdin
-    // pipe; when it dies — even by kill -9 — the pipe closes). --supervised
-    // and --companion-pair are mutually exclusive, so nothing else reads stdin
-    // while the companion's line reader is active.
+    // Shutdown triggers, installed before the ready line so a Ctrl-C / SIGTERM
+    // during startup is handled gracefully rather than by the default
+    // immediate-kill disposition. Ctrl-C covers all three OSes; SIGTERM is the
+    // Unix service-manager signal; stdin EOF is the portable parent-death
+    // signal in --supervised mode (the parent holds our stdin pipe; when it
+    // dies — even by kill -9 — the pipe closes).
     {
         let tx = shutdown_tx.clone();
         tokio::spawn(async move {
@@ -367,50 +275,6 @@ async fn main() {
         });
     }
 
-    // The companion control plane (opt-in). Bound BEFORE the ready line so
-    // `ready` truthfully means "fully serving, companion included", and the
-    // bind (which prints nothing to stdout) never precedes the machine-readable
-    // line. Startup failures here are fatal — the operator explicitly asked for
-    // the endpoint — and take the graceful path so the portfile never goes
-    // stale. The bind is raced against the shutdown channel so a Ctrl-C during
-    // a slow bind aborts startup cleanly instead of waiting out the timeout.
-    if args.companion_reset_pairings {
-        if let Err(err) = companion::reset_pairings(&data_dir) {
-            error!("{err}");
-            lifecycle::graceful_shutdown(&state, "companion pairing reset failed").await;
-            drop(log_guard);
-            std::process::exit(1);
-        }
-    }
-    let mut companion = if args.companion_control || args.companion_pair {
-        let spawn = companion::spawn(companion::CompanionOptions {
-            data_dir: data_dir.clone(),
-            engine: state.engine.clone(),
-            pair: args.companion_pair,
-            supervised: args.supervised,
-        });
-        tokio::select! {
-            spawned = spawn => match spawned {
-                Ok(companion) => Some(companion),
-                Err(err) => {
-                    error!("{err}");
-                    lifecycle::graceful_shutdown(&state, "companion control startup failed").await;
-                    drop(log_guard);
-                    std::process::exit(1);
-                }
-            },
-            reason = shutdown_rx.recv() => {
-                let reason = reason.unwrap_or_else(|| "shutdown during companion startup".to_owned());
-                drop(listener);
-                lifecycle::graceful_shutdown(&state, &reason).await;
-                drop(log_guard);
-                std::process::exit(0);
-            }
-        }
-    } else {
-        None
-    };
-
     // The supervision contract: exactly one machine-readable JSON line on
     // stdout, first, before any human-readable output. The token is NOT here —
     // it lives in the 0600 portfile.
@@ -442,13 +306,6 @@ async fn main() {
             data_dir.display()
         );
     }
-    // Companion status + the pairing loop print AFTER the ready line so the
-    // machine-readable line stays first on stdout.
-    if let Some(companion) = companion.as_mut() {
-        println!("{}", companion.status_line());
-        companion.start_pairing();
-    }
-
     // Open the UI once we're bound and actually serving it (best-effort, never
     // fatal). Scripts, headless runs, and supervised sidecar runs never pop a
     // browser — in sidecar mode the parent app owns all UX.
@@ -484,12 +341,6 @@ async fn main() {
     // concurrent restart's health probe fails fast (connection refused) instead
     // of blocking on a socket whose accept loop has stopped.
     drop(listener);
-    // Companion first: its shutdown stops the pairing/stdin tasks, closes the
-    // Iroh endpoint so no session can install a key past the final snapshot,
-    // then writes that snapshot — all before the engine tears the rooms down.
-    if let Some(companion) = companion.take() {
-        companion.shutdown().await;
-    }
     lifecycle::graceful_shutdown(&state, &reason).await;
     // Flush the non-blocking file-log worker before the process dies —
     // std::process::exit runs no destructors, so drop the guard explicitly or
@@ -592,85 +443,32 @@ mod tests {
         );
     }
 
-    /// The administrative pairing commands take the data dir exclusively and
-    /// then exit. Every one of these combinations would otherwise reach that
-    /// path with a daemon's flags alongside it — or, for the hidden verifier
-    /// flag, exit 0 before the data dir is ever read, reporting success for a
-    /// revocation that never happened. Clap is what enforces this, so the
-    /// matrix is pinned here: dropping one entry from a `conflicts_with_all`
-    /// is otherwise a silent regression.
+    /// The companion control plane is removed (see
+    /// `docs/desktop-first-scope-decision.md`), so its five flags must no
+    /// longer parse. Pinned here because a re-entry that restores the plane
+    /// has to restore the flags deliberately, not by a stray merge.
+    ///
+    /// The assertion is on the error *kind*, not merely on "it errored".
+    /// `--companion-revoke` used to take a required `ID`, so a bare
+    /// `--companion-revoke` would fail for a missing value even with the flag
+    /// fully restored — an `is_err()` check would pass while the thing it
+    /// guards had come back. `UnknownArgument` is the only kind that actually
+    /// means "clap has never heard of this".
     #[test]
-    fn administrative_pairing_commands_refuse_daemon_flags() {
-        for argv in [
-            // The two admin commands are mutually exclusive.
-            vec![
-                "jeliyad",
-                "--companion-list-pairings",
-                "--companion-revoke",
-                "abcd",
-            ],
-            // Neither may combine with bringing the companion up…
-            vec![
-                "jeliyad",
-                "--companion-list-pairings",
-                "--companion-control",
-            ],
-            vec!["jeliyad", "--companion-list-pairings", "--companion-pair"],
-            vec![
-                "jeliyad",
-                "--companion-revoke",
-                "abcd",
-                "--companion-control",
-            ],
-            vec!["jeliyad", "--companion-revoke", "abcd", "--companion-pair"],
-            // …nor with forgetting every pairing at once.
-            vec![
-                "jeliyad",
-                "--companion-list-pairings",
-                "--companion-reset-pairings",
-            ],
-            vec![
-                "jeliyad",
-                "--companion-revoke",
-                "abcd",
-                "--companion-reset-pairings",
-            ],
+    fn the_removed_companion_flags_no_longer_parse() {
+        for flag in [
+            "--companion-control",
+            "--companion-pair",
+            "--companion-reset-pairings",
+            "--companion-list-pairings",
+            "--companion-revoke",
         ] {
-            assert!(
-                Args::try_parse_from(&argv).is_err(),
-                "must be rejected: {argv:?}"
-            );
-        }
-
-        // Each alone parses, so the rejections above are the conflicts and not
-        // a typo in a flag name.
-        assert!(Args::try_parse_from(["jeliyad", "--companion-list-pairings"]).is_ok());
-        let revoke = Args::try_parse_from(["jeliyad", "--companion-revoke", "abcd"])
-            .expect("revoke parses alone");
-        assert_eq!(revoke.companion_revoke.as_deref(), Some("abcd"));
-    }
-
-    #[cfg(feature = "relay-only-test")]
-    #[test]
-    fn the_relay_attestation_flag_cannot_mask_a_revocation() {
-        // That branch returns 0 before any data dir is read; combined with a
-        // revoke it would exit 0 having revoked nothing.
-        for argv in [
-            vec![
-                "jeliyad",
-                "--verification-relay-only-build",
-                "--companion-revoke",
-                "abcd",
-            ],
-            vec![
-                "jeliyad",
-                "--verification-relay-only-build",
-                "--companion-list-pairings",
-            ],
-        ] {
-            assert!(
-                Args::try_parse_from(&argv).is_err(),
-                "must be rejected: {argv:?}"
+            let err = Args::try_parse_from(["jeliyad", flag])
+                .expect_err("{flag} must no longer be accepted");
+            assert_eq!(
+                err.kind(),
+                clap::error::ErrorKind::UnknownArgument,
+                "{flag} must be unknown to clap, not merely rejected"
             );
         }
     }

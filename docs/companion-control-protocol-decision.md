@@ -4,7 +4,7 @@ title: "Companion control protocol and pairing transcript — decision record"
 description: "Adopts (2026-07-23) the mutually-authenticated, end-to-end-encrypted browser-to-companion control protocol (Noise XX-equivalent over the Iroh control ALPN), the SAS-confirmed pairing transcript, the non-extractable bounded-lifetime browser control key, the default-deny scope model, replay defense, and revocation, so Phase 1 deliverable D5 can be implemented under amendment A1."
 tags: ["protocol", "pairing", "companion", "security", "decision", "phase-1", "amendment-a1"]
 timestamp: "2026-07-23T00:00:00Z"
-status: "canonical"
+status: "deprecated"
 implementation_status: "planned"
 verification_status: "not-applicable"
 release_status: "unreleased"
@@ -12,6 +12,19 @@ audience: ["contributors", "maintainers", "security-reviewers"]
 ---
 
 # Companion control protocol and pairing transcript — decision record
+
+> **DEPRECATED 2026-07-26 — the plane this ADR specifies has been removed.**
+> The [desktop-operator-first scope decision](desktop-first-scope-decision.md)
+> defers the hosted browser plane, and the companion control plane and its
+> three crates are deleted from the tree. This record is **retained**, not
+> superseded in substance: it is the only specification of the protocol that
+> was removed, and it is the starting analysis for any hosted re-entry. The
+> preconditions any replacement must satisfy — the `room.join` confused-deputy
+> invariant, bounded authority for a second controller, and the fail-closed
+> authorization order — are carried forward in the scope decision.
+>
+> Its adoption below stands as a historical fact. Nothing in it describes code
+> that now exists.
 
 **Status: ADOPTED 2026-07-23** — ratified by the risk-owner of record (the
 merge of the adoption PR is the countersignature, per the recording-PR
@@ -159,11 +172,12 @@ Resolved at adoption (2026-07-23):
 This ADR is adopted (2026-07-23); the scaffolding relationship below is
 unchanged by adoption. The
 [independent Phase-1 security review](phase-1-security-review.md) found that
-[`crates/jeliya-control/src/lib.rs`](../crates/jeliya-control/src/lib.rs) —
-which exists and is merged on `main` — does not conform to this ADR, and
-**must not be cited as if it did**. The crate is **scaffolding** toward the
-construction this ADR specifies; its conformance is checked at the **D5b/D6
-review gate**, not at the Phase-1 gate. Specifically:
+`crates/jeliya-control/src/lib.rs` —
+which existed and was merged on `main` when the review was written, and has
+since been deleted — did **not** conform to this ADR, and **must not be cited
+as if it had**. The crate was **scaffolding** toward the construction this ADR
+specifies; its conformance was to be checked at the **D5b/D6 review gate**,
+not at the Phase-1 gate. Specifically:
 
 - **[F2](phase-1-security-review.md#f2--blocker-no-control-wire-format-exists-to-approve):
   no wire format exists to approve.** The crate exposes a Rust API
