@@ -89,7 +89,21 @@ maintenance/yank warnings are tracked with mitigation and an expiry of
   client, and measuring the stranded fraction belongs to amendment A3 of the
   [production deployment decision](production-deployment-decision.md).
 
-## Exit criteria for the next release
+## Exit criteria for the next release — the project's launch gate
+
+> **PROMOTED 2026-07-26.** These eight criteria used to govern "the next
+> release" while a separate first-launch gate governed the hosted origin. The
+> [desktop-operator-first scope decision](desktop-first-scope-decision.md)
+> defers the hosted plane and closes that gate unfired, so **this is now the
+> project's only launch gate**. Nothing in the list changes; what changes is
+> that nothing else stands behind it.
+>
+> One consequence worth stating, because its absence is easy to misread as an
+> oversight: **none of the eight requires OS code-signing.** They require signed
+> *evidence manifests* and verified checksums. Signing is deferred under its own
+> re-anchored trigger — it fires before the first release published without the
+> technical-preview label (see the
+> [code-signing deferral](signing-deferral-decision.md)).
 
 `v0.5.0` met its exit criteria and shipped on 2026-07-14. The next release
 reaches a release-authority decision only when the same bar is met at the
@@ -110,6 +124,43 @@ new candidate:
    [Release versus main](release-vs-main.md), and
    [Verification evidence](verification-evidence.md) match that final commit;
 8. explicit release authority is granted to the sole publishing job.
+
+## Carried-forward gaps
+
+Each of these is a durable result whose only written home was a document the
+[desktop-operator-first scope decision](desktop-first-scope-decision.md)
+deprecates. They are recorded here as **specified gaps**, not as plan: naming
+them is what stops them from surviving only in Git history.
+
+- **Owner removal via a signed `member.removed` event.** The only written design
+  for it lives in the agent-marketplace proposal, where it is incidental to a
+  feature that is not being built. It is not a marketplace concern: it is an
+  independently tracked **protocol gap**. Today `invite.cancel` authors a
+  `member.removed` against an *invited* identity, so the event type and its fold
+  already exist; what is missing is the owner-initiated path against an
+  *accepted member*, its authorization rule, and its interaction with the
+  architectural limit that revocation cannot recall material a peer already
+  received (see the
+  [threat model](security-threat-model.md#architectural-limits)).
+- **Recovery finding F7 — re-export does not rotate.** Exporting a recovery
+  bundle again produces an additional valid bundle; it does not invalidate the
+  previous one. **Every prior recovery key therefore stays valid indefinitely.**
+  This is a named limitation of a *shipped* feature, not a pending defect: a
+  user who believes re-exporting revokes an older bundle is wrong, and the
+  product must not imply otherwise. Fixing it requires rotation semantics that
+  the recovery-bundle decision does not currently define.
+- **The `room.timeline` limit clamp.** The upper bound on the requested limit
+  was defined only inside a crate this cut deletes; the daemon's own path has no
+  cap, so an unbounded `limit` reaches the store. The fix lands in
+  `jeliya-core`, next to the other room-scoped preflight rules, rather than in
+  any client.
+- **Point the distribution repository's security file at the centralized
+  intake.** Private vulnerability reporting is enabled on
+  `kortiene/app.jeliya.ai`, and that is where the disclosure channel now points.
+  The distribution repository `kortiene/jeliya` still needs its security file
+  aimed at the same intake, so a reporter who finds the binaries first is not
+  routed somewhere unmonitored. This is an **open operator action**, not an
+  engineering task.
 
 ## NEXT — after the preview
 

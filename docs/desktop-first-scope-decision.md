@@ -233,7 +233,7 @@ is deleted.
 | [Relay-auth admission rule](relay-auth-admission-rule-decision.md) | Deprecated. Its admission result is carried forward above. |
 | [Hostile-frontend containment](hostile-frontend-containment-decision.md) | Deprecated. Its anti-rollback and fail-open design is carried forward above. |
 | [Trusted Types policy allowlist](trusted-types-policy-decision.md) | Deprecated. |
-| [Portable Iroh Rooms traits](iroh-rooms-portable-traits-decision.md) | Deprecated. Its short-lived-audited-patch rule is retained as dependency policy. |
+| [Portable Iroh Rooms traits](iroh-rooms-portable-traits-decision.md) | Deprecated. Its short-lived-audited-patch rule is retained as dependency policy in [Dependency fork policy](verification-evidence.md#dependency-fork-policy). |
 | [Companion control protocol decision](companion-control-protocol-decision.md) | Deprecated. See the review-pin note below — this file cannot be left untouched. |
 | [Companion control wire protocol](control-wire-protocol.md) | Deprecated, **retained**. It is the remediation artifact that closed a blocker finding in the Phase 1 security review, and the only specification of the wire being removed. |
 | [Provider selection](provider-selection-decision.md) | Reduced in place: the DNS, CDN, edge-token, relay and object-store rows go dormant; the native-signing row survives. |
@@ -257,30 +257,50 @@ set**, or it survives only in Git history:
 
 - **Owner removal via a signed `member.removed` event.** The only written design
   for it lives in the agent-marketplace proposal, and it is an independently
-  tracked protocol gap, not a marketplace feature. Promote it to a specified gap
-  in the roadmap.
+  tracked protocol gap, not a marketplace feature. **Landed:**
+  [Carried-forward gaps](known-gaps-roadmap.md#carried-forward-gaps).
 - **The architectural limits.** Signatures prevent forgery but not copying;
   revocation cannot recall material a peer already received; a recovery bundle
-  restores identity authority and not unreplicated blobs. These belong in the
-  threat model as a standing section. They are the product's differentiator and
-  must survive every future cut.
+  restores identity authority and not unreplicated blobs. They are the
+  product's differentiator and must survive every future cut. **Landed:**
+  [Architectural limits](security-threat-model.md#architectural-limits), a
+  standing section in the threat model.
 - **The invite residual-disclosure list**, including the channels that fire with
-  no user action.
+  no user action. **Landed:** [Invite-ticket residual
+  disclosure](security-threat-model.md#invite-ticket-residual-disclosure).
+  Re-anchored on arrival: the two no-user-action channels were conditional on a
+  join **URL**, which desktop-first does not have — invites are ticket strings
+  copied to the clipboard — so they are restated as a standing constraint on any
+  future URL-borne delivery rather than a present exposure. The four
+  clipboard-and-screenshot channels are live today.
 - **Why the loopback daemon must not be public** — the complete constructional
   argument, which is now the boundary statement for the only surface that
-  exists.
+  exists. **Landed:** [Why the loopback daemon must not be
+  public](security-threat-model.md#why-the-loopback-daemon-must-not-be-public).
+  The "two honest limits" paragraph, which was stranded inside the now-dormant
+  hosted-boundaries section and is sharper than the carried text, moved up with
+  it.
 - **Recovery finding F7:** re-export does not rotate, so every prior recovery
   key stays valid indefinitely. A named limitation of a shipped feature.
+  **Landed:** [Carried-forward gaps](known-gaps-roadmap.md#carried-forward-gaps).
 - **The `room.timeline` limit clamp.** The upper bound was defined only in a
-  crate being deleted; the daemon's own path has no cap. This becomes a named
-  gap with the fix landing in `jeliya-core`.
+  crate being deleted; the daemon's own path has no cap. **Landed:**
+  [Carried-forward gaps](known-gaps-roadmap.md#carried-forward-gaps), with the
+  fix specified to land in `jeliya-core`.
 - **The cross-implementation conformance method** — one committed golden corpus
   exercised by both implementations — as the project's standard for any future
-  second implementation.
+  second implementation. **Landed:** [Conformance
+  method](verification-evidence.md#conformance-method). Recorded there rather
+  than in `PROTOCOL.md`, which is the more natural home but sits in the Phase 1
+  review's reopen set; adding a documentation section is not worth reopening a
+  closed security review.
 - **The short-lived-audited-patch rule** for any dependency fork: short-lived by
-  rule, not by hope.
+  rule, not by hope. **Landed:** [Dependency fork
+  policy](verification-evidence.md#dependency-fork-policy).
 - **The open operator action** to point the distribution repository's security
-  file at the centralized intake.
+  file at the centralized intake. **Landed:** [Carried-forward
+  gaps](known-gaps-roadmap.md#carried-forward-gaps), recorded as an open
+  operator action rather than an engineering task.
 
 ## Consequences — issues, gates, and the signing trigger
 

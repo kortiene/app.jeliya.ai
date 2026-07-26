@@ -4,7 +4,7 @@ title: "Production deployment architecture — decision record"
 description: "Adopts the capability-aware hybrid architecture and the companion-backed first slice for app.jeliya.ai, subject to six binding amendments drawn from the adversarial review."
 tags: ["architecture", "deployment", "decision", "security", "roadmap", "governance"]
 timestamp: "2026-07-20T13:20:00Z"
-status: "canonical"
+status: "deprecated"
 implementation_status: "planned"
 verification_status: "partial"
 release_status: "unreleased"
@@ -12,6 +12,13 @@ audience: ["contributors", "maintainers", "product", "release-engineers", "secur
 ---
 
 # Production deployment architecture — decision record
+
+> **DEPRECATED 2026-07-26 — superseded for scope by the [desktop-operator-first scope decision](desktop-first-scope-decision.md).**
+> Amendments A1 through A6 go dormant with the phases they serve. A1's
+> invariant survives: a browser controller must never be able to cause the
+> device to author a signed membership event into a room the human did not
+> name. It is carried forward in the scope decision's preconditions, which any
+> hosted re-entry must satisfy before it is built.
 
 **Status: DECIDED 2026-07-19 — Jeliya adopts the capability-aware hybrid
 architecture described in [Production deployment

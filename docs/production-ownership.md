@@ -13,6 +13,18 @@ audience: ["maintainers", "release-engineers", "security-reviewers", "operators"
 
 # Production ownership record
 
+> **REDUCED IN PLACE 2026-07-26.** The [desktop-operator-first scope decision](desktop-first-scope-decision.md)
+> defers the hosted browser plane, so the zone, CDN, relay and edge-token
+> custody rows below own nothing that exists and are **dormant**, retained as
+> re-entry analysis.
+>
+> The **repository** and **signing** custody rows stay live and binding — they
+> govern the only distribution channel there is. So does the record's open
+> single point of failure: **a named deputy still does not exist**, and that
+> gap now sits on the repository and release keys rather than on hosted
+> infrastructure. It survives this cut rather than going dormant with the
+> plane.
+
 This is the Phase 0 deliverable "confirm DNS, CDN, relay, and signing
 ownership" from [Production deployment
 architecture](production-deployment.md#dependency-ordered-roadmap-and-gates).

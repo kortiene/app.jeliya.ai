@@ -4,7 +4,7 @@ title: "Production deployment architecture review"
 description: "Adversarially verified three-track review of the production deployment proposal, recording every surviving finding, every refuted finding, and every claim checked and found accurate."
 tags: ["architecture", "deployment", "review", "verification", "security", "evidence"]
 timestamp: "2026-07-19T00:08:29Z"
-status: "canonical"
+status: "deprecated"
 implementation_status: "not-applicable"
 verification_status: "partial"
 release_status: "not-applicable"
@@ -12,6 +12,12 @@ audience: ["contributors", "maintainers", "security-reviewers", "release-enginee
 ---
 
 # Production deployment architecture review
+
+> **DEPRECATED 2026-07-26 — retained as the verified finding set.** The
+> [desktop-operator-first scope decision](desktop-first-scope-decision.md) defers the plane this review
+> examined. The findings behind the six amendments are kept intact: they are
+> what the deferred work paid for, and re-entry should start from them rather
+> than rediscover them.
 
 This page is the evidence record for the technical review of
 [Production deployment architecture](production-deployment.md). It records every finding

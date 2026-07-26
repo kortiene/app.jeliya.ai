@@ -4,7 +4,7 @@ title: "Trusted Types policy allowlist — decision record"
 description: "Names an explicit trusted-types directive in the production header set alongside require-trusted-types-for 'script'. The shell creates exactly one narrow policy, jeliya-sw, to mint the TrustedScriptURL for service-worker registration; any off-allowlist trustedTypes.createPolicy() throws, and no policy named default is created. The allowlist is scoped to the current React/Vite shell and re-examined — not pre-broadened — when the worker-hosted Wasm runtime lands. The CSP and Trusted Types per-PR tests assert an off-allowlist policy throws and that service-worker registration still succeeds under the served directive. Issue #46."
 tags: ["decision", "deployment", "security", "trusted-types", "csp", "phase-3"]
 timestamp: "2026-07-24T20:00:00Z"
-status: "canonical"
+status: "deprecated"
 implementation_status: "planned"
 verification_status: "unverified"
 release_status: "unreleased"
@@ -12,6 +12,11 @@ audience: ["maintainers", "operators", "security-reviewers", "frontend", "releas
 ---
 
 # Trusted Types policy allowlist — decision record
+
+> **DEPRECATED 2026-07-26 — nothing remains to carry the policy.** The
+> [desktop-operator-first scope decision](desktop-first-scope-decision.md) removes the hosted origin and
+> the service worker, so there is no document to serve a Trusted Types policy
+> allowlist on. Retained as the analysis a re-entry would restart from.
 
 **Status: DECIDED 2026-07-24 —** This record names the **`trusted-types`** directive
 that the production header set must carry alongside the baseline CSP's

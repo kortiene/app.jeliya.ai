@@ -4,7 +4,7 @@ title: "Relay-auth admission rule and minting-cost bound — decision record"
 description: "Defines what admits a relay-credential mint at relay-auth.jeliya.ai: a layered rule that mints only to a companion-countersigned non-extractable control key (proof of possession over an endpoint-bound challenge), bounds volume with per-control-key quotas and a global daily minting budget that sheds automatically at the #45 ceilings, reserves capacity for established paired keys under shed, and defers a privacy-preserving scarcity anchor behind a named trigger. Issue #49."
 tags: ["decision", "deployment", "relay", "relay-auth", "abuse", "cost", "security", "phase-3"]
 timestamp: "2026-07-24T13:00:00Z"
-status: "canonical"
+status: "deprecated"
 implementation_status: "planned"
 verification_status: "unverified"
 release_status: "unreleased"
@@ -12,6 +12,13 @@ audience: ["contributors", "maintainers", "release-engineers", "operators", "sec
 ---
 
 # Relay-auth admission rule and minting-cost bound — decision record
+
+> **DEPRECATED 2026-07-26 — superseded by the [desktop-operator-first scope decision](desktop-first-scope-decision.md).**
+> Its central result is carried forward and does **not** depend on the relay
+> design that produced it: a public-key identity is free to mint, so no limit
+> keyed on one can bind, and any admission control for a shared resource must
+> anchor on something scarce. That result now lives in the scope decision's
+> preconditions on any hosted re-entry.
 
 **Status: DECIDED 2026-07-24 —** This record settles issue
 [#49](https://github.com/kortiene/app.jeliya.ai/issues/49): it replaces the

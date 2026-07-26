@@ -17,7 +17,7 @@ CI rules for every page in this wiki.
 ## Current status and evidence
 
 - [Capability status](capability-status.md) - What is implemented, verified, and publicly released as of v0.5.0 and the post-release candidate.
-- [Platform matrix](platform-matrix.md) - Runtime, packaging, verification, and release status by operating system and artifact.
+- [Platform matrix](platform-matrix.md) - **Reduced in place** — browser and mobile columns dormant; the 320 CSS px reflow target is NOT part of them. Runtime, packaging, verification, and release status by operating system and artifact.
 - [Release versus main](release-vs-main.md) - Exact boundary between released v0.5.0, its certified evidence, and the post-release candidate on main.
 - [Verification evidence](verification-evidence.md) - Revision-bound milestone ledger, remote-test record, and evidence-sanitization contract.
 - [Known gaps and roadmap](known-gaps-roadmap.md) - Release blockers, deferred risks, owners, and the NOW/NEXT/LATER boundary.
@@ -32,17 +32,17 @@ CI rules for every page in this wiki.
 - [Cross-client design tokens](design-tokens.md) - Mapping from every design-token concept to its React custom property, the shared fixture, and the gate that enforces it.
 - [Agent orchestration](agent-orchestration.md) - Normative contract for agent liveness, task claims, fleet reads, and UI projections.
 - [Security and threat model](security-threat-model.md) - Assets, trust boundaries, threats, controls, and residual risks for the technical preview.
-- [Production deployment decision](production-deployment-decision.md) - Decision record adopting the capability-aware hybrid architecture and the companion-backed first slice for app.jeliya.ai, and the six amendments binding its phase gates.
-- [Production ownership record](production-ownership.md) - Who controls the jeliya.ai zone, CDN, relay, edge-token, and signing accounts, and who can approve a production change (Phase 0 deliverable, issue #24).
-- [Production provider selection decision](provider-selection-decision.md) - Decision record confirming the DNS, CDN, edge-token, relay, object-store, IaC, and native-signing provider set for app.jeliya.ai, with its reversibility position (Phase 0 deliverable, issue #27).
-- [Relay load and cost ceilings decision](relay-load-and-cost-ceilings-decision.md) - Canonical / decided 2026-07-24 (issue #45): the closed-beta load profile and hard ceilings — 1,024 GiB/mo relay egress, 2M/day token mints, $900/mo all-in spend cap (alert fractions stated), sized at a conservative $0.15/GiB — for production, staging, CI, and dev relays, with the Phase 3 gate restated against them; blocks #49.
-- [Relay-auth admission rule decision](relay-auth-admission-rule-decision.md) - Canonical / decided 2026-07-24 (issue #49): the layered rule that admits a relay-credential mint — companion-countersigned non-extractable control key (proof of possession over an endpoint-bound challenge), per-key quotas, and a global daily minting budget that auto-sheds at the #45 ceilings with a reserve for established paired keys; a privacy-preserving scarcity anchor (proof-of-work) is deferred behind a named trigger.
-- [Trust, safety, and legal ownership decision](trust-safety-and-legal-decision.md) - Canonical / decided 2026-07-24 (issue #47, amendment A6): names the maintainer as sole operator and abuse/triage/launch owner, the GitHub-private-reporting beta abuse channel with per-class response times, the retention + lawful-basis position (72h security logs, no room content, EU relay residency, GDPR Art 6(1)(f) legitimate interest), and the takedown-limit statement (the operator cannot read content or recall distributed material); adds three A6 items to the Phase 3 launch gate. Legal review is a named pre-launch dependency.
-- [Hosted-origin vulnerability disclosure decision](vulnerability-disclosure-decision.md) - Canonical / decided 2026-07-24 (issue #48): publishes the security disclosure path for the hosted origin and extends SECURITY.md to the new surfaces — corrects the private-reporting channel to this repo (kortiene/app.jeliya.ai), specifies the RFC 9116 `/.well-known/security.txt` file and its serving requirements, states the companion control ALPN and relay-auth Worker trust boundaries, and commits that every origin-only fix earns a published GitHub Security Advisory with a stated scoped-user-notification trigger. Pairs with A6; serving security.txt is a Phase-3 gate item.
-- [Trusted Types policy allowlist decision](trusted-types-policy-decision.md) - Canonical / decided 2026-07-24 (issue #46): names an explicit `trusted-types jeliya-sw` directive in the production header set alongside `require-trusted-types-for 'script'` — one narrow named policy that mints the TrustedScriptURL for service-worker registration, with any off-allowlist `createPolicy()` (including `default`) throwing, explicitly not `trusted-types 'none'` (which would break the planned service worker), scoped to the current React/Vite shell and re-examined when the Wasm worker runtime lands. The CSP/Trusted-Types per-PR tests assert an off-allowlist policy throws and the SW still registers.
-- [Hostile-frontend containment decision](hostile-frontend-containment-decision.md) - Canonical / decided 2026-07-24 (issue #44, amendment A2): separates the 15-minute CDN-pointer rollback (clean bytes available) from a hostile-code-termination objective (hostile code stops running, worst case ~24h + a navigation), and specifies the two mechanisms that evict a hostile web shell — a `Clear-Site-Data` incident header served from the rolled-back origin on the SW-script path and index.html, and a signed web-shell kill-switch document (release-chain-signed, monotonic anti-rollback floor) the service worker checks on activate/navigation and self-terminates on, failing open when the document is unreachable so the offline shell survives. Adds the runbook eviction step, a hostile-shell eviction smoke test, and the gate split.
-- [Supported platform matrix decision](platform-matrix-decision.md) - Decision record fixing the first-slice supported desktop OS and browser matrix, its mobile position under amendment A4, the test-lane mapping, and the pairing-success denominator.
-- [Portable Iroh Rooms traits decision](iroh-rooms-portable-traits-decision.md) - Decision record choosing the audited short-lived patch path for the browser peer's portable store, blob, transport, clock, and task-scheduling traits, with its audit owner and recurring cost.
+- [Production deployment decision](production-deployment-decision.md) - **Deprecated / archived plane.** Decision record adopting the capability-aware hybrid architecture and the companion-backed first slice for app.jeliya.ai, and the six amendments binding its phase gates.
+- [Production ownership record](production-ownership.md) - **Reduced in place** — repository and signing custody are live; zone, CDN, relay and edge-token custody are dormant. Who controls the jeliya.ai zone, CDN, relay, edge-token, and signing accounts, and who can approve a production change (Phase 0 deliverable, issue #24).
+- [Production provider selection decision](provider-selection-decision.md) - **Reduced in place** — only the native-signing selection is live. Decision record confirming the DNS, CDN, edge-token, relay, object-store, IaC, and native-signing provider set for app.jeliya.ai, with its reversibility position (Phase 0 deliverable, issue #27).
+- [Relay load and cost ceilings decision](relay-load-and-cost-ceilings-decision.md) - **Deprecated / archived plane.** Was canonical, decided 2026-07-24 (issue #45): the closed-beta load profile and hard ceilings — 1,024 GiB/mo relay egress, 2M/day token mints, $900/mo all-in spend cap (alert fractions stated), sized at a conservative $0.15/GiB — for production, staging, CI, and dev relays, with the Phase 3 gate restated against them; blocks #49.
+- [Relay-auth admission rule decision](relay-auth-admission-rule-decision.md) - **Deprecated / archived plane.** Was canonical, decided 2026-07-24 (issue #49): the layered rule that admits a relay-credential mint — companion-countersigned non-extractable control key (proof of possession over an endpoint-bound challenge), per-key quotas, and a global daily minting budget that auto-sheds at the #45 ceilings with a reserve for established paired keys; a privacy-preserving scarcity anchor (proof-of-work) is deferred behind a named trigger.
+- [Trust, safety, and legal ownership decision](trust-safety-and-legal-decision.md) - **Reduced in place** — the takedown limit and both named human dependencies stay live. Canonical / decided 2026-07-24 (issue #47, amendment A6): names the maintainer as sole operator and abuse/triage/launch owner, the GitHub-private-reporting beta abuse channel with per-class response times, the retention + lawful-basis position (72h security logs, no room content, EU relay residency, GDPR Art 6(1)(f) legitimate interest), and the takedown-limit statement (the operator cannot read content or recall distributed material); adds three A6 items to the Phase 3 launch gate. Legal review is a named pre-launch dependency.
+- [Hosted-origin vulnerability disclosure decision](vulnerability-disclosure-decision.md) - **Reduced in place** — the disclosure path and private reporting stay live. Canonical / decided 2026-07-24 (issue #48): publishes the security disclosure path for the hosted origin and extends SECURITY.md to the new surfaces — corrects the private-reporting channel to this repo (kortiene/app.jeliya.ai), specifies the RFC 9116 `/.well-known/security.txt` file and its serving requirements, states the companion control ALPN and relay-auth Worker trust boundaries, and commits that every origin-only fix earns a published GitHub Security Advisory with a stated scoped-user-notification trigger. Pairs with A6; serving security.txt is a Phase-3 gate item.
+- [Trusted Types policy allowlist decision](trusted-types-policy-decision.md) - **Deprecated / archived plane.** Was canonical, decided 2026-07-24 (issue #46): names an explicit `trusted-types jeliya-sw` directive in the production header set alongside `require-trusted-types-for 'script'` — one narrow named policy that mints the TrustedScriptURL for service-worker registration, with any off-allowlist `createPolicy()` (including `default`) throwing, explicitly not `trusted-types 'none'` (which would break the planned service worker), scoped to the current React/Vite shell and re-examined when the Wasm worker runtime lands. The CSP/Trusted-Types per-PR tests assert an off-allowlist policy throws and the SW still registers.
+- [Hostile-frontend containment decision](hostile-frontend-containment-decision.md) - **Deprecated / archived plane.** Was canonical, decided 2026-07-24 (issue #44, amendment A2): separates the 15-minute CDN-pointer rollback (clean bytes available) from a hostile-code-termination objective (hostile code stops running, worst case ~24h + a navigation), and specifies the two mechanisms that evict a hostile web shell — a `Clear-Site-Data` incident header served from the rolled-back origin on the SW-script path and index.html, and a signed web-shell kill-switch document (release-chain-signed, monotonic anti-rollback floor) the service worker checks on activate/navigation and self-terminates on, failing open when the document is unreachable so the offline shell survives. Adds the runbook eviction step, a hostile-shell eviction smoke test, and the gate split.
+- [Supported platform matrix decision](platform-matrix-decision.md) - **Reduced in place** to its desktop-OS axis. Decision record fixing the first-slice supported desktop OS and browser matrix, its mobile position under amendment A4, the test-lane mapping, and the pairing-success denominator.
+- [Portable Iroh Rooms traits decision](iroh-rooms-portable-traits-decision.md) - **Deprecated / archived plane.** Decision record choosing the audited short-lived patch path for the browser peer's portable store, blob, transport, clock, and task-scheduling traits, with its audit owner and recurring cost.
 - [Phase 0 go/no-go gate verdict](phase-0-gate-verdict.md) - Dated verdict against each of the six Phase 0 gate conditions for the v0.6.0 candidate (922f620 + a5d98b70), each with linked evidence (issue #31).
 - [Phase 1 go/no-go gate verdict](phase-1-gate-verdict.md) - GO recorded 2026-07-22: risk-owner countersigned the row #7 APPROVE-WITH-CONDITIONS re-review against candidate `df28f6a`; Phase 2 may begin; row #2 OPEN as accepted risk (opt-in encryption, F5); verdict conditions tracked.
 - [Phase 1 security review scope](phase-1-security-review-scope.md) - The review package for gate row #7: the wire formats, key lifecycle, and enforcement surfaces, with files, tests, and design rationale.
@@ -51,9 +51,9 @@ CI rules for every page in this wiki.
 - [Phase 1 implementation plan](phase-1-plan.md) - Sequencing, dependency order, gate mapping, and per-deliverable tasks for the seven Phase 1 production-identity and protocol-primitive deliverables unlocked by the Phase 0 gate.
 - [Recovery bundle decision](recovery-bundle-decision.md) - Canonical / partial (ADR #3, amended 2026-07-21): versioned authenticated-encryption recovery bundle keyed by a random 256-bit key, user-held custody, and optional opaque cloud hosting; Phase-1 D1 slice adopted, password wrap + wider payload + setup-time test_restore are Phase 2 / unwired.
 - [Room device key decision](room-device-key-decision.md) - Canonical / complete (issue #91): deterministic per-room device keys derived from the profile device seed (versioned BLAKE3 derive_key context), resolved through the room's signed membership binding, with a legacy collision guard — fixes multi-room live-receive collision without new persisted secrets or recovery-bundle changes.
-- [Companion control protocol decision](companion-control-protocol-decision.md) - Canonical / adopted 2026-07-23 (ADR #2, control-key lifetime default fixed at 30 days): mutually-authenticated E2EE browser-to-companion control protocol (Noise XX-equivalent), SAS-confirmed pairing, non-extractable bounded-lifetime control key, default-deny scopes, replay defense, and revocation; D5b is now implementable, conformance checked at the D5b/D6 review gate.
-- [Companion control wire protocol v1 (D5b/D6)](control-wire-protocol.md) - Draft / partial: the byte-level wire ADR #2 defers to D5 — the `/jeliya/control/1` ALPN, the D6 version hellos bound into the Noise `Noise_XX_25519_AESGCM_SHA256` prologue, the transcript-derived SAS, scoped-RPC framing with per-session replay windows, pairing enrollment, rate limits, revocation teardown, and persistence. Implemented in `crates/jeliya-protocol` + `crates/jeliya-control`; the Iroh transport and browser controller are the remaining D5b work. The D5b/D6 independent review gate approves it.
-- [Code-signing deferral decision](signing-deferral-decision.md) - Decision record deferring code-signing (the signing gate and #25) until after the full system is deployed and tested, so signing never blocks development.
+- [Companion control protocol decision](companion-control-protocol-decision.md) - **Deprecated / archived plane.** Was canonical, adopted 2026-07-23 (ADR #2, control-key lifetime default fixed at 30 days): mutually-authenticated E2EE browser-to-companion control protocol (Noise XX-equivalent), SAS-confirmed pairing, non-extractable bounded-lifetime control key, default-deny scopes, replay defense, and revocation; D5b is now implementable, conformance checked at the D5b/D6 review gate.
+- [Companion control wire protocol v1 (D5b/D6)](control-wire-protocol.md) - **Deprecated / archived plane.** The byte-level specification of the control wire that ADR #2 deferred to D5 — the `/jeliya/control/1` ALPN, the D6 version hellos bound into the Noise `Noise_XX_25519_AESGCM_SHA256` prologue, the transcript-derived SAS, scoped-RPC framing with per-session replay windows, pairing enrollment, rate limits, revocation teardown, and persistence. The implementing crates were deleted by the desktop-operator-first scope decision; this page is retained as the only specification of the removed wire and as the remediation artifact that closed a Phase 1 blocker finding.
+- [Code-signing deferral decision](signing-deferral-decision.md) - Canonical / trigger re-anchored 2026-07-26: defers code-signing (the signing gate and #25) until the first release published without the technical-preview label, so signing never blocks development. The original "after Phase 5" trigger could never fire once the phases were deferred. Until the gate fires, archives ship with SHA-256 sidecars and the installers' fail-closed verified-checksum behaviour is the enforced contract.
 
 ## Agents
 
@@ -62,8 +62,8 @@ CI rules for every page in this wiki.
 ## Proposals
 
 - [Agent marketplace architecture](agent-marketplace.md) - Proposed, not-yet-implemented hosted-agent marketplace architecture, trust model, product flow, and delivery plan.
-- [Production deployment architecture](production-deployment.md) - Repository-grounded assessment, hybrid browser/native/server target, trust boundaries, infrastructure, release gates, and the first production slice for app.jeliya.ai.
-- [Production deployment architecture review](production-deployment-review.md) - Adversarially verified findings, refuted candidates, and confirmed claims behind the six amendments carried by the deployment decision record.
+- [Production deployment architecture](production-deployment.md) - **Deprecated / archived plane, retained whole as the re-entry artifact.** Was a proposal. Repository-grounded assessment, hybrid browser/native/server target, trust boundaries, infrastructure, release gates, and the first production slice for app.jeliya.ai.
+- [Production deployment architecture review](production-deployment-review.md) - **Deprecated / archived plane.** Was canonical. Adversarially verified findings, refuted candidates, and confirmed claims behind the six amendments carried by the deployment decision record.
 
 ## Operations and release evidence
 
@@ -80,3 +80,49 @@ CI rules for every page in this wiki.
 - [French glossary](glossary-fr.md) - Canonical French terminology and localization decisions.
 - [Naming decision](naming.md) - Decision record and trademark research supporting the rename to Jeliya.
 - [Documentation profile](PROFILE.md) - Metadata, navigation, linking, and CI rules for this wiki.
+
+## Archived plane — deferred, retained
+
+The [desktop-operator-first scope decision](desktop-first-scope-decision.md)
+defers the hosted browser plane behind a named re-entry trigger. **Nothing
+below is deleted, and nothing below describes code that is being built.** Each
+page is retained because a deferral's value is that the analysis survives for
+whoever re-enters — and several of them are the only written home of a result
+that is still binding.
+
+The entries themselves stay in their original sections above, so links from
+elsewhere in the wiki keep resolving. This section is a reading guide, not a
+second index.
+
+- **Start here on re-entry:** [Production deployment
+  architecture](production-deployment.md), retained whole as the starting
+  analysis, and the [preconditions any hosted re-entry must
+  satisfy](desktop-first-scope-decision.md#preconditions-on-any-hosted-re-entry)
+  — which is the part that binds.
+- **Deprecated and retained:** the production deployment
+  [decision](production-deployment-decision.md) and
+  [review](production-deployment-review.md); [relay load and cost
+  ceilings](relay-load-and-cost-ceilings-decision.md); the [relay-auth admission
+  rule](relay-auth-admission-rule-decision.md); [hostile-frontend
+  containment](hostile-frontend-containment-decision.md); the [Trusted Types
+  policy](trusted-types-policy-decision.md); [portable Iroh Rooms
+  traits](iroh-rooms-portable-traits-decision.md); [ADR #2, the companion
+  control protocol](companion-control-protocol-decision.md); and the [companion
+  control wire protocol](control-wire-protocol.md).
+- **Reduced in place — read the banner for which half still binds:** [provider
+  selection](provider-selection-decision.md), [production
+  ownership](production-ownership.md), the [platform matrix
+  decision](platform-matrix-decision.md) and [platform
+  matrix](platform-matrix.md), [trust, safety and
+  legal](trust-safety-and-legal-decision.md), [vulnerability
+  disclosure](vulnerability-disclosure-decision.md), and the [security threat
+  model](security-threat-model.md).
+- **Results that outlived their homes:** the [architectural
+  limits](security-threat-model.md#architectural-limits), [why the loopback
+  daemon must not be
+  public](security-threat-model.md#why-the-loopback-daemon-must-not-be-public),
+  [invite-ticket residual
+  disclosure](security-threat-model.md#invite-ticket-residual-disclosure), the
+  [conformance method](verification-evidence.md#conformance-method), the
+  [dependency fork policy](verification-evidence.md#dependency-fork-policy), and
+  the [carried-forward gaps](known-gaps-roadmap.md#carried-forward-gaps).

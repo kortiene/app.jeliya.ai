@@ -4,7 +4,7 @@ title: "Companion control wire protocol v1 (D5b/D6) — specification"
 description: "The versioned control-wire format ADR #2 decision 10 defers to D5: the /jeliya/control/1 ALPN, the plaintext version negotiation (D6) bound into the Noise XX prologue, the Noise_XX_25519_AESGCM_SHA256 handshake, the transcript-derived SAS, the encrypted capability exchange, the scoped-RPC framing with per-session nonce replay windows, pairing enrollment, rate limits, revocation teardown, and the persistence records — the byte-level artifact the D5b/D6 independent review gate approves."
 tags: ["protocol", "pairing", "companion", "security", "wire-format", "phase-2", "d5b", "d6"]
 timestamp: "2026-07-23T00:00:00Z"
-status: "draft"
+status: "deprecated"
 implementation_status: "partial"
 verification_status: "not-applicable"
 release_status: "unreleased"
@@ -12,6 +12,23 @@ audience: ["contributors", "maintainers", "security-reviewers"]
 ---
 
 # Companion control wire protocol v1 (D5b/D6) — specification
+
+> **DEPRECATED 2026-07-26 — the wire this specifies has been removed, and this
+> document is deliberately RETAINED.** The
+> [desktop-operator-first scope decision](desktop-first-scope-decision.md) deletes `jeliya-protocol`,
+> `jeliya-control`, `jeliya-companion` and `ui/src/lib/control/`. Two reasons
+> it is kept rather than deleted: it is the remediation artifact that closed a
+> blocker finding in the Phase 1 security review, and it is the only
+> specification of the protocol that was removed.
+>
+> **One correction, recorded because the file is now read as history.** The
+> summary line's statement of the gateway ordering is wrong and contradicts
+> this document's own normative section further down. The normative section and
+> the removed code were correct. The order is identity, then revocation, then
+> expiry, then scope, then per-room binding, then replay — with **rate limiting
+> charged separately and earlier**, on every request from an admitted key,
+> before method lookup and parameter validation. The order is the invariant,
+> not an implementation detail, and any replacement must preserve it.
 
 **Status: DRAFT — subject to the D5b/D6 independent review gate.** This
 document is the wire-format specification that

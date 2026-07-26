@@ -13,6 +13,25 @@ audience: ["maintainers", "operators", "security-reviewers", "product", "release
 
 # Trust, safety, and legal ownership — decision record
 
+> **REDUCED IN PLACE 2026-07-26.** The [desktop-operator-first scope decision](desktop-first-scope-decision.md)
+> defers the hosted browser plane. The origin-publication mechanics below —
+> everything that presumes an operated public origin, its abuse surface and its
+> takedown workflow — are **dormant**, retained as re-entry analysis.
+>
+> Three things survive the cut and are **live**:
+>
+> - **The takedown-limit statement.** What the operator can and cannot reach is
+>   a property of the peer-to-peer architecture, not of the hosted origin, and
+>   it is unchanged by deferring the plane.
+> - **The qualified legal review of the lawful-basis position.** No longer a
+>   launch blocker — the project now processes no user data on infrastructure it
+>   operates — but it is **not discharged**. It re-enters as a pre-launch
+>   condition with the hosted plane. The funding re-entry trigger requires
+>   funding that *covers* it; completion gates a hosted launch.
+> - **The named production deputy.** This remains an **open single point of
+>   failure** on the repository and release keys and should be tracked as such
+>   rather than closed with the phase.
+
 **Status: DECIDED 2026-07-24 —** This record makes the amendment **A6**
 ([production deployment decision](production-deployment-decision.md) §A6)
 decisions for issue [#47](https://github.com/kortiene/app.jeliya.ai/issues/47):

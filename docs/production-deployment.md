@@ -4,7 +4,7 @@ title: "Production deployment architecture"
 description: "Repository-grounded assessment, target architecture, security boundaries, infrastructure plan, and phased gates for deploying Jeliya at app.jeliya.ai."
 tags: ["architecture", "deployment", "production", "security", "pwa", "iroh"]
 timestamp: "2026-07-20T13:20:00Z"
-status: "proposal"
+status: "deprecated"
 implementation_status: "planned"
 verification_status: "partial"
 release_status: "unreleased"
@@ -12,6 +12,14 @@ audience: ["contributors", "maintainers", "operators", "product", "release-engin
 ---
 
 # Production deployment architecture
+
+> **DEPRECATED 2026-07-26 — retained whole as the re-entry artifact.** The
+> [desktop-operator-first scope decision](desktop-first-scope-decision.md) defers Phases 2 through 5. This
+> document is **not** deleted and **not** trimmed: it is the starting analysis
+> if the hosted plane is ever re-entered, and its Phase 3 and Phase 4 bodies
+> carry navigation links that other retained records depend on. Read it as
+> history and as a plan that may resume — never as a description of what is
+> being built.
 
 This document is the decision-ready plan for making Jeliya safely usable from
 `https://app.jeliya.ai` while preserving its local-first, peer-to-peer,
