@@ -26,6 +26,23 @@ UI, the peer-to-peer core, the agent and fleet plane, the recovery bundle, or
 the release-evidence pipeline. It does not discharge an issue: it closes four
 epics and re-scopes six.
 
+**How this record lands.** The sections below are stated in the present tense
+because they state what is *decided*, which is settled the moment this record
+is adopted. They are not a report of the tree's current state. The consequences
+land in their own reviewable change sets, in this order, each verifiable
+against the checklist at the end:
+
+| Change set | Discharges |
+|---|---|
+| this record | the decision itself, and its index entry |
+| the code removal | [Consequences — code](#consequences--code), in one commit, plus the mandatory link repairs and the ADR #2 re-pin |
+| the document pass | [Consequences — documents](#consequences--documents) and [Carried forward](#carried-forward-before-anything-is-deleted) |
+| the housekeeping pass | [issues, gates, and the signing trigger](#consequences--issues-gates-and-the-signing-trigger) |
+
+Until the last of those merges, this record describes a decision in force whose
+consequences are partly outstanding. That is the normal state of a decision
+record between adoption and discharge, and the checklist is what closes it.
+
 ## Decision
 
 1. **The product's front door is the installed daemon.** A user obtains Jeliya
@@ -81,9 +98,14 @@ The price of removing that step was never the engineering alone. It was:
   strongest single argument for the cut.
 
 Two facts about the current tree support the timing. The companion control
-plane has never shipped: the three crates landed after the `v0.6.0` tag, so no
-released binary has ever contained them, and the whole plane is reachable only
-behind opt-in flags. And it does not currently work — issue #115 records that
+plane has never shipped, and the claim is checkable rather than asserted: the
+three crates are **absent from the `v0.6.0` tagged tree**, which contains only
+`jeliya-core`, `jeliya-ffi` and `jeliyad` — `jeliya-control` first appears in
+`cdcae83` (PR #78) and `jeliya-companion` in `f51ae85` (PR #101). No published
+release contains them either: `v0.5.0` is the last release actually built and
+published, and per the [verification evidence](verification-evidence.md) the
+public `v0.6.0` tag does not exist. The whole plane is reachable only behind
+opt-in flags. And it does not currently work — issue #115 records that
 `jeliyad --companion-control` never starts, because the bind path awaits an
 endpoint readiness signal that does not arrive. The cut therefore removes
 unreleased, non-functioning code and its two-language wire protocol, not a
@@ -123,9 +145,15 @@ be checkable by someone who was not in this decision:
    ten distinct would-be users in the issue tracker or the disclosure channel,
    recorded as such rather than inferred from silence.
 3. **Funding.** Committed funding covers the standing infrastructure floor
-   stated in the cost-ceilings record **and** the completed qualified legal
-   review of the lawful-basis position, which remains an unmet human dependency
-   whether or not the plane is built.
+   stated in the cost-ceilings record **and the cost of** the qualified legal
+   review of the lawful-basis position.
+
+   To be explicit, because these two are easy to conflate: what re-opens the
+   question is funding that *covers* the review. What gates a hosted *launch*
+   is the review being *completed*. Re-entry does not require the review to
+   have happened first — it requires the means to obtain it — and the completed
+   review re-enters as a pre-launch condition along with the plane, exactly as
+   [recorded below](#consequences--issues-gates-and-the-signing-trigger).
 
 Re-entry does not restore the old plan wholesale. It re-opens
 [`production-deployment.md`](production-deployment.md) as the starting analysis,
@@ -291,12 +319,24 @@ phase.
 
 Recorded because a later cleanup pass will otherwise get these wrong:
 
-- **`app.jeliya.ai` is baked into a key-derivation context.** The string appears
-  inside the versioned BLAKE3 `derive_key` context for room-scoped device keys,
-  and it is mirrored in the [room device key
-  decision](room-device-key-decision.md). It is a domain-separation constant in
-  keys that shipped in `v0.5.0`. **Do not find-and-replace it.** Changing it
-  re-derives every room device key and breaks every existing install. The
+- **`app.jeliya.ai` is baked into a key-derivation context.** It occurs exactly
+  once in the Rust tree, inside `ROOM_DEVICE_KDF_CONTEXT_V1` in
+  `crates/jeliya-core/src/identity.rs` — the versioned BLAKE3 `derive_key`
+  context for room-scoped device keys — and it is mirrored in the [room device
+  key decision](room-device-key-decision.md). It is a **domain-separation
+  constant, not an origin reference**, and the `v1` in its name is the migration
+  seam: changing the string is a key-version change, never a rename. **Do not
+  find-and-replace it.** Changing it re-derives every room-scoped device key,
+  which changes each room's `EndpointId` and its invite-discovery semantics.
+
+  Stated precisely, because the blast radius is smaller than it looks and the
+  overclaim would be caught: room-scoped device keys are **not yet released**
+  (the [room device key decision](room-device-key-decision.md) carries
+  `release_status: "unreleased"`; the feature landed in PR #94, `4206984`, after
+  the `v0.6.0` tag was cut). So today the damage is confined to trees built from
+  `main`, not to any published install. That is an argument for fixing the
+  constant's status *now* rather than for treating it as harmless — it becomes
+  genuinely irreversible on the first published release that contains it. The
   repository slug is likewise a repository name, not an origin.
 - **The relay-connect spike under `spike/` is retained**, alongside its recorded
   [Phase 0 result](evidence/phase-0-relay-spike.md), as re-entry evidence. It is
@@ -327,12 +367,15 @@ carries no semantic content. A reviewer must be able to confirm that by diff.
 
 This decision is complete when:
 
-- [ ] `node scripts/check-docs.mjs` passes. The known failure set is: the index
-      entry for this record; the audit-chain links into the deleted crate's
-      source file, in the companion control protocol decision, both Phase 1
-      gate-verdict references, and five references in the Phase 1 security
-      review — plus one further link in that file that the gate currently masks
-      and will expose once the surrounding text changes.
+- [ ] `node scripts/check-docs.mjs` passes. It must pass in **every** change
+      set, not only at the end, because it is a required gate on the default
+      branch. The one change set that breaks it is the code removal, which
+      deletes the crate that eight audit-chain links point into: one in the
+      companion control protocol decision, two Phase 1 gate-verdict references,
+      and five in the Phase 1 security review — plus a sixth link in that last
+      file which the gate masks today under its four-space indented-code rule
+      and which is repaired with the others. Those repairs therefore land in the
+      code-removal change set, not here.
 - [ ] `cargo clippy --locked --workspace --all-targets -- -D warnings` and
       `cargo test --locked --workspace` pass with the three crates, the daemon
       module, the five flags and the argument-parsing tests removed together.
@@ -343,11 +386,20 @@ This decision is complete when:
 - [ ] The security-review scope hash is re-pinned, with the no-semantic-content
       note.
 - [ ] `docs/index.md` reaches this record, and no document is orphaned.
-- [ ] **Fresh signed network evidence is generated against the final commit.**
-      Removing three crates changes the candidate, and certified evidence binds
-      one exact revision pair — it never transfers across commits. The retained
-      direct and forced-relay manifests therefore stop certifying the tree the
-      moment this decision lands, and a signed direct run plus a signed
-      forced-relay run bound to the post-deletion commit are required before the
-      next release. This is the longest-lead item in the change set: it needs
-      the operator workstation and the remote hosts, not CI.
+- [ ] **Fresh signed network evidence is generated against the final source
+      commit.** Removing three crates changes the candidate, and certified
+      evidence binds one exact revision pair — it never transfers across
+      commits. The retained direct and forced-relay manifests therefore stop
+      certifying the tree the moment this decision lands, and a signed direct
+      run plus a signed forced-relay run bound to the post-deletion source
+      commit are required before the next release. This is the longest-lead item
+      in the change set: it needs the operator workstation and the remote hosts,
+      not CI.
+
+      Note the ordering this implies, so it is not read as a contradiction: the
+      manifests are written under `docs/evidence/` **after** the runs complete,
+      so the commit that carries the evidence is necessarily a later commit than
+      the source commit the evidence certifies. That is the normal flow, not a
+      defect. What must match is the revision pair recorded *inside* each
+      manifest and the source commit being qualified — not the commit the
+      manifest file happens to land in.
