@@ -25,7 +25,7 @@ CI rules for every page in this wiki.
 ## Architecture and protocols
 
 - [Daemon protocol](PROTOCOL.md) - Normative transport-neutral contract between `jeliya-core` and every Jeliya client.
-- [Desktop-operator-first scope decision](desktop-first-scope-decision.md) - Canonical / decided 2026-07-24: defers the hosted browser plane (Phases 2 to 5) behind a named re-entry trigger, keeps the installed daemon as the distribution, removes the companion control plane and its three crates, states the preconditions any hosted re-entry must satisfy, and re-anchors the code-signing trigger that Phase 5 was carrying.
+- [Desktop-operator-first scope decision](desktop-first-scope-decision.md) - Canonical / decided 2026-07-24: defers the hosted browser plane (Phases 2 to 5) behind a named re-entry trigger, keeps the installed daemon as the distribution, and **decides the removal of** the companion control plane and its three crates. It states the preconditions any hosted re-entry must satisfy and re-anchors the code-signing trigger that Phase 5 was carrying. The decision is in force; its consequences land in their own change sets, which the record's landing table names.
 - [Room Workbench](room-workbench.md) - Decision record for the global-versus-room hierarchy, canonical routes, responsive shells, and status vocabulary.
 - [Room attention](room-attention.md) - Decision record for evidence-backed room recency, device-local unread, and actionable attention, and the evidence rule each displayed field must satisfy.
 - [Device-local self label](self-label.md) - Decision record for the editable, device-local self display name reusing the alias store keyed by the self identity id, its fallback, validation, migration, and privacy rules.
