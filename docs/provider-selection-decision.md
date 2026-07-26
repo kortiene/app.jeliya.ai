@@ -13,6 +13,21 @@ audience: ["contributors", "maintainers", "release-engineers", "security-reviewe
 
 # Production provider selection — decision record
 
+> **REDUCED IN PLACE 2026-07-26 — most of this selection is dormant, one row
+> still binds.** The [desktop-operator-first scope decision](desktop-first-scope-decision.md) defers the
+> hosted browser plane, so the DNS, CDN/static-host, edge-token,
+> dedicated-relay, object-store and infrastructure-as-code selections below
+> decide nothing that is being built: no account is provisioned against them
+> and no gate depends on them. They are **dormant**, retained whole as the
+> re-entry analysis.
+>
+> What stays **live** is the **native signing selection** — macOS notarization,
+> Windows signing, and Linux release integrity — because distribution stays
+> "install `jeliyad`", which makes signing the trust boundary of the only
+> channel that exists. The rejection of a raw `.pfx` Windows secret stays live
+> with it. See the [code-signing deferral](signing-deferral-decision.md) for
+> when that gate now fires.
+
 **Status: DECIDED 2026-07-20 —** This record settles deferred decision 1 of the
 [production deployment decision](production-deployment-decision.md) — "Final
 CDN, edge-token, relay, and infrastructure provider selection" — for the first

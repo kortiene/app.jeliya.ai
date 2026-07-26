@@ -13,6 +13,17 @@ audience: ["contributors", "maintainers", "product", "release-engineers"]
 
 # Supported browser, desktop OS, and mobile matrix — decision record
 
+> **REDUCED IN PLACE 2026-07-26 — to its desktop-OS axis, which remains
+> live.** The [desktop-operator-first scope decision](desktop-first-scope-decision.md) defers the browser
+> and mobile targets, so the rows and gates that qualify them are **dormant**.
+> The supported desktop-OS matrix is unchanged and still binding.
+>
+> **Not dormant, and not a phone concern:** the compact and responsive UI shell
+> is retained on accessibility grounds. The WCAG 1.4.10 reflow target at
+> 320 CSS px / 400% zoom is a required check on the default branch and is
+> independent of whether a phone can ever reach the daemon. Do not sweep the
+> small-viewport requirements with the mobile rows.
+
 **Status: DECIDED 2026-07-20.** This record settles deferred decision 8 of the
 [production deployment decision](production-deployment-decision.md) — the
 supported browser, desktop OS, and mobile matrix — for the first production

@@ -13,6 +13,15 @@ audience: ["contributors", "maintainers", "operators", "release-engineers"]
 
 # Platform matrix
 
+> **REDUCED IN PLACE 2026-07-26.** The [desktop-operator-first scope decision](desktop-first-scope-decision.md)
+> defers the hosted browser plane, so the **browser and mobile columns** below
+> are **dormant** — retained so a re-entry can read what was intended, not
+> deleted. The desktop-OS columns stay live and binding.
+>
+> **The 320 CSS px / 400%-zoom reflow target (WCAG 1.4.10) is not part of the
+> dormant mobile column.** It is an accessibility requirement, enforced on the
+> default branch, and it stands whether or not a phone can reach the daemon.
+
 The latest public release is `v0.5.0` (2026-07-14, daemon-only prerelease
 with certified network evidence). The current `v0.6.0` source candidate repins
 `iroh-rooms` to untagged `a5d98b70...`; local exact-revision and loopback
