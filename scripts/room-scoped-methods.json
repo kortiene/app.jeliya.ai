@@ -1,8 +1,6 @@
 {
-  "_comment": "THE source of truth for which daemon-protocol methods are room-scoped. 'Which methods are room-scoped' was previously written down in several places that had silently drifted apart: crates/jeliya-core/src/engine.rs preflighted 19 methods while the release gate, its own test, and the network-evidence harness each enumerated 17 — all three omitting room.health and invite.cancel. The consequence was not cosmetic: the signed cross-machine release evidence proved foreign-room non-disclosure for 17 of the 19 methods that claim it, and nothing in the repository said so. Every consumer now reads this file, and scripts/check-room-scoped-methods.mjs fails CI if it stops matching the engine's own allowlist.",
-
-  "rule": "A method belongs here if and only if requires_room_access_preflight() in crates/jeliya-core/src/engine.rs returns true for it — which is to say, if its params struct carries a room_id. room.join is deliberately absent: its authorization object is the key-bound ticket, and the caller is not a room member until redemption succeeds.",
-
+  "_comment": "THE source of truth for which daemon-protocol methods are room-scoped. 'Which methods are room-scoped' was previously written down in several places that had silently drifted apart: crates/jeliya-core/src/engine.rs preflighted 19 methods while the release gate, its own test, and the network-evidence harness each enumerated 17 \u2014 all three omitting room.health and invite.cancel. The consequence was not cosmetic: the signed cross-machine release evidence proved foreign-room non-disclosure for 17 of the 19 methods that claim it, and nothing in the repository said so. Every consumer now reads this file, and scripts/check-room-scoped-methods.mjs fails CI if it stops matching the engine's own allowlist.",
+  "rule": "A method belongs here if and only if requires_room_access_preflight() in crates/jeliya-core/src/engine.rs returns true for it \u2014 which is to say, if its params struct carries a room_id. room.join is deliberately absent: its authorization object is the key-bound ticket, and the caller is not a room member until redemption succeeds.",
   "methods": [
     "agent.history",
     "file.fetch",
@@ -24,12 +22,14 @@
     "room.timeline",
     "status.post"
   ],
-
   "legacy_manifest_sets": [
     {
       "id": "pre-2026-07-26-seventeen",
-      "_comment": "Every network-evidence manifest generated before the drift was found probes these 17. Retained manifests are covered by detached Ed25519 signatures over their exact bytes, so they can neither be regenerated nor edited — the gate must accept this set for retained evidence while requiring the complete set above for anything new. This entry is the record of what those signatures do NOT prove: foreign-room non-disclosure for room.health and invite.cancel was never exercised on a certifying run.",
-      "unproven": ["invite.cancel", "room.health"],
+      "_comment": "Every network-evidence manifest generated before the drift was found probes these 17. Retained manifests are covered by detached Ed25519 signatures over their exact bytes, so they can neither be regenerated nor edited. The exception is bound to these exact run_ids and NOT to the method set alone: a new signed manifest for a future candidate would otherwise be free to report the old 17 and pass, which is the opposite of what this file exists to enforce. New release evidence is signed too, so a signature proves nothing about which set a manifest should have used. This entry is also the record of what the retained signatures do NOT prove: foreign-room non-disclosure for room.health and invite.cancel was never exercised on a certifying run.",
+      "unproven": [
+        "invite.cancel",
+        "room.health"
+      ],
       "methods": [
         "room.open",
         "room.close",
@@ -48,7 +48,17 @@
         "pipe.close",
         "peers.status",
         "agent.history"
+      ],
+      "run_ids": [
+        "20260721T122840Z-098c4979",
+        "20260721T130958Z-8bda01e6",
+        "20260714T214223Z-3b86ac67",
+        "20260714T220516Z-a3c76859",
+        "20260712T231015Z-3c938c66",
+        "20260712T155534Z-d3d9ff69",
+        "20260712T161837Z-f1d9c149"
       ]
     }
-  ]
+  ],
+  "_comparison": "Method lists are compared as SETS, not sequences. The evidence harness emits them in probe order while this file is stored sorted for readable diffs; comparing sequences would reject every new certifying run."
 }

@@ -6,7 +6,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { checkRoomScopedMethods, enginePreflightMethods } from "./check-room-scoped-methods.mjs";
-import { ROOM_SCOPED_METHODS, LEGACY_ROOM_SCOPED_METHOD_SETS } from "./room-scoped-methods.mjs";
+import {
+  ROOM_SCOPED_METHODS,
+  LEGACY_ROOM_SCOPED_METHOD_SETS,
+  sameMethodSet,
+} from "./room-scoped-methods.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -150,6 +154,51 @@ test("a fail-closed gate: an unreadable engine is not a pass", () => {
   );
   try {
     assert.match(checkRoomScopedMethods(root).join("\n"), /could not read/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("method lists compare as sets, not sequences", () => {
+  // The harness emits probe order; the committed file is sorted. Comparing
+  // sequences rejected every new certifying run while looking correct in review.
+  const probeOrder = ["room.open", "room.close", "message.send"];
+  const sorted = ["message.send", "room.close", "room.open"];
+  assert.equal(sameMethodSet(probeOrder, sorted), true);
+  assert.equal(sameMethodSet(["room.open"], ["room.open", "room.close"]), false);
+  assert.equal(sameMethodSet(["room.open", "room.open"], ["room.open", "room.close"]), false,
+    "a duplicate must not stand in for a missing method");
+  assert.equal(sameMethodSet(undefined, sorted), false);
+});
+
+test("a real freshly-probed manifest ordering matches the canonical set", () => {
+  // Guards the exact defect: probe order vs sorted order must still compare equal.
+  const probeOrder = [
+    "room.open", "room.close", "room.leave", "room.timeline", "room.members",
+    "invite.create", "message.send", "status.post", "file.share", "file.list",
+    "file.fetch", "pipe.expose", "pipe.list", "pipe.connect", "pipe.close",
+    "peers.status", "agent.history", "room.health", "invite.cancel",
+  ];
+  assert.equal(sameMethodSet(probeOrder, ROOM_SCOPED_METHODS), true);
+  assert.notEqual(JSON.stringify(probeOrder), JSON.stringify([...ROOM_SCOPED_METHODS]),
+    "the orders genuinely differ, so this test is not vacuous");
+});
+
+test("the legacy exception is bound to exact run_ids", () => {
+  const legacy = LEGACY_ROOM_SCOPED_METHOD_SETS.find((s) => s.id === "pre-2026-07-26-seventeen");
+  assert.ok(legacy.runIds.length > 0, "an unbounded legacy exception would let new evidence under-claim");
+  assert.ok(legacy.runIds.includes("20260721T122840Z-098c4979"), "the v0.6.0 direct run must be grandfathered");
+  assert.equal(legacy.runIds.includes("20260901T000000Z-deadbeef"), false);
+});
+
+test("a legacy set without run_ids fails the gate", () => {
+  const root = fixture({
+    methods: ["message.send", "room.health"],
+    engine: ["message.send", "room.health"],
+    legacy: [{ id: "unbounded", unproven: ["room.health"], methods: ["message.send"] }],
+  });
+  try {
+    assert.match(checkRoomScopedMethods(root).join("\n"), /must list the exact `run_ids` it grandfathers/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

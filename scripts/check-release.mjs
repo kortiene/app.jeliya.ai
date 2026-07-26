@@ -16,7 +16,11 @@ import { isIP } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OFFICIAL_ZIG_0_15_2_ARCHIVES } from "./realnet-evidence.mjs";
-import { ROOM_SCOPED_METHODS, LEGACY_ROOM_SCOPED_METHOD_SETS } from "./room-scoped-methods.mjs";
+import {
+  ROOM_SCOPED_METHODS,
+  LEGACY_ROOM_SCOPED_METHOD_SETS,
+  sameMethodSet,
+} from "./room-scoped-methods.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -1072,11 +1076,18 @@ export function validateNetworkEvidenceManifest(manifest, {
   // the 19 methods. Rejecting them would invalidate signed history; silently
   // accepting a short list for NEW evidence would under-verify the thing this
   // check exists to verify. So both shapes are named, and nothing else passes.
-  const deniedMethodSets = [ROOM_SCOPED_METHODS, ...LEGACY_ROOM_SCOPED_METHOD_SETS.map((s) => s.methods)];
+  //
+  // Compared as a SET: the harness emits probe order, this file stores sorted.
+  // And the legacy exception is bound to the exact grandfathered run_ids, not
+  // to the method set — otherwise a new signed manifest could report the old
+  // 17 and pass, which is precisely what this check exists to prevent. A
+  // signature cannot distinguish those cases, because new evidence is signed too.
   const deniedMethodsActual = functional?.foreign_room_non_disclosure?.rpc_methods_denied;
-  const deniedMethodsAccepted = deniedMethodSets.some(
-    (set) => JSON.stringify(deniedMethodsActual) === JSON.stringify(set),
+  const grandfathered = LEGACY_ROOM_SCOPED_METHOD_SETS.find(
+    (set) => set.runIds.includes(manifest.run_id) && sameMethodSet(deniedMethodsActual, set.methods),
   );
+  const deniedMethodsAccepted = grandfathered !== undefined
+    || sameMethodSet(deniedMethodsActual, ROOM_SCOPED_METHODS);
   if (!Number.isInteger(functional?.file?.bytes_expected)
       || functional.file.bytes_expected < 1
       || functional.file.bytes_actual !== functional.file.bytes_expected

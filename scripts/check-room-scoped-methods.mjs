@@ -94,6 +94,14 @@ export function checkRoomScopedMethods(root) {
   }
 
   for (const legacy of declared.legacy_manifest_sets ?? []) {
+    // A legacy set with no run_ids is an unbounded exception: it would let any
+    // future manifest claim the short list. The binding is what makes it safe.
+    if (!Array.isArray(legacy.run_ids) || legacy.run_ids.length === 0) {
+      failures.push(
+        `legacy manifest set "${legacy.id}": must list the exact \`run_ids\` it grandfathers — `
+          + "an exception keyed only on the method set would let new evidence under-claim",
+      );
+    }
     const unproven = (legacy.unproven ?? []).slice().sort();
     const gap = sortedListed.filter((m) => !(legacy.methods ?? []).includes(m)).sort();
     if (JSON.stringify(unproven) !== JSON.stringify(gap)) {

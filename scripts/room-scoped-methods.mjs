@@ -36,6 +36,27 @@ export const LEGACY_ROOM_SCOPED_METHOD_SETS = Object.freeze(
       id: set.id,
       unproven: Object.freeze([...(set.unproven ?? [])]),
       methods: Object.freeze([...(set.methods ?? [])]),
+      // The exception is bound to these exact runs. Binding it to the method
+      // set alone would let a NEW signed manifest report the old 17 and pass —
+      // and a signature cannot distinguish the cases, because new release
+      // evidence is signed too.
+      runIds: Object.freeze([...(set.run_ids ?? [])]),
     }),
   ),
 );
+
+/**
+ * Whether a manifest's probed method list is the given set, compared as a SET.
+ *
+ * The harness emits methods in probe order; this file stores them sorted for
+ * readable diffs. Comparing sequences would reject every new certifying run
+ * while looking correct in review.
+ */
+export function sameMethodSet(actual, expected) {
+  if (!Array.isArray(actual) || !Array.isArray(expected)) return false;
+  if (actual.length !== expected.length) return false;
+  if (new Set(actual).size !== actual.length) return false;
+  const a = [...actual].sort();
+  const b = [...expected].sort();
+  return a.every((value, index) => value === b[index]);
+}

@@ -167,6 +167,11 @@ which no longer exist as candidates. So the shortfall is recorded here and
 encoded in `scripts/room-scoped-methods.json` as the named legacy set
 `pre-2026-07-26-seventeen`, whose `unproven` field is gated against the real gap.
 
+That exception is bound to the **exact `run_id`s** of the retained manifests, not
+to the method set. Binding it to the set alone would let a new signed manifest
+for a future candidate report the old seventeen and pass — and a signature could
+not distinguish the cases, because new release evidence is signed too.
+
 **The next signed run closes it.** `scripts/realnet-evidence.mjs` now probes all
 19 and fails closed if it ever omits one, and `scripts/check-release.mjs` accepts
 the complete set for new manifests while continuing to accept the legacy set for
