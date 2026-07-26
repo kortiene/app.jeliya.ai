@@ -54,6 +54,7 @@ PIDS+=($!)
 # daemon on $AGENT_PORT, joins it to the room, posts statuses forever).
 node "$REPO_ROOT/scripts/demo-agent.mjs" \
   --human-port "$HUMAN_PORT" \
+  --human-data-dir "$DEMO_DIR/human" \
   --agent-port "$AGENT_PORT" \
   --agent-data-dir "$DEMO_DIR/agent" &
 PIDS+=($!)
