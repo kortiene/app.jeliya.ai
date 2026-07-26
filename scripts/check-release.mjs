@@ -16,6 +16,11 @@ import { isIP } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OFFICIAL_ZIG_0_15_2_ARCHIVES } from "./realnet-evidence.mjs";
+import {
+  ROOM_SCOPED_METHODS,
+  LEGACY_ROOM_SCOPED_METHOD_SETS,
+  sameMethodSet,
+} from "./room-scoped-methods.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -1060,12 +1065,29 @@ export function validateNetworkEvidenceManifest(manifest, {
     }
   }
   const functional = manifest.functional_evidence;
-  const deniedMethods = [
-    "room.open", "room.close", "room.leave", "room.timeline", "room.members",
-    "invite.create", "message.send", "status.post", "file.share", "file.list",
-    "file.fetch", "pipe.expose", "pipe.list", "pipe.connect", "pipe.close",
-    "peers.status", "agent.history",
-  ];
+  // A manifest must exercise EVERY room-scoped method, which is the committed
+  // set in scripts/room-scoped-methods.json — the same set the engine's own
+  // preflight allowlist is gated against.
+  //
+  // Retained manifests are the exception, and it is a real one rather than a
+  // convenience: they are covered by detached Ed25519 signatures over their
+  // exact bytes, so they can be neither regenerated nor edited. Every one of
+  // them predates the discovery that this list had drifted, and probes 17 of
+  // the 19 methods. Rejecting them would invalidate signed history; silently
+  // accepting a short list for NEW evidence would under-verify the thing this
+  // check exists to verify. So both shapes are named, and nothing else passes.
+  //
+  // Compared as a SET: the harness emits probe order, this file stores sorted.
+  // And the legacy exception is bound to the exact grandfathered run_ids, not
+  // to the method set — otherwise a new signed manifest could report the old
+  // 17 and pass, which is precisely what this check exists to prevent. A
+  // signature cannot distinguish those cases, because new evidence is signed too.
+  const deniedMethodsActual = functional?.foreign_room_non_disclosure?.rpc_methods_denied;
+  const grandfathered = LEGACY_ROOM_SCOPED_METHOD_SETS.find(
+    (set) => set.runIds.includes(manifest.run_id) && sameMethodSet(deniedMethodsActual, set.methods),
+  );
+  const deniedMethodsAccepted = grandfathered !== undefined
+    || sameMethodSet(deniedMethodsActual, ROOM_SCOPED_METHODS);
   if (!Number.isInteger(functional?.file?.bytes_expected)
       || functional.file.bytes_expected < 1
       || functional.file.bytes_actual !== functional.file.bytes_expected
@@ -1093,8 +1115,7 @@ export function validateNetworkEvidenceManifest(manifest, {
       || functional.reconnect.settled_path.consecutive_observations < 3
       || functional?.multi_peer?.peers !== 3
       || functional?.multi_peer?.convergence_verified !== true
-      || JSON.stringify(functional?.foreign_room_non_disclosure?.rpc_methods_denied)
-        !== JSON.stringify(deniedMethods)
+      || !deniedMethodsAccepted
       || functional?.foreign_room_non_disclosure?.local_file_http_denied !== true
       || functional?.foreign_room_non_disclosure?.aggregate_reads_filtered !== true
       || functional?.foreign_room_non_disclosure?.foreign_agent_projection_exercised !== true

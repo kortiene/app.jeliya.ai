@@ -51,6 +51,16 @@ jobs:
           node --test scripts/check-secret-storage.test.mjs
           node scripts/check-secret-storage.mjs
 
+      # "Which methods are room-scoped" is a security-relevant set, and it had
+      # silently drifted: the engine preflighted 19 while three separate
+      # enumerations each listed 17. This gate makes the engine's own allowlist
+      # the oracle, so the drift cannot come back quietly.
+      - name: Verify room-scoped method list
+        run: |
+          set -euo pipefail
+          node --test scripts/check-room-scoped-methods.test.mjs
+          node scripts/check-room-scoped-methods.mjs
+
       - name: Verify release and installer contracts
         run: |
           set -euo pipefail

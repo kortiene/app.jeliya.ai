@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { ROOM_SCOPED_METHODS, LEGACY_ROOM_SCOPED_METHOD_SETS } from "./room-scoped-methods.mjs";
+
 import {
   expectedNetworkAssertionNames,
   expectedArtifactNames,
@@ -42,12 +44,7 @@ function networkManifest(path, commit, upstream) {
   const toolDigest = "12".repeat(32);
   const features = relay ? ["embed-ui", "relay-only-test"] : ["embed-ui"];
   const featureArgument = features.join(",");
-  const deniedMethods = [
-    "room.open", "room.close", "room.leave", "room.timeline", "room.members",
-    "invite.create", "message.send", "status.post", "file.share", "file.list",
-    "file.fetch", "pipe.expose", "pipe.list", "pipe.connect", "pipe.close",
-    "peers.status", "agent.history",
-  ];
+  const deniedMethods = ROOM_SCOPED_METHODS;
   return {
     schema: 2,
     run_id: `20260712T12000${relay ? "1" : "0"}Z-0123abcd`,

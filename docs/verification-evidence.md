@@ -146,6 +146,38 @@ release-blocking. A new reachable high or critical vulnerability is a release
 blocker unless maintainers explicitly approve a separate, scoped, owned, and
 time-bounded exception.
 
+## What the retained foreign-room evidence does not prove
+
+Recorded 2026-07-26. Every retained network-evidence manifest — including the
+signed direct and forced-relay runs that certify `v0.5.0` — exercises **17**
+room-scoped methods. The engine has always required its accepted-room preflight
+on **19**. The two never probed are **`room.health`** and **`invite.cancel`**.
+
+This is a gap in *evidence*, not a known defect in the guard: both methods are
+inside `requires_room_access_preflight`, and the local test suite covers the
+preflight. What no certifying run ever demonstrated is foreign-room
+non-disclosure for those two methods on real cross-machine topology, which is
+what the manifests are for. The honesty rules make that distinction load-bearing,
+so it is stated rather than left to be rediscovered.
+
+The manifests cannot be corrected in place. Each is covered by a detached
+Ed25519 signature over its exact bytes; regenerating them would require re-running
+the operator workstation and remote hosts against the revisions they certify,
+which no longer exist as candidates. So the shortfall is recorded here and
+encoded in `scripts/room-scoped-methods.json` as the named legacy set
+`pre-2026-07-26-seventeen`, whose `unproven` field is gated against the real gap.
+
+That exception is bound to the **exact `run_id`s** of the retained manifests, not
+to the method set. Binding it to the set alone would let a new signed manifest
+for a future candidate report the old seventeen and pass — and a signature could
+not distinguish the cases, because new release evidence is signed too.
+
+**The next signed run closes it.** `scripts/realnet-evidence.mjs` now probes all
+19 and fails closed if it ever omits one, and `scripts/check-release.mjs` accepts
+the complete set for new manifests while continuing to accept the legacy set for
+retained ones — so signed history stays valid without new evidence being allowed
+to under-claim.
+
 ## Dependency fork policy
 
 Carried forward from the deprecated [portable Iroh Rooms traits
