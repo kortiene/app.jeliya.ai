@@ -497,17 +497,28 @@ operates**. Such gates cover infrastructure and diagnostic surfaces, not the
 browser's own databases. The live analogue that does hold is the UI's own
 diagnostics redaction, which explicitly excludes invite tickets.
 
-The structural mitigations that are **shipped** are bounded expiry (the UI's
-1h/24h/7d presets over the daemon's 24-hour default, Phase 1 D4), terminal
-redemption — each invite is single-use, and once redeemed it is spent — and
-owner-only cancellation through `invite.cancel`. Opening or viewing an invite
-does **not** consume it; only redemption, cancellation, or expiry does. So the
-product instruction for a possibly-disclosed link is to treat it as
-compromised: **cancel it and reissue**, because a recorded URL cannot be
-retracted.
+The structural mitigations divide on release status, and the division matters:
+a user cannot rely on a control their daemon does not have.
 
-Product copy must state both halves — single-use redemption, and
-cancel-and-reissue on possible disclosure.
+**Released in `v0.5.0`:** terminal redemption. Each invite is single-use, and
+once redeemed it is spent. Opening or viewing an invite does **not** consume it;
+only redemption, cancellation, or expiry does.
+
+**Implemented but NOT released** (Phase 1 D4, `release_status: "unreleased"` in
+[capability status](capability-status.md)): bounded expiry — the UI's 1h/24h/7d
+presets over the daemon's 24-hour default — and owner-only cancellation through
+`invite.cancel`. A `v0.5.0` daemon has neither. Product copy must not imply that
+an invite issued from a released daemon can be expired or cancelled.
+
+So the product instruction for a possibly-disclosed link depends on which
+daemon issued it. Where cancellation exists, treat the link as compromised:
+**cancel it and reissue**, because a recorded URL cannot be retracted. On a
+released `v0.5.0` daemon there is no cancellation, and the only true statement
+is that the invite remains redeemable exactly once by whoever reaches it first —
+which is a stronger reason to treat disclosure as serious, not a weaker one.
+
+Product copy must state both halves for the release it describes: single-use
+redemption, and cancel-and-reissue where that control has actually shipped.
 
 See [`known-gaps-roadmap.md`](known-gaps-roadmap.md) for ownership and release
 blocking status, the
